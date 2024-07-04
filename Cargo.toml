@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+#
+# SPDX-License-Identifier: 0BSD
+
+[package]
+name = "eambfc-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libc = "0.2.155"
