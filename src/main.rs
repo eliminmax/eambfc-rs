@@ -2,11 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#[allow(unused_imports)]
-use std::env;
+use std::{io,env};
 #[allow(unused_imports)]
 use std::fs::File;
-use std::io;
 #[allow(unused_imports)]
 use std::os::unix::fs::PermissionsExt;
 
@@ -56,9 +54,11 @@ fn rm_ext(filename: &String, extension: &str) -> String {
 }
 
 fn main() {
+    let mut args = env::args();
+    let progname: String = args.next().unwrap_or(String::from("eambfc"));
     show_help(
         &mut io::stdout(),
-        &env::args().next().unwrap_or("eambfc".to_string()).as_str(),
+        progname.as_str()
     );
     todo!("main");
 }
