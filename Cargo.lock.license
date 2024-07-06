@@ -1,3 +1,5 @@
 SPDX-FileCopyrightText: NONE
 
 SPDX-License-Identifier: 0BSD
+
+(Needed to satisfy `reuse lint` for auto-generated Cargo.lock file)
