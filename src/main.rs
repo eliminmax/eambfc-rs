@@ -2,20 +2,21 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{io,env};
 #[allow(unused_imports)]
 use std::fs::File;
 #[allow(unused_imports)]
 use std::os::unix::fs::PermissionsExt;
+use std::{env, io};
 
 #[allow(dead_code)]
 fn get_perms() -> u32 {
     todo!("get_perms");
 }
 
-// help text is b"Usage: ", followed by the program name, then this.
-// show_help writes the help text.
-const HELP_TEXT_BODY: &[u8] = b" [options] <program.bf> [<program2.bf> ...]
+#[allow(dead_code, unused_variables)]
+fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
+    let help_text = format!(
+        "Usage: {} [options] <program.bf> [<program2.bf> ...]
 
  -h        - display this help text and exit
  -V        - print version information and exit
@@ -38,14 +39,10 @@ const HELP_TEXT_BODY: &[u8] = b" [options] <program.bf> [<program2.bf> ...]
 Remaining options are treated as source file names. If they don't
 end with '.bf' (or the extension specified with '-e'), the program
 will raise an error.
-";
-
-#[allow(dead_code, unused_variables)]
-fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
-    let mut help_text = Vec::<u8>::from("Usage: ");
-    help_text.extend_from_slice(progname.as_bytes());
-    help_text.extend_from_slice(HELP_TEXT_BODY);
-    let _ = outfile.write(help_text.as_slice());
+",
+        progname
+    );
+    let _ = outfile.write(help_text.as_bytes());
 }
 
 #[allow(dead_code, unused_variables)]
@@ -56,9 +53,6 @@ fn rm_ext(filename: &String, extension: &str) -> String {
 fn main() {
     let mut args = env::args();
     let progname: String = args.next().unwrap_or(String::from("eambfc"));
-    show_help(
-        &mut io::stdout(),
-        progname.as_str()
-    );
+    show_help(&mut io::stdout(), progname.as_str());
     todo!("main");
 }
