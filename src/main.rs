@@ -3,7 +3,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 pub mod arg_parse;
+pub mod eam_compile;
+pub mod elf_tools;
+pub mod err;
+pub mod optimize;
 pub mod run_config;
+pub mod x86_64_encoders;
 
 use std::ffi::{OsStr, OsString};
 #[allow(unused_imports)]
