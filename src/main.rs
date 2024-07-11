@@ -20,11 +20,6 @@ use err::BfErrDisplay;
 #[allow(unused_imports)]
 use run_config::{OutMode, RunType, StandardRunConfig};
 
-#[allow(dead_code)]
-fn get_perms() -> u32 {
-    todo!("get_perms");
-}
-
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
     let help_text = format!(
         "Usage: {} [options] <program.bf> [<program2.bf> ...]
