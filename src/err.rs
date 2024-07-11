@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::run_config::OutMode;
-use std::fmt;
 
 pub enum BFCompileError {
     Basic {
@@ -41,7 +40,7 @@ impl BfErrDisplay for BFCompileError {
                     eprintln!("Error {}: {}", id, msg);
                 } else {
                     println!(
-                        "{{\"errorId\": \"{}\", \"message\":{}\"}}",
+                        "{{\"errorId\": \"{}\", \"message\":\"{}\"}}",
                         json_str(id),
                         json_str(msg)
                     );
@@ -52,7 +51,7 @@ impl BfErrDisplay for BFCompileError {
                     eprintln!("Error {} when compiling {}: {}", id, instr, msg);
                 } else {
                     println!(
-                        "{{\"errorId\": \"{}\", \"message\":{}\", \"instruction\": \"{}\"}}",
+                        "{{\"errorId\": \"{}\", \"message\":\"{}\", \"instruction\": \"{}\"}}",
                         json_str(id),
                         json_str(msg),
                         json_str(&instr.to_string())
@@ -73,7 +72,7 @@ impl BfErrDisplay for BFCompileError {
                     );
                 } else {
                     println!(
-                        "{{\"errorId\": \"{}\", \"message\":{}\", \"instruction\": \"{}\",\
+                        "{{\"errorId\": \"{}\", \"message\":\"{}\", \"instruction\": \"{}\",\
                         \"line\": {}, \"column\": {}}}",
                         json_str(id),
                         json_str(msg),
@@ -85,11 +84,13 @@ impl BfErrDisplay for BFCompileError {
             }
             BFCompileError::UnknownFlag(c) => BFCompileError::Basic {
                 id: "UNKNOWN_ARG".to_string(),
-                msg: format!("Unknown argument: {}", match *c {
-                    n if n < 0x80_u8 => (*c as char).to_string(),
-                    _ => format!("\\x{:x}", *c)
-
-                }),
+                msg: format!(
+                    "Unknown argument: {}",
+                    match *c {
+                        n if n < 0x80_u8 => (*c as char).to_string(),
+                        _ => format!("\\x{:x}", *c),
+                    }
+                ),
             }
             .report(out_mode),
         }
@@ -97,5 +98,18 @@ impl BfErrDisplay for BFCompileError {
 }
 
 fn json_str(s: &str) -> String {
-    todo!("JSON string of {}", s);
+    s.chars()
+        .map(|c| match c {
+            '\n' => "\\n".to_string(),
+            '\r' => "\\r".to_string(),
+            '\x0c' => "\\f".to_string(),
+            '\t' => "\\t".to_string(),
+            '\x08' => "\\x08".to_string(),
+            '\\' => "\\\\".to_string(),
+            '"' => "\\\"".to_string(),
+            n if n < '\x20' => format!("\\u00{:02x}", n as u32),
+            _ => (c.to_string()),
+        })
+        .collect::<Vec<String>>()
+        .join("")
 }
