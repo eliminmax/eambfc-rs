@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use super::err::BFCompileError;
 use super::run_config::{OutMode, RunType, StandardRunConfig};
 use std::env;
 use std::ffi::OsString;
@@ -15,7 +16,7 @@ pub enum ArgParseError {
     MissingParameter,
 }
 
-pub fn parse_args() -> Result<RunType, ArgParseError> {
+pub fn parse_args() -> Result<RunType, (BFCompileError, OutMode)> {
     let mut args = env::args_os();
     // argument 0 should be the name of the file.
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
@@ -41,14 +42,26 @@ pub fn parse_args() -> Result<RunType, ArgParseError> {
                 match b {
                     b'e' => {
                         if !extension.is_empty() {
-                            return Err(ArgParseError::MultipleExtensions);
+                            return Err((
+                                BFCompileError::Basic {
+                                    id: "MULTIPLE_EXTENSIONS".to_string(),
+                                    msg: "passed -e multiple times".to_string(),
+                                },
+                                out_mode,
+                            ));
                         }
                         let remainder = arg_byte_iter.collect::<Vec<u8>>();
                         if remainder.is_empty() {
                             if let Some(new_extension) = args.next() {
                                 extension = new_extension;
                             } else {
-                                return Err(ArgParseError::MissingParameter);
+                                return Err((
+                                    BFCompileError::Basic {
+                                        id: "MISSING_OPERAND".to_string(),
+                                        msg: "-e requires an additional argument".to_string(),
+                                    },
+                                    out_mode,
+                                ));
                             }
                         } else {
                             extension = OsString::from_vec(remainder);
@@ -67,7 +80,7 @@ pub fn parse_args() -> Result<RunType, ArgParseError> {
                     b'O' => optimize = true,
                     b'k' => keep = true,
                     b'c' => cont = true,
-                    c => return Err(ArgParseError::UnknownFlag(c)),
+                    c => return Err((BFCompileError::UnknownFlag(c), out_mode)),
                 };
             }
         } else {
@@ -79,7 +92,13 @@ pub fn parse_args() -> Result<RunType, ArgParseError> {
         }
     }
     if source_files.is_empty() {
-        return Err(ArgParseError::NoFiles);
+        return Err((
+            BFCompileError::Basic {
+                id: "NO_SOURCE_FILES".to_string(),
+                msg: "No source files provided".to_string(),
+            },
+            out_mode,
+        ));
     }
     // fall back to default extension if none was provided
     if extension.is_empty() {

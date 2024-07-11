@@ -3,24 +3,26 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::run_config::OutMode;
+use std::fmt;
 
 pub enum BFCompileError {
     Basic {
-        id: &'static str,
-        msg: &'static str,
+        id: String,
+        msg: String,
     },
     Instruction {
-        id: &'static str,
-        msg: &'static str,
+        id: String,
+        msg: String,
         instr: char,
     },
     Position {
-        id: &'static str,
-        msg: &'static str,
+        id: String,
+        msg: String,
         instr: char,
         line: usize,
         col: usize,
     },
+    UnknownFlag(u8), // flag is a c character
 }
 
 #[allow(unused_variables)]
@@ -81,11 +83,19 @@ impl BfErrDisplay for BFCompileError {
                     );
                 }
             }
+            BFCompileError::UnknownFlag(c) => BFCompileError::Basic {
+                id: "UNKNOWN_ARG".to_string(),
+                msg: format!("Unknown argument: {}", match *c {
+                    n if n < 0x80_u8 => (*c as char).to_string(),
+                    _ => format!("\\x{:x}", *c)
+
+                }),
+            }
+            .report(out_mode),
         }
     }
 }
 
 fn json_str(s: &str) -> String {
     todo!("JSON string of {}", s);
-    "".to_string()
 }

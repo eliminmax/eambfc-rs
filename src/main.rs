@@ -16,7 +16,7 @@ use std::fs::File;
 #[allow(unused_imports)]
 use std::os::unix::fs::PermissionsExt;
 use std::{io, process};
-
+use err::BfErrDisplay;
 #[allow(unused_imports)]
 use run_config::{OutMode, RunType, StandardRunConfig};
 
@@ -25,7 +25,6 @@ fn get_perms() -> u32 {
     todo!("get_perms");
 }
 
-#[allow(dead_code, unused_variables)]
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
     let help_text = format!(
         "Usage: {} [options] <program.bf> [<program2.bf> ...]
@@ -61,9 +60,9 @@ fn rm_ext(filename: &OsString, extension: &OsStr) -> OsString {
 
 fn main() {
     let mut stdout = io::stdout();
-    match arg_parse::parse_args().unwrap() {
-        RunType::ShowHelp(progname) => show_help(&mut stdout, &progname),
-        RunType::StandardRun(rc) => {
+    match arg_parse::parse_args() {
+        Ok(RunType::ShowHelp(progname)) => show_help(&mut stdout, &progname),
+        Ok(RunType::StandardRun(rc)) => {
             println!("Not yet implemented, but arguments parsed were:");
             println!("Program name: {}", rc.progname);
             println!(
@@ -85,7 +84,7 @@ fn main() {
                 .iter()
                 .for_each(|f| println!("- compile: {}", f.to_string_lossy().to_string()));
         }
-        RunType::ShowVersion(progname) => {
+        Ok(RunType::ShowVersion(progname)) => {
             println!(
                 "{}: eambfc-rs version {}
 
@@ -99,5 +98,6 @@ There is NO WARRANTY, to the extent permitted by law.",
             );
             process::exit(0);
         }
+        Err((err, out_mode)) => err.report(out_mode),
     }
 }
