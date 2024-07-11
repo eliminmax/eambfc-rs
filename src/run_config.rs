@@ -4,13 +4,14 @@
 
 use std::ffi::OsString;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum OutMode {
     Basic,
     JSON,
     Quiet,
 }
 
+#[derive(Debug)]
 pub struct StandardRunConfig {
     pub progname: String,
     pub out_mode: OutMode,
@@ -21,6 +22,7 @@ pub struct StandardRunConfig {
     pub source_files: Vec<OsString>,
 }
 
+#[derive(Debug)]
 pub enum RunConfig {
     StandardRun(StandardRunConfig),
     ShowHelp(String),
