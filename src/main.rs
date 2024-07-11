@@ -61,7 +61,6 @@ fn rm_ext(filename: &OsString, extension: &OsStr) -> OsString {
 
 fn main() {
     let mut stdout = io::stdout();
-    // let args = getopt::new(env::args(), "hVqjOkme:").unwrap();
     match arg_parse::parse_args().unwrap() {
         RunType::ShowHelp(progname) => show_help(&mut stdout, &progname),
         RunType::StandardRun(_) => todo!(),
