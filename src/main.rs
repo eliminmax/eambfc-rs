@@ -10,15 +10,15 @@ pub mod optimize;
 pub mod run_config;
 pub mod x86_64_encoders;
 
+use err::BfErrDisplay;
+#[allow(unused_imports)]
+use run_config::{OutMode, RunConfig, StandardRunConfig};
 use std::ffi::{OsStr, OsString};
 #[allow(unused_imports)]
 use std::fs::File;
 #[allow(unused_imports)]
 use std::os::unix::fs::PermissionsExt;
 use std::{io, process};
-use err::BfErrDisplay;
-#[allow(unused_imports)]
-use run_config::{OutMode, RunConfig, StandardRunConfig};
 
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
     let help_text = format!(
