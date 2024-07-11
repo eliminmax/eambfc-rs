@@ -27,7 +27,7 @@ impl Default for EambfcOutMode {
     }
 }
 
-pub enum CompileError {
+pub enum BFCompileError {
     Basic {
         id: &'static str,
         msg: &'static str,
