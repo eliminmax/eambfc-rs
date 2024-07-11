@@ -23,6 +23,6 @@ pub struct StandardRunConfig {
 
 pub enum RunType {
     StandardRun(StandardRunConfig),
-    ShowHelp( String ),
-    ShowVersion ( String ),
+    ShowHelp(String),
+    ShowVersion(String),
 }
