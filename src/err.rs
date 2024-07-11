@@ -2,30 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-// enable quiet mode - this does not print error messages to stderr. Does not
-// affect JSON messages printed to stdout.
-pub fn quiet_mode() {
-    todo!("quiet_mode");
-}
-
-// enable JSON display mode - this prints JSON-formatted error messagess to
-// stdout instead of printing human-readable error messages to stderr.
-pub fn json_mode() {
-    todo!("json_mode");
-}
-
-
-pub enum EambfcOutMode {
-    JSON,
-    Quiet,
-    Basic
-}
-
-impl Default for EambfcOutMode {
-    fn default() -> Self {
-        EambfcOutMode::Basic
-    }
-}
+use super::run_config::OutMode;
 
 pub enum BFCompileError {
     Basic {
@@ -46,32 +23,69 @@ pub enum BFCompileError {
     },
 }
 
-// functions to display error messages, depending on the current error mode.
-
-// special handling for malloc/realloc failure error messages, which avoids any
-// further use of malloc/realloc for purposes like generating JSON-escaped
-// strings.
-pub fn alloc_err() {
-    todo!("alloc_err");
+#[allow(unused_variables)]
+pub trait BfErrDisplay {
+    fn report(&self, out_mode: OutMode);
 }
 
-// a generic error message
-pub fn basic_err(id: &str, msg: &str) {
-    todo!("basic_err");
+impl BfErrDisplay for BFCompileError {
+    fn report(&self, out_mode: OutMode) {
+        if out_mode == OutMode::Quiet {
+            return;
+        }
+        match &self {
+            BFCompileError::Basic { id, msg } => {
+                if out_mode == OutMode::Basic {
+                    eprintln!("Error {}: {}", id, msg);
+                } else {
+                    println!(
+                        "{{\"errorId\": \"{}\", \"message\":{}\"}}",
+                        json_str(id),
+                        json_str(msg)
+                    );
+                }
+            }
+            BFCompileError::Instruction { id, msg, instr } => {
+                if out_mode == OutMode::Basic {
+                    eprintln!("Error {} when compiling {}: {}", id, instr, msg);
+                } else {
+                    println!(
+                        "{{\"errorId\": \"{}\", \"message\":{}\", \"instruction\": \"{}\"}}",
+                        json_str(id),
+                        json_str(msg),
+                        json_str(&instr.to_string())
+                    );
+                }
+            }
+            BFCompileError::Position {
+                id,
+                msg,
+                instr,
+                line,
+                col,
+            } => {
+                if out_mode == OutMode::Basic {
+                    eprintln!(
+                        "Error {} when compiling {} at line {}, colunm {}: {}",
+                        id, instr, line, col, msg
+                    );
+                } else {
+                    println!(
+                        "{{\"errorId\": \"{}\", \"message\":{}\", \"instruction\": \"{}\",\
+                        \"line\": {}, \"column\": {}}}",
+                        json_str(id),
+                        json_str(msg),
+                        json_str(&instr.to_string()),
+                        line,
+                        col
+                    );
+                }
+            }
+        }
+    }
 }
 
-// an error message related to a specific instruction
-pub fn instr_err(id: &str, msg: &str, instr: char) {
-    todo!("instr_err");
-}
-
-// an error message related to a specific instruction at a specific location
-pub fn position_err(id: &str, msg: &str, instr: char, line: usize, col: usize) {
-    todo!("position_err");
-}
-
-// replaces first instance of "{}" within proto with arg, then passes it as msg
-// to basic_err
-pub fn param_err(id: &str, proto: String, arg: &str) {
-    todo!("param_err");
+fn json_str(s: &str) -> String {
+    todo!("JSON string of {}", s);
+    "".to_string()
 }
