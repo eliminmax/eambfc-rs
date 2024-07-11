@@ -108,7 +108,7 @@ fn json_str(s: &str) -> String {
             '\\' => "\\\\".to_string(),
             '"' => "\\\"".to_string(),
             n if n < '\x20' => format!("\\u00{:02x}", n as u32),
-            _ => (c.to_string()),
+            _ => c.to_string(),
         })
         .collect::<Vec<String>>()
         .join("")
