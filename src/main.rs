@@ -18,7 +18,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::{io, process};
 
 #[allow(unused_imports)]
-use run_config::{RunType, StandardRunConfig};
+use run_config::{OutMode, RunType, StandardRunConfig};
 
 #[allow(dead_code)]
 fn get_perms() -> u32 {
@@ -63,7 +63,28 @@ fn main() {
     let mut stdout = io::stdout();
     match arg_parse::parse_args().unwrap() {
         RunType::ShowHelp(progname) => show_help(&mut stdout, &progname),
-        RunType::StandardRun(_) => todo!(),
+        RunType::StandardRun(rc) => {
+            println!("Not yet implemented, but arguments parsed were:");
+            println!("Program name: {}", rc.progname);
+            println!(
+                "Output mode: {}",
+                match rc.out_mode {
+                    OutMode::Basic => "Basic",
+                    OutMode::JSON => "JSON",
+                    OutMode::Quiet => "Quiet",
+                }
+            );
+            println!("Optimize: {}", rc.optimize);
+            println!("Keep failed compilation output: {}", rc.keep);
+            println!("Continue after failed compilation: {}", rc.cont);
+            println!(
+                "File extension: {}",
+                rc.extension.to_string_lossy().to_string()
+            );
+            rc.source_files
+                .iter()
+                .for_each(|f| println!("- compile: {}", f.to_string_lossy().to_string()));
+        }
         RunType::ShowVersion(progname) => {
             println!(
                 "{}: eambfc-rs version {}
