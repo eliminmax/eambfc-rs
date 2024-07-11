@@ -21,7 +21,7 @@ pub struct StandardRunConfig {
     pub source_files: Vec<OsString>,
 }
 
-pub enum RunType {
+pub enum RunConfig {
     StandardRun(StandardRunConfig),
     ShowHelp(String),
     ShowVersion(String),

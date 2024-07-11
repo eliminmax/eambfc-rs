@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::err::BFCompileError;
-use super::run_config::{OutMode, RunType, StandardRunConfig};
+use super::run_config::{OutMode, RunConfig, StandardRunConfig};
 use std::env;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
@@ -16,7 +16,7 @@ pub enum ArgParseError {
     MissingParameter,
 }
 
-pub fn parse_args() -> Result<RunType, (BFCompileError, OutMode)> {
+pub fn parse_args() -> Result<RunConfig, (BFCompileError, OutMode)> {
     let mut args = env::args_os();
     // argument 0 should be the name of the file.
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
@@ -68,8 +68,8 @@ pub fn parse_args() -> Result<RunType, (BFCompileError, OutMode)> {
                         }
                         break;
                     }
-                    b'h' => return Ok(RunType::ShowHelp(progname.to_string())),
-                    b'V' => return Ok(RunType::ShowVersion(progname.to_string())),
+                    b'h' => return Ok(RunConfig::ShowHelp(progname.to_string())),
+                    b'V' => return Ok(RunConfig::ShowVersion(progname.to_string())),
                     b'j' => out_mode = OutMode::JSON,
                     // for consistency with original C version, quiet doesn't override JSON mode
                     b'q' => {
@@ -104,7 +104,7 @@ pub fn parse_args() -> Result<RunType, (BFCompileError, OutMode)> {
     if extension.is_empty() {
         extension = OsString::from(".bf");
     }
-    Ok(RunType::StandardRun(StandardRunConfig {
+    Ok(RunConfig::StandardRun(StandardRunConfig {
         progname,
         out_mode,
         optimize,

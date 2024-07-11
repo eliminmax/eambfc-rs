@@ -18,7 +18,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::{io, process};
 use err::BfErrDisplay;
 #[allow(unused_imports)]
-use run_config::{OutMode, RunType, StandardRunConfig};
+use run_config::{OutMode, RunConfig, StandardRunConfig};
 
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
     let help_text = format!(
@@ -56,8 +56,8 @@ fn rm_ext(filename: &OsString, extension: &OsStr) -> OsString {
 fn main() {
     let mut stdout = io::stdout();
     match arg_parse::parse_args() {
-        Ok(RunType::ShowHelp(progname)) => show_help(&mut stdout, &progname),
-        Ok(RunType::StandardRun(rc)) => {
+        Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
+        Ok(RunConfig::StandardRun(rc)) => {
             println!("Not yet implemented, but arguments parsed were:");
             println!("Program name: {}", rc.progname);
             println!(
@@ -79,7 +79,7 @@ fn main() {
                 .iter()
                 .for_each(|f| println!("- compile: {}", f.to_string_lossy().to_string()));
         }
-        Ok(RunType::ShowVersion(progname)) => {
+        Ok(RunConfig::ShowVersion(progname)) => {
             println!(
                 "{}: eambfc-rs version {}
 
