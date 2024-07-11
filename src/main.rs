@@ -48,9 +48,9 @@ will raise an error.
     let _ = outfile.write(help_text.as_bytes());
 }
 
-#[allow(dead_code, unused_variables)]
+#[allow(dead_code)]
 fn rm_ext(filename: &OsString, extension: &OsStr) -> OsString {
-    todo!("rm_ext");
+    todo!("rm_ext({:?}, {:?})", filename, extension);
 }
 
 fn main() {

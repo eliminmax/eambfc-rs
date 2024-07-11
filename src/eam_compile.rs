@@ -11,5 +11,5 @@ pub fn bf_compile(
     optimize: bool,
     rc: &RunConfig,
 ) -> Result<(), BFCompileError> {
-    todo!("bf_compile");
+    todo!("bf_compile({in_f:?}, {out_f:?}, {optimize:?}, {rc:?})",);
 }
