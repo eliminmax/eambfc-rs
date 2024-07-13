@@ -9,6 +9,7 @@ pub mod err;
 pub mod optimize;
 pub mod run_config;
 pub mod x86_64_encoders;
+pub use x86_64_encoders as instr_encoders;
 
 use err::BfErrDisplay;
 use run_config::{OutMode, RunConfig};
