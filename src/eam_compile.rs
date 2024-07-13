@@ -58,7 +58,7 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
     let phtb: [Elf64_Phdr; 2] = [
         Elf64_Phdr {
             p_type: 1,          // PT_LOAD ( loadable segment )
-            p_flags: 2 | 4,     // PF_R | PF_W (readable and writable)
+            p_flags: 4 | 2,     // PF_R | PF_W (readable and writable)
             p_offset: 0,        // load bytes from this index in the file
             p_vaddr: TAPE_ADDR, // load segment into this section of memory
             p_paddr: 0,         // load from this physical address
@@ -68,7 +68,7 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
         },
         Elf64_Phdr {
             p_type: 1,                               // PT_LOAD ( loadable segment )
-            p_flags: 2 | 1,                          // PF_R | PF_X (readable and executable)
+            p_flags: 4 | 1,                          // PF_R | PF_X (readable and executable)
             p_offset: 0,                             // load bytes from this index in the file
             p_vaddr: LOAD_VADDR,                     // load segment into this section of memory
             p_paddr: 0,                              // load from this physical address
@@ -81,6 +81,8 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
     serialize_ehdr64_le(ehdr, &mut to_write);
     serialize_phdr64_le(phtb[0], &mut to_write);
     serialize_phdr64_le(phtb[1], &mut to_write);
+    // add padding bytes
+    to_write.resize(START_PADDR as usize, 0u8);
     match output.write(to_write.as_slice()) {
         Ok(_) => Ok(()),
         Err(_) => Err(BFCompileError::Basic {
@@ -130,9 +132,9 @@ fn compile_instr<W: Write>(
         b'-' => result = dst.write(bfc_dec_byte(REG_BF_PTR).as_slice()),
         // increment the current cell value
         b'+' => result = dst.write(bfc_inc_byte(REG_BF_PTR).as_slice()),
-        // Write 1 byte at REG_BF_PTR to STDOUT
+        // Write 1 byte at [REG_BF_PTR] to STDOUT
         b'.' => result = dst.write(bf_io(SC_WRITE, 1).as_slice()),
-        // Read 1 byte to REG_BF_PTR from STDIN
+        // Read 1 byte to [REG_BF_PTR] from STDIN
         b',' => result = dst.write(bf_io(SC_READ, 0).as_slice()),
         b'[' | b']' => {
             return Err(BFCompileError::Position {
@@ -174,9 +176,9 @@ pub fn bf_compile<W: Write, R: Read>(
             msg: String::from("Optimization not implemented"),
         });
     }
-    let mut code_buf = Vec::<u8>::new();
-    let codesize: usize = Result::<Vec<usize>, BFCompileError>::from_iter(
-        BufReader::new(in_f).bytes().map(|maybe_byte| {
+    let mut code_buf = bfc_set_reg(REG_BF_PTR, TAPE_ADDR as i64);
+    let _ = Result::<Vec<usize>, BFCompileError>::from_iter(BufReader::new(in_f).bytes().map(
+        |maybe_byte| {
             let byte = maybe_byte.map_err(|_| BFCompileError::Position {
                 id: String::from("FAILED_READ"),
                 msg: String::from("Failed to read byte after current position"),
@@ -185,11 +187,14 @@ pub fn bf_compile<W: Write, R: Read>(
                 instr: '\0',
             })?;
             compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack)
-        }),
-    )?
-    .into_iter()
-    .sum();
-    write_headers(&mut out_f, codesize)?;
+        },
+    ))?;
+    // finally, after that mess, end with an exit(0)
+    code_buf.extend(bfc_set_reg(REG_SC_NUM, SC_EXIT));
+    code_buf.extend(bfc_set_reg(REG_ARG1, 0));
+    code_buf.extend(bfc_syscall());
+
+    write_headers(&mut out_f, code_buf.len())?;
     match out_f.write(code_buf.as_slice()) {
         Ok(_) => Ok(()),
         Err(_) => Err(BFCompileError::Basic {
