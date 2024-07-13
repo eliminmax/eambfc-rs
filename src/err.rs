@@ -82,17 +82,26 @@ impl BfErrDisplay for BFCompileError {
                     );
                 }
             }
-            BFCompileError::UnknownFlag(c) => BFCompileError::Basic {
-                id: "UNKNOWN_ARG".to_string(),
-                msg: format!(
-                    "Unknown argument: {}",
-                    match *c {
-                        n if n < 0x80_u8 => (*c as char).to_string(),
-                        _ => format!("\\x{:x}", *c),
-                    }
-                ),
+            BFCompileError::UnknownFlag(c) => {
+                if out_mode == OutMode::Basic {
+                    eprintln!(
+                        "Error UNKNOWN_ARG: {} is not a recognized argument.",
+                        match *c {
+                            n if n < 0x80_u8 => (*c as char).to_string(),
+                            _ => format!("non-ASCII byte char 0x{c:02x}"),
+                        }
+                    );
+                } else {
+                    println!(
+                        "{{\"errorId\": \"UNKNOWN_ARG\", \
+                        \"message\": \"{} is not a recognized argument\"}}",
+                        match *c {
+                            n if n < 0x80_u8 => json_str(&(*c as char).to_string()),
+                            _ => format!("non-ASCII byte char 0x{c:02x}"),
+                        }
+                    );
+                }
             }
-            .report(out_mode),
         }
     }
 }
