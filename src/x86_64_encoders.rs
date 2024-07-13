@@ -14,6 +14,39 @@
 // certain functions, it causes the debug builds to panic, so that they are theoretically known to
 // be used safely
 
+// the Linux kernel reads system call numbers from RAX on x86_64 systems, and reads arguments from
+// RDI, RSI, RDX, R10, R8, and R9.
+// None of the system calls that eambfc-r compiles to use more than 3 arguments, and the R8-R15
+// registers are addressed incompatibly, so only worry the first 3 argument registers.
+//
+// the RBX register is preserved through system calls, so it's useful as the tape pointer.
+//
+// Thus, for eambfc, the registers to care about are RAX, RDI, RSI, RDX, and RBX
+//
+// Oversimpifying a bit, in x86 assembly, when specifying a register that is not one of R8-R15, a
+// 3-bit value is used to identify it.
+//
+// * RAX is 000b
+// * RDI is 111b
+// * RSI is 110b
+// * RDX is 010b
+// * RBX is 011b
+pub mod registers {
+    pub const REG_SC_NUM: u8 = 0b000u8;
+    pub const REG_ARG1: u8 = 0b111u8;
+    pub const REG_ARG2: u8 = 0b110u8;
+    pub const REG_ARG3: u8 = 0b010u8;
+    pub const REG_BF_PTR: u8 = 0b011u8;
+}
+
+
+// Numbers used for the read, write, and exit system calls on linux/x86_64
+pub mod syscall_nums {
+    pub const SC_READ: i64 = 60;
+    pub const SC_WRITE: i64 = 1;
+    pub const SC_EXIT: i64 = 0;
+}
+
 // Chooses the shortest instrution to set a register to an immediate value, from the following:
 // XOR reg, reg
 // PUSH imm8; POP reg
