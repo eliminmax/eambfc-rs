@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use libc::{Elf64_Ehdr, Elf64_Phdr};
+// use and re-export
+// TODO: reimplement to remove libc dependency
+pub use libc::{Elf64_Ehdr, Elf64_Phdr};
 
 pub fn serialize_ehdr64_le(ehdr: Elf64_Ehdr, dest: &mut Vec<u8>) {
     dest.extend(ehdr.e_ident);
