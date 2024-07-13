@@ -39,12 +39,11 @@ pub mod registers {
     pub const REG_BF_PTR: u8 = 0b011u8;
 }
 
-
 // Numbers used for the read, write, and exit system calls on linux/x86_64
 pub mod syscall_nums {
-    pub const SC_READ: i64 = 60;
+    pub const SC_READ: i64 = 0;
     pub const SC_WRITE: i64 = 1;
-    pub const SC_EXIT: i64 = 0;
+    pub const SC_EXIT: i64 = 60;
 }
 
 // Chooses the shortest instrution to set a register to an immediate value, from the following:
@@ -76,7 +75,7 @@ pub fn bfc_set_reg(reg: u8, imm: i64) -> Vec<u8> {
 }
 
 // Returns instruction that copies the contents of the register src to the register dst
-pub fn bfc_reg_copy(src: u8, dst: u8) -> Vec<u8> {
+pub fn bfc_reg_copy(dst: u8, src: u8) -> Vec<u8> {
     // ensure src and dst are valid registers
     debug_assert!(src < 8 && dst < 8);
     // MOV dst, src
@@ -144,7 +143,7 @@ fn x86_offset(op: u8, mode: u8, reg: u8) -> Vec<u8> {
     debug_assert!(op == OFFSET_OP_INC || op == OFFSET_OP_DEC);
     debug_assert!(mode == OFFSET_MODE_BYTEPTR || mode == OFFSET_MODE_REG);
     debug_assert!(reg < 8);
-    vec![0xfe_u8, mode & 1]
+    vec![0xfe_u8 | (mode & 1), op | reg | (mode << 6)]
 }
 
 pub fn bfc_inc_reg(reg: u8) -> Vec<u8> {
