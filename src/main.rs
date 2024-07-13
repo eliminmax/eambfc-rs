@@ -11,13 +11,14 @@ pub mod run_config;
 pub mod x86_64_encoders;
 
 use err::BfErrDisplay;
-#[allow(unused_imports)]
-use run_config::{OutMode, RunConfig, StandardRunConfig};
+use run_config::{OutMode, RunConfig};
 use std::ffi::{OsStr, OsString};
 #[allow(unused_imports)]
 use std::fs::File;
 #[allow(unused_imports)]
-use std::os::unix::fs::PermissionsExt;
+use std::io::Write;
+#[allow(unused_imports)]
+use std::os::unix::{fs::PermissionsExt, ffi::OsStrExt, ffi::OsStringExt};
 use std::{io, process};
 
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
@@ -48,9 +49,19 @@ will raise an error.
     let _ = outfile.write(help_text.as_bytes());
 }
 
-#[allow(dead_code)]
-fn rm_ext(filename: &OsString, extension: &OsStr) -> OsString {
-    todo!("rm_ext({:?}, {:?})", filename, extension);
+
+// if filename ends with extension, return Ok(f), where f is the filename without the extension
+// otherwise, return Err(filename)
+fn rm_ext<'a>(filename: &'a OsStr, extension: &OsStr) -> Result<OsString, &'a OsStr> {
+    let name_len: usize = filename.as_bytes().len();
+    let ext_len: usize = extension.as_bytes().len();
+    if filename.to_os_string().into_vec().ends_with(extension.as_bytes()) {
+        let mut noext = filename.to_os_string().into_vec();
+        noext.truncate(name_len - ext_len);
+        Ok(OsString::from_vec(noext))
+    } else {
+        Err(filename)
+    }
 }
 
 fn main() {
@@ -75,9 +86,13 @@ fn main() {
                 "File extension: {}",
                 rc.extension.to_string_lossy().to_string()
             );
-            rc.source_files
-                .iter()
-                .for_each(|f| println!("- compile: {}", f.to_string_lossy().to_string()));
+            rc.source_files.iter().for_each(|f| {
+                println!(
+                    "- compile {} to {}",
+                    f.to_string_lossy().to_string(),
+                    rm_ext(&f, &rc.extension).unwrap().to_string_lossy().to_string()
+                )
+            });
         }
         Ok(RunConfig::ShowVersion(progname)) => {
             println!(
