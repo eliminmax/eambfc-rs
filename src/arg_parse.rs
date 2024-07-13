@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+// ut
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
@@ -8,15 +9,7 @@ use std::env;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 
-#[derive(Debug)]
-pub enum ArgParseError {
-    MultipleExtensions,
-    UnknownFlag(u8),
-    NoFiles,
-    MissingParameter,
-}
-
-pub fn parse_args() -> Result<RunConfig, (BFCompileError, OutMode)> {
+pub fn parse_args() -> Result<RunConfig, (BFCompileError, String, OutMode)> {
     let mut args = env::args_os();
     // argument 0 should be the name of the file.
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
@@ -47,6 +40,7 @@ pub fn parse_args() -> Result<RunConfig, (BFCompileError, OutMode)> {
                                     id: "MULTIPLE_EXTENSIONS".to_string(),
                                     msg: "passed -e multiple times".to_string(),
                                 },
+                                progname,
                                 out_mode,
                             ));
                         }
@@ -60,6 +54,7 @@ pub fn parse_args() -> Result<RunConfig, (BFCompileError, OutMode)> {
                                         id: "MISSING_OPERAND".to_string(),
                                         msg: "-e requires an additional argument".to_string(),
                                     },
+                                    progname,
                                     out_mode,
                                 ));
                             }
@@ -80,7 +75,7 @@ pub fn parse_args() -> Result<RunConfig, (BFCompileError, OutMode)> {
                     b'O' => optimize = true,
                     b'k' => keep = true,
                     b'c' => cont = true,
-                    c => return Err((BFCompileError::UnknownFlag(c), out_mode)),
+                    c => return Err((BFCompileError::UnknownFlag(c),progname, out_mode)),
                 };
             }
         } else {
@@ -97,6 +92,7 @@ pub fn parse_args() -> Result<RunConfig, (BFCompileError, OutMode)> {
                 id: "NO_SOURCE_FILES".to_string(),
                 msg: "No source files provided".to_string(),
             },
+            progname,
             out_mode,
         ));
     }
