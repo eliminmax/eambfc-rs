@@ -75,7 +75,7 @@ fn compile_wrapper(
     let outfile_name = rm_ext(file_name, extension).map_err(|e| BFCompileError::Basic {
         id: String::from("BAD_EXTENSION"),
         msg: format!(
-            "File {} does not end with expected extension.",
+            "Filename {} does not end with expected extension.",
             e.to_string_lossy()
         ),
     })?;
