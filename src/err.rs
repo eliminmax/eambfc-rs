@@ -40,7 +40,7 @@ impl BfErrDisplay for BFCompileError {
                     eprintln!("Error {}: {}", id, msg);
                 } else {
                     println!(
-                        "{{\"errorId\": \"{}\", \"message\":\"{}\"}}",
+                        "{{\"errorId\":\"{}\",\"message\":\"{}\"}}",
                         json_str(id),
                         json_str(msg)
                     );
@@ -51,7 +51,7 @@ impl BfErrDisplay for BFCompileError {
                     eprintln!("Error {} when compiling {}: {}", id, instr, msg);
                 } else {
                     println!(
-                        "{{\"errorId\": \"{}\", \"message\":\"{}\", \"instruction\": \"{}\"}}",
+                        "{{\"errorId\":\"{}\",\"message\":\"{}\",\"instruction\":\"{}\"}}",
                         json_str(id),
                         json_str(msg),
                         json_str(&instr.to_string())
@@ -72,8 +72,8 @@ impl BfErrDisplay for BFCompileError {
                     );
                 } else {
                     println!(
-                        "{{\"errorId\": \"{}\", \"message\":\"{}\", \"instruction\": \"{}\",\
-                        \"line\": {}, \"column\": {}}}",
+                        "{{\"errorId\":\"{}\",\"message\":\"{}\",\"instruction\":\"{}\",\
+                        \"line\":{},\"column\":{}}}",
                         json_str(id),
                         json_str(msg),
                         json_str(&instr.to_string()),
@@ -93,8 +93,8 @@ impl BfErrDisplay for BFCompileError {
                     );
                 } else {
                     println!(
-                        "{{\"errorId\": \"UNKNOWN_ARG\", \
-                        \"message\": \"{} is not a recognized argument\"}}",
+                        "{{\"errorId\":\"UNKNOWN_ARG\",\
+                        \"message\":\"{} is not a recognized argument\"}}",
                         match *c {
                             n if n < 0x80_u8 => json_str(&(*c as char).to_string()),
                             _ => format!("non-ASCII byte char 0x{c:02x}"),
