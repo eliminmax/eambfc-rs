@@ -17,7 +17,7 @@ pub enum BFCompileError {
     Position {
         id: String,
         msg: String,
-        u8: char,
+        instr: u8,
         line: usize,
         col: usize,
     },
