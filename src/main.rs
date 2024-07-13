@@ -79,11 +79,6 @@ fn compile_wrapper(
             e.to_string_lossy()
         ),
     })?;
-    eprintln!(
-        "file {}: outfile {}",
-        file_name.to_string_lossy(),
-        outfile_name.to_string_lossy()
-    );
     let mut open_options = OpenOptions::new();
     open_options.write(true).create(true).mode(0o755);
     let infile = File::open(file_name).map_err(|_| BFCompileError::Basic {
