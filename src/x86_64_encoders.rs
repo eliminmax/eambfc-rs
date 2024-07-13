@@ -108,6 +108,9 @@ fn test_jcc(tttn: u8, reg: u8, offset: i32) -> Vec<u8> {
     v
 }
 
+// size of the TEST + JUMP instructions
+pub const JUMP_SIZE: usize = 9;
+
 pub fn bfc_jump_not_zero(reg: u8, offset: i32) -> Vec<u8> {
     // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
     // TEST byte [reg], 0xff; JNZ offset
