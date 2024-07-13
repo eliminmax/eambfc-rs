@@ -11,15 +11,13 @@ pub mod run_config;
 pub mod x86_64_encoders;
 pub use x86_64_encoders as instr_encoders;
 
-use err::BfErrDisplay;
+use eam_compile::bf_compile;
+use err::{BFCompileError, BfErrDisplay};
 use run_config::{OutMode, RunConfig};
 use std::ffi::{OsStr, OsString};
-#[allow(unused_imports)]
-use std::fs::File;
-#[allow(unused_imports)]
-use std::io::Write;
-#[allow(unused_imports)]
-use std::os::unix::{ffi::OsStrExt, ffi::OsStringExt, fs::PermissionsExt};
+use std::fs::{remove_file, File, OpenOptions};
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::os::unix::fs::OpenOptionsExt;
 use std::{io, process};
 
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
@@ -68,37 +66,70 @@ fn rm_ext<'a>(filename: &'a OsStr, extension: &OsStr) -> Result<OsString, &'a Os
     }
 }
 
+// wrapper around the compilation of a specific file
+fn compile_wrapper(
+    file_name: &OsString,
+    extension: &OsStr,
+    optimize: bool,
+) -> Result<(), BFCompileError> {
+    let outfile_name = rm_ext(file_name, extension).map_err(|e| BFCompileError::Basic {
+        id: String::from("BAD_EXTENSION"),
+        msg: format!(
+            "File {} does not end with expected extension.",
+            e.to_string_lossy()
+        ),
+    })?;
+    eprintln!(
+        "file {}: outfile {}",
+        file_name.to_string_lossy(),
+        outfile_name.to_string_lossy()
+    );
+    let mut open_options = OpenOptions::new();
+    open_options.write(true).create(true).mode(0o755);
+    let infile = File::open(file_name).map_err(|_| BFCompileError::Basic {
+        id: String::from("OPEN_R_FAILED"),
+        msg: format!(
+            "Failed to open {} for reading.",
+            file_name.to_string_lossy().to_string()
+        ),
+    })?;
+    let outfile = open_options
+        .open(&outfile_name)
+        .map_err(|_| BFCompileError::Basic {
+            id: String::from("OPEN_W_FAILED"),
+            msg: format!(
+                "Failed to open {} for writing.",
+                outfile_name.to_string_lossy().to_string()
+            ),
+        })?;
+    bf_compile(infile, outfile, optimize)
+}
+
 fn main() {
     let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
+
+    let mut exit_code = 0;
     match arg_parse::parse_args() {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
-            println!("Not yet implemented, but arguments parsed were:");
-            println!("Program name: {}", rc.progname);
-            println!(
-                "Output mode: {}",
-                match rc.out_mode {
-                    OutMode::Basic => "Basic",
-                    OutMode::JSON => "JSON",
-                    OutMode::Quiet => "Quiet",
-                }
-            );
-            println!("Optimize: {}", rc.optimize);
-            println!("Keep failed compilation output: {}", rc.keep);
-            println!("Continue after failed compilation: {}", rc.cont);
-            println!(
-                "File extension: {}",
-                rc.extension.to_string_lossy().to_string()
-            );
             rc.source_files.iter().for_each(|f| {
-                println!(
-                    "- compile {} to {}",
-                    f.to_string_lossy().to_string(),
-                    rm_ext(&f, &rc.extension)
-                        .unwrap()
-                        .to_string_lossy()
-                        .to_string()
-                )
+                match compile_wrapper(&f, &rc.extension, rc.optimize) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        e.report(&rc.out_mode);
+                        if !rc.keep {
+                            // try to delete the file
+                            let _ =
+                                remove_file(rm_ext(f, &rc.extension).unwrap_or(OsString::from("")));
+                        }
+                        if !rc.cont {
+                            process::exit(1);
+                        } else {
+                            exit_code = 1;
+                        }
+                    }
+                }
             });
         }
         Ok(RunConfig::ShowVersion(progname)) => {
@@ -113,8 +144,14 @@ you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.",
                 progname, "0.0.0-pre"
             );
-            process::exit(0);
+            process::exit(exit_code);
         }
-        Err((err, out_mode)) => err.report(out_mode),
+        Err((err, progname, out_mode)) => {
+            err.report(&out_mode);
+            if out_mode == OutMode::Basic {
+                show_help(&mut stderr, &progname)
+            }
+        }
     }
+    process::exit(exit_code);
 }
