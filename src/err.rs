@@ -26,17 +26,17 @@ pub enum BFCompileError {
 
 #[allow(unused_variables)]
 pub trait BfErrDisplay {
-    fn report(&self, out_mode: OutMode);
+    fn report(&self, out_mode: &OutMode);
 }
 
 impl BfErrDisplay for BFCompileError {
-    fn report(&self, out_mode: OutMode) {
-        if out_mode == OutMode::Quiet {
+    fn report(&self, out_mode: &OutMode) {
+        if *out_mode == OutMode::Quiet {
             return;
         }
         match &self {
             BFCompileError::Basic { id, msg } => {
-                if out_mode == OutMode::Basic {
+                if *out_mode == OutMode::Basic {
                     eprintln!("Error {}: {}", id, msg);
                 } else {
                     println!(
@@ -47,7 +47,7 @@ impl BfErrDisplay for BFCompileError {
                 }
             }
             BFCompileError::Instruction { id, msg, instr } => {
-                if out_mode == OutMode::Basic {
+                if *out_mode == OutMode::Basic {
                     eprintln!("Error {} when compiling {}: {}", id, instr, msg);
                 } else {
                     println!(
@@ -65,7 +65,7 @@ impl BfErrDisplay for BFCompileError {
                 line,
                 col,
             } => {
-                if out_mode == OutMode::Basic {
+                if *out_mode == OutMode::Basic {
                     eprintln!(
                         "Error {} when compiling {} at line {}, colunm {}: {}",
                         id, instr, line, col, msg
@@ -83,7 +83,7 @@ impl BfErrDisplay for BFCompileError {
                 }
             }
             BFCompileError::UnknownFlag(c) => {
-                if out_mode == OutMode::Basic {
+                if *out_mode == OutMode::Basic {
                     eprintln!(
                         "Error UNKNOWN_ARG: {} is not a recognized argument.",
                         match *c {
