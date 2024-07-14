@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
-use super::elf_tools::{serialize_ehdr64_le, serialize_phdr64_le, Elf64_Ehdr, Elf64_Phdr};
+use super::elf_tools::{Ehdr, Phdr};
 use super::err::BFCompileError;
 use super::instr_encoders::arch_info::*;
 use super::instr_encoders::registers::*;
@@ -48,7 +48,7 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
         0u8,
         0u8,
     ];
-    let ehdr = Elf64_Ehdr {
+    let ehdr = Ehdr {
         e_ident: e_ident_vals,
         e_type: 2, // ET_EXEC
         e_machine: EM_ARCH,
@@ -64,34 +64,30 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
         e_entry: START_VADDR,
         e_flags: 0, // ISA-specific flags. None are defined for x86_64, so set to 0.
     };
-    let phtb: [Elf64_Phdr; 2] = [
-        // the segment containing the tape
-        Elf64_Phdr {
-            p_type: 1,          // PT_LOAD ( loadable segment )
-            p_flags: 4 | 2,     // PF_R | PF_W (readable and writable)
-            p_offset: 0,        // load bytes from this index in the file
-            p_vaddr: TAPE_ADDR, // load segment into this section of memory
-            p_paddr: 0,         // load from this physical address
-            p_filesz: 0,        // don't load anything from file, just zero-initialize it
-            p_memsz: TAPE_SIZE, // allocate this many bytes of memory for this segment
-            p_align: 0x1000,    // align with this power of 2
-        },
-        // The segment containgin the actual machine code
-        Elf64_Phdr {
-            p_type: 1,                               // PT_LOAD ( loadable segment )
-            p_flags: 4 | 1,                          // PF_R | PF_X (readable and executable)
-            p_offset: 0,                             // load bytes from this index in the file
-            p_vaddr: LOAD_VADDR,                     // load segment into this section of memory
-            p_paddr: 0,                              // load from this physical address
-            p_filesz: START_PADDR + codesize as u64, // load this many bytes from file…
-            p_memsz: START_PADDR + codesize as u64,  // allocate this many bytes of memory…
-            p_align: 1,                              // align with this power of 2
-        },
-    ];
-    let mut to_write = Vec::<u8>::new();
-    serialize_ehdr64_le(ehdr, &mut to_write);
-    serialize_phdr64_le(phtb[0], &mut to_write);
-    serialize_phdr64_le(phtb[1], &mut to_write);
+    let tape_segment = Phdr {
+        p_type: 1,          // PT_LOAD ( loadable segment )
+        p_flags: 4 | 2,     // PF_R | PF_W (readable and writable)
+        p_offset: 0,        // load bytes from this index in the file
+        p_vaddr: TAPE_ADDR, // load segment into this section of memory
+        p_paddr: 0,         // load from this physical address
+        p_filesz: 0,        // don't load anything from file, just zero-initialize it
+        p_memsz: TAPE_SIZE, // allocate this many bytes of memory for this segment
+        p_align: 0x1000,    // align with this power of 2
+    };
+    let code_segment = Phdr {
+        p_type: 1,                               // PT_LOAD ( loadable segment )
+        p_flags: 4 | 1,                          // PF_R | PF_X (readable and executable)
+        p_offset: 0,                             // load bytes from this index in the file
+        p_vaddr: LOAD_VADDR,                     // load segment into this section of memory
+        p_paddr: 0,                              // load from this physical address
+        p_filesz: START_PADDR + codesize as u64, // load this many bytes from file…
+        p_memsz: START_PADDR + codesize as u64,  // allocate this many bytes of memory…
+        p_align: 1,                              // align with this power of 2
+    };
+    let mut to_write = Vec::<u8>::from(ehdr);
+    to_write.extend(Vec::<u8>::from(tape_segment).as_slice());
+    to_write.extend(Vec::<u8>::from(code_segment).as_slice());
+
     // add padding bytes
     to_write.resize(START_PADDR as usize, 0u8);
     match output.write(to_write.as_slice()) {

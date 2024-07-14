@@ -31,6 +31,7 @@
 // * RSI is 110b
 // * RDX is 010b
 // * RBX is 011b
+
 pub mod registers {
     pub const REG_SC_NUM: u8 = 0b000u8;
     pub const REG_ARG1: u8 = 0b111u8;
