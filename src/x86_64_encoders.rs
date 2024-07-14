@@ -46,6 +46,13 @@ pub mod syscall_nums {
     pub const SC_EXIT: i64 = 60;
 }
 
+pub mod arch_info {
+    // size of the TEST + JUMP instructions
+    pub const JUMP_SIZE: usize = 9;
+    pub const EM_ARCH: u16 = 62u16; // EM_X86_64 (i.e. amd64)
+    pub const ELFDATA_BYTE_ORDER: u8 = 1; // ELFDATA2LSB (i.e. 2's complement, little endian)
+}
+
 // Chooses the shortest instrution to set a register to an immediate value, from the following:
 // XOR reg, reg
 // PUSH imm8; POP reg
@@ -107,9 +114,6 @@ fn test_jcc(tttn: u8, reg: u8, offset: i32) -> Vec<u8> {
     v.extend(offset.to_le_bytes());
     v
 }
-
-// size of the TEST + JUMP instructions
-pub const JUMP_SIZE: usize = 9;
 
 pub fn bfc_jump_not_zero(reg: u8, offset: i32) -> Vec<u8> {
     // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
