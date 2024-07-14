@@ -14,11 +14,11 @@ pub use x86_64_encoders as instr_encoders;
 use eam_compile::bf_compile;
 use err::{BFCompileError, BfErrDisplay};
 use run_config::{OutMode, RunConfig};
+use std::env::args_os;
 use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
-use std::env::args_os;
 use std::{io, process};
 
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {

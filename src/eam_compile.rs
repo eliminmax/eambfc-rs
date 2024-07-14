@@ -227,7 +227,6 @@ pub fn bf_compile<W: Write, R: Read>(
         },
     ))?;
 
-
     // quick check to make sure that there are no unterminated loops
     if let Some(jl) = jump_stack.pop() {
         return Err(BFCompileError::Position {

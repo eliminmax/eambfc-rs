@@ -217,7 +217,7 @@ mod tests {
     fn fallback_for_empty_args() -> Result<(), String> {
         let err = parse_args(vec![].into_iter()).unwrap_err();
         match err {
-            (BFCompileError::Basic { id,  msg: _ }, name, _) => {
+            (BFCompileError::Basic { id, msg: _ }, name, _) => {
                 assert_eq!(name, String::from("eambfc-rs"));
                 assert_eq!(id, "NO_SOURCE_FILES");
             }
