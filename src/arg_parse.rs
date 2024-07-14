@@ -13,7 +13,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
 ) -> Result<RunConfig, (BFCompileError, String, OutMode)> {
     // argument 0 should be the name of the file.
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
-    let progname = args.next().unwrap_or(OsString::from("eambfs-rs"));
+    let progname = args.next().unwrap_or(OsString::from("eambfc-rs"));
     let progname = progname.to_string_lossy().to_string();
 
     let mut extension = OsString::new();
