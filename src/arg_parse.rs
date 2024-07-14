@@ -226,4 +226,36 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn arg0_contains_non_utf8() -> Result<(), String> {
+        let args_set = vec![
+            OsString::from_vec(b"not-\xeeambfc-i-promis\xee".into()),
+            OsString::from("-h"),
+        ]
+        .into_iter();
+        assert_eq!(
+            parse_args(args_set),
+            Ok(RunConfig::ShowHelp(String::from("not-�ambfc-i-promis�")))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn filename_contains_non_utf8() -> Result<(), String> {
+        let args_set = vec![
+            OsString::from("eambfc-rs"),
+            OsString::from_vec(b"fil\xee.bf".into()),
+        ]
+        .into_iter();
+        assert_eq!(
+            parse_args(args_set),
+            Ok(RunConfig::StandardRun(StandardRunConfig {
+                progname: String::from("eambfc-rs"),
+                source_files: vec![OsString::from_vec(b"fil\xee.bf".into())],
+                ..StandardRunConfig::default()
+            }))
+        );
+        Ok(())
+    }
 }
