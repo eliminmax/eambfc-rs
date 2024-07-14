@@ -25,7 +25,6 @@ pub enum BFCompileError {
     UnknownFlag(u8), // flag is a c character
 }
 
-#[allow(unused_variables)]
 pub trait BfErrDisplay {
     fn report(&self, out_mode: &OutMode);
 }

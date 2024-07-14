@@ -120,7 +120,6 @@ struct JumpLocation {
     index: usize,
 }
 
-#[allow(unused_variables)]
 fn compile_instr(
     instr: u8,
     dst: &mut Vec<u8>,
