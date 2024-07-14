@@ -5,11 +5,12 @@
 
 use super::err::BFCompileError;
 use super::run_config::{OutMode, RunConfig, StandardRunConfig};
-use std::env::ArgsOs;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 
-pub fn parse_args(mut args: ArgsOs) -> Result<RunConfig, (BFCompileError, String, OutMode)> {
+pub fn parse_args<T: Iterator<Item = OsString>>(
+    mut args: T,
+) -> Result<RunConfig, (BFCompileError, String, OutMode)> {
     // argument 0 should be the name of the file.
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
     let progname = args.next().unwrap_or(OsString::from("eambfs-rs"));
@@ -74,7 +75,7 @@ pub fn parse_args(mut args: ArgsOs) -> Result<RunConfig, (BFCompileError, String
                     b'O' => optimize = true,
                     b'k' => keep = true,
                     b'c' => cont = true,
-                    c => return Err((BFCompileError::UnknownFlag(c),progname, out_mode)),
+                    c => return Err((BFCompileError::UnknownFlag(c), progname, out_mode)),
                 };
             }
         } else {
