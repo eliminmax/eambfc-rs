@@ -47,10 +47,11 @@ pub mod syscall_nums {
 }
 
 pub mod arch_info {
-    // size of the TEST + JUMP instructions
-    pub const JUMP_SIZE: usize = 9;
+    pub const JUMP_SIZE: usize = 9; // size of the TEST + JUMP instructions
     pub const EM_ARCH: u16 = 62u16; // EM_X86_64 (i.e. amd64)
     pub const ELFDATA_BYTE_ORDER: u8 = 1; // ELFDATA2LSB (i.e. 2's complement, little endian)
+    pub const MAX_JUMP_DISTANCE: usize = i32::MAX as usize; // how far can we jump
+    pub type JumpDistance = i32; // type to pass to bfc_jump_not_zero and bfc_jump_zero
 }
 
 // Chooses the shortest instrution to set a register to an immediate value, from the following:
@@ -115,13 +116,13 @@ fn test_jcc(tttn: u8, reg: u8, offset: i32) -> Vec<u8> {
     v
 }
 
-pub fn bfc_jump_not_zero(reg: u8, offset: i32) -> Vec<u8> {
+pub fn bfc_jump_not_zero(reg: u8, offset: arch_info::JumpDistance) -> Vec<u8> {
     // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
     // TEST byte [reg], 0xff; JNZ offset
     test_jcc(0b0101_u8, reg, offset)
 }
 
-pub fn bfc_jump_zero(reg: u8, offset: i32) -> Vec<u8> {
+pub fn bfc_jump_zero(reg: u8, offset: arch_info::JumpDistance) -> Vec<u8> {
     // according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
     // TEST byte [reg], 0xff; JZ offset
     test_jcc(0b0100_u8, reg, offset)

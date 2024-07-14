@@ -31,19 +31,28 @@ const START_VADDR: u64 = START_PADDR + LOAD_VADDR;
 fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFCompileError> {
     let e_ident_vals: [u8; 16] = [
         // first 4 bytes are the magic values pre-defined and used to mark this as an ELF file
-        0x7fu8, b'E', b'L', b'F',
+        0x7fu8,
+        b'E',
+        b'L',
+        b'F',
         2u8, // EI_CLASS = ELFCLASS64 (i.e. this is a 64-bit ELF file)
-        1u8, // EI_DATA = ELFDATA2LSB (i.e. this is a LSB-ordered ELF file)
+        ELFDATA_BYTE_ORDER,
         1u8, // EI_VERSION = EV_CURRENT (the only valid option)
         0u8, // EI_OSABI = ELFOSABI_SYSV,
         0u8, // EI_ABIVERSION = 0 (ELFOSABI_SYSV doesn't define any ABI versions)
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, // remaining bytes are for padding
+        0u8, // remaining bytes are for padding
+        0u8,
+        0u8,
+        0u8,
+        0u8,
+        0u8,
+        0u8,
     ];
     let ehdr = Elf64_Ehdr {
         e_ident: e_ident_vals,
-        e_type: 2,     // ET_EXEC
-        e_machine: 62, // the identifier for X86_64 machines
-        e_version: 1,  // The only valid version number
+        e_type: 2, // ET_EXEC
+        e_machine: EM_ARCH,
+        e_version: 1, // The only valid version number
         e_phnum: PHNUM,
         e_shnum: 0,
         e_phoff: EHDR_SIZE as u64,
@@ -167,22 +176,25 @@ fn compile_instr(
                     })?;
             let open_address = open_location.index;
             let distance = dst.len() - open_address;
-            // This gets messy. Jump length must be within the 32-bit integer limit.
+            // This gets messy. Jump length must be within the limit allowed by the architecture.
             // usize may be longer than 32 bits on 64-bit platforms.
             // need to cast to 32 bit signed integer, but if it's too big, throw a JUMP_TOO_LONG
-            dst[open_address..open_address + JUMP_SIZE].swap_with_slice(&mut bfc_jump_zero(
-                REG_BF_PTR,
-                distance.try_into().map_err(|_| BFCompileError::Position {
+            if distance > MAX_JUMP_DISTANCE {
+                return Err(BFCompileError::Position {
                     id: String::from("JUMP_TOO_LONG"),
-                    msg: String::from("Attempted a jump longer than the 32-bit integer limit"),
+                    msg: String::from("Attempted a jump longer than the maximum length."),
                     instr: b'[',
                     col: open_location.src_col,
                     line: open_location.src_line,
-                })?,
-            ));
+                });
+            }
+
+            dst[open_address..open_address + JUMP_SIZE]
+                .swap_with_slice(&mut bfc_jump_zero(REG_BF_PTR, distance as JumpDistance));
             // now, we know that distance fits within the 32-bit integer limit, so we can
             // simply cast without another check needed when compiling the `]` instruction itself
-            result = dst.write(bfc_jump_not_zero(REG_BF_PTR, -(distance as i32)).as_slice());
+            result =
+                dst.write(bfc_jump_not_zero(REG_BF_PTR, -(distance as JumpDistance)).as_slice());
         }
         b'\n' => {
             pos.col = 1;
