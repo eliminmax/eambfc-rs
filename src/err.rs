@@ -4,6 +4,7 @@
 
 use super::run_config::OutMode;
 
+#[derive(Debug, PartialEq)]
 pub enum BFCompileError {
     Basic {
         id: String,
