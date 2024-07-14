@@ -11,7 +11,7 @@ pub enum OutMode {
     Quiet,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct StandardRunConfig {
     pub progname: String,
     pub out_mode: OutMode,
@@ -22,7 +22,7 @@ pub struct StandardRunConfig {
     pub source_files: Vec<OsString>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum RunConfig {
     StandardRun(StandardRunConfig),
     ShowHelp(String),
