@@ -18,6 +18,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
+use std::env::args_os;
 use std::{io, process};
 
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
@@ -105,7 +106,7 @@ fn main() {
     let mut stderr = io::stderr();
 
     let mut exit_code = 0;
-    match arg_parse::parse_args() {
+    match arg_parse::parse_args(args_os()) {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
