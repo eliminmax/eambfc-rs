@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::elf_tools::{serialize_ehdr64_le, serialize_phdr64_le, Elf64_Ehdr, Elf64_Phdr};
 use super::err::BFCompileError;
+use super::instr_encoders::arch_info::*;
 use super::instr_encoders::registers::*;
 use super::instr_encoders::syscall_nums::*;
 use super::instr_encoders::*;
@@ -31,19 +32,18 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
     let e_ident_vals: [u8; 16] = [
         // first 4 bytes are the magic values pre-defined and used to mark this as an ELF file
         0x7fu8, b'E', b'L', b'F',
-        // EI_CLASS = ELFCLASS64 (i.e. this is a 64-bit ELF file)
-        2u8, // EI_DATA = ELFDATA2LSB (i.e. this is a LSB-ordered ELF file)
+        2u8, // EI_CLASS = ELFCLASS64 (i.e. this is a 64-bit ELF file)
+        1u8, // EI_DATA = ELFDATA2LSB (i.e. this is a LSB-ordered ELF file)
         1u8, // EI_VERSION = EV_CURRENT (the only valid option)
-        1u8, // EI_OSABI = ELFOSABI_SYSV,
+        0u8, // EI_OSABI = ELFOSABI_SYSV,
         0u8, // EI_ABIVERSION = 0 (ELFOSABI_SYSV doesn't define any ABI versions)
-        0u8, // remaining bytes are for padding
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, // remaining bytes are for padding
     ];
     let ehdr = Elf64_Ehdr {
         e_ident: e_ident_vals,
         e_type: 2,     // ET_EXEC
         e_machine: 62, // the identifier for X86_64 machines
-        e_version: 1,
+        e_version: 1,  // The only valid version number
         e_phnum: PHNUM,
         e_shnum: 0,
         e_phoff: EHDR_SIZE as u64,
@@ -56,16 +56,18 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
         e_flags: 0, // ISA-specific flags. None are defined for x86_64, so set to 0.
     };
     let phtb: [Elf64_Phdr; 2] = [
+        // the segment containing the tape
         Elf64_Phdr {
             p_type: 1,          // PT_LOAD ( loadable segment )
             p_flags: 4 | 2,     // PF_R | PF_W (readable and writable)
             p_offset: 0,        // load bytes from this index in the file
             p_vaddr: TAPE_ADDR, // load segment into this section of memory
             p_paddr: 0,         // load from this physical address
-            p_filesz: 0,        // load this many bytes from file, then zero-initialize the rest
+            p_filesz: 0,        // don't load anything from file, just zero-initialize it
             p_memsz: TAPE_SIZE, // allocate this many bytes of memory for this segment
             p_align: 0x1000,    // align with this power of 2
         },
+        // The segment containgin the actual machine code
         Elf64_Phdr {
             p_type: 1,                               // PT_LOAD ( loadable segment )
             p_flags: 4 | 1,                          // PF_R | PF_X (readable and executable)
