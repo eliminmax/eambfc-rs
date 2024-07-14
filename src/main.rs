@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#[cfg(not(unix))] compile_error!("Unsupported platform! This program relies on std::os::unix!");
+#[cfg(not(unix))]
+compile_error!("Unsupported platform! This program relies on std::os::unix!");
 
 pub mod arg_parse;
 pub mod eam_compile;
