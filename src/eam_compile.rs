@@ -226,6 +226,18 @@ pub fn bf_compile<W: Write, R: Read>(
             compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack)
         },
     ))?;
+
+
+    // quick check to make sure that there are no unterminated loops
+    if let Some(jl) = jump_stack.pop() {
+        return Err(BFCompileError::Position {
+            id: String::from("UNMATCHED_OPEN"),
+            msg: String::from("Reached the end of the file with an unmatched '['"),
+            line: jl.src_line,
+            col: jl.src_col,
+            instr: b'[',
+        });
+    }
     // finally, after that mess, end with an exit(0)
     code_buf.extend(bfc_set_reg(REG_SC_NUM, SC_EXIT));
     code_buf.extend(bfc_set_reg(REG_ARG1, 0));
@@ -239,4 +251,22 @@ pub fn bf_compile<W: Write, R: Read>(
             msg: String::from(""),
         }),
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unmatched_open() -> Result<(), String> {
+        // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
+        // user Calamari.
+        // SPDX-FileCopyrightText: 2005 Jeffry Johnston
+        //
+        // SPDX-License-Identifier: CC0-1.0
+        let loopy_code: &[u8] = b"";
+        Ok(())
+    }
+
 }
