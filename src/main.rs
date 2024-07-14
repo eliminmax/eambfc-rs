@@ -153,3 +153,44 @@ There is NO WARRANTY, to the extent permitted by law.",
     }
     process::exit(exit_code);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rmext_success_ascii() -> Result<(), String> {
+        assert_eq!(
+            rm_ext(&OsString::from("foobar"), &OsString::from("bar")),
+            Ok(OsString::from("foo"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rmext_success_non_ascii() -> Result<(), String> {
+        assert_eq!(
+            rm_ext(&OsStr::from_bytes(b"\xee.e"), &OsStr::from_bytes(b".e")),
+            Ok(OsString::from_vec(vec![0xeeu8]))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rmext_fail_ascii() -> Result<(), String> {
+        assert_eq!(
+            rm_ext(&OsString::from("foobar"), &OsString::from("baz")),
+            Err(OsStr::from_bytes(b"foobar"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rmext_fail_non_ascii() -> Result<(), String> {
+        assert_eq!(
+            rm_ext(&OsStr::from_bytes(b"\xee.e"), &OsStr::from_bytes(b".bf")),
+            Err(OsStr::from_bytes(b"\xee.e"))
+        );
+        Ok(())
+    }
+}
