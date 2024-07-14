@@ -28,3 +28,17 @@ pub enum RunConfig {
     ShowHelp(String),
     ShowVersion(String),
 }
+
+impl Default for StandardRunConfig {
+    fn default() -> Self {
+        StandardRunConfig {
+            progname: String::from("eambfc-rs"),
+            out_mode: OutMode::Basic,
+            optimize: false,
+            keep: false,
+            cont: false,
+            extension: OsString::from(".bf"),
+            source_files: Vec::<OsString>::new(),
+        }
+    }
+}
