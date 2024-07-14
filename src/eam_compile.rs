@@ -253,20 +253,50 @@ pub fn bf_compile<W: Write, R: Read>(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn compile_all_bf_instructions() -> Result<(), String> {
+        bf_compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false)
+            .map_err(|e| format!("Failed to compile: {:?}", e))
+    }
+
+    #[test]
+    fn compile_nested_loops() -> Result<(), String> {
+        // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
+        // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
+        bf_compile(b">+[-->---[-<]>]>+".as_slice(), Vec::<u8>::new(), false)
+            .map_err(|e| format!("Failed to compile: {:?}", e))
+    }
 
     #[test]
     fn unmatched_open() -> Result<(), String> {
-        // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
-        // user Calamari.
-        // SPDX-FileCopyrightText: 2005 Jeffry Johnston
-        //
-        // SPDX-License-Identifier: CC0-1.0
-        let loopy_code: &[u8] = b"";
+        assert!(
+            bf_compile(b"[".as_slice(), Vec::<u8>::new(), false).is_err_and(|e| {
+                match e {
+                    BFCompileError::Basic { id, .. }
+                    | BFCompileError::Instruction { id, .. }
+                    | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_OPEN"),
+                    BFCompileError::UnknownFlag(_) => false,
+                }
+            })
+        );
         Ok(())
     }
 
+    #[test]
+    fn unmatched_close() -> Result<(), String> {
+        assert!(
+            bf_compile(b"]".as_slice(), Vec::<u8>::new(), false).is_err_and(|e| {
+                match e {
+                    BFCompileError::Basic { id, .. }
+                    | BFCompileError::Instruction { id, .. }
+                    | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_CLOSE"),
+                    BFCompileError::UnknownFlag(_) => false,
+                }
+            })
+        );
+        Ok(())
+    }
 }
