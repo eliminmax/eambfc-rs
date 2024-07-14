@@ -110,3 +110,121 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
         source_files,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn combined_args() -> Result<(), String> {
+        // ensure that combined arguments are processed properly
+        let args_set_0 = vec![
+            OsString::from("eambfc-rs-test"),
+            // should be interpreted identically to -k -j -e .brainfuck'
+            OsString::from("-kje.brainfuck"),
+            OsString::from("foo.brainfuck"),
+            OsString::from("bar.brainfuck"),
+        ]
+        .into_iter();
+        let args_set_1 = vec![
+            OsString::from("eambfc-rs-test"),
+            // should be interpreted identically to -kje.brainfuck'
+            OsString::from("-k"),
+            OsString::from("-j"),
+            OsString::from("-e"),
+            OsString::from(".brainfuck"),
+            OsString::from("foo.brainfuck"),
+            OsString::from("bar.brainfuck"),
+        ]
+        .into_iter();
+
+        assert_eq!(
+            parse_args(args_set_0).unwrap(),
+            parse_args(args_set_1).unwrap()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn options_stop_on_double_dash() -> Result<(), String> {
+        let args_set = vec![
+            OsString::from("eambfc-rs-test"),
+            OsString::from("--"),
+            OsString::from("-j"),
+            OsString::from("-h"),
+            OsString::from("-e.notbf"),
+        ]
+        .into_iter();
+        // ensure that -h, -j and -e.notbf are interpreted as the list of file names
+        let parsed_args = match parse_args(args_set).unwrap() {
+            RunConfig::StandardRun(rc) => rc,
+            _ => panic!("Arguments not parsed into StandardRunConfig!"),
+        };
+        assert_eq!(parsed_args.out_mode, OutMode::Basic);
+        assert_eq!(
+            parsed_args.source_files,
+            vec![
+                OsString::from("-j"),
+                OsString::from("-h"),
+                OsString::from("-e.notbf"),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn options_dont_mix_with_files() -> Result<(), String> {
+        let args_set = vec![
+            OsString::from("eambfc-rs-test"),
+            OsString::from("e.bf"),
+            OsString::from("-h"),
+        ]
+        .into_iter();
+        // ensure that -h is interpreted as a of file name
+        let parsed_args = match parse_args(args_set).unwrap() {
+            RunConfig::StandardRun(rc) => rc,
+            _ => panic!("Arguments not parsed into StandardRunConfig!"),
+        };
+        assert_eq!(
+            parsed_args.source_files,
+            vec![OsString::from("e.bf"), OsString::from("-h"),]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn help_includes_progname() -> Result<(), String> {
+        let args_set =
+            vec![OsString::from("not-eambfc-i-promise"), OsString::from("-h")].into_iter();
+        assert_eq!(
+            parse_args(args_set),
+            Ok(RunConfig::ShowHelp(String::from("not-eambfc-i-promise")))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn version_includes_progname() -> Result<(), String> {
+        let args_set =
+            vec![OsString::from("not-eambfc-i-promise"), OsString::from("-V")].into_iter();
+        assert_eq!(
+            parse_args(args_set),
+            Ok(RunConfig::ShowVersion(String::from("not-eambfc-i-promise")))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn fallback_for_empty_args() -> Result<(), String> {
+        let err = parse_args(vec![].into_iter()).unwrap_err();
+        match err {
+            (BFCompileError::Basic { id,  msg: _ }, name, _) => {
+                assert_eq!(name, String::from("eambfc-rs"));
+                assert_eq!(id, "NO_SOURCE_FILES");
+            }
+            _ => panic!(),
+        }
+
+        Ok(())
+    }
+}
