@@ -1,5 +1,4 @@
 // SPDX-FileCopyrightText: 2024 Eli Array Minkoff
-// ut
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
