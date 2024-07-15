@@ -84,7 +84,7 @@ fn compile_wrapper(
         ),
     })?;
     let mut open_options = OpenOptions::new();
-    open_options.write(true).create(true).mode(0o755);
+    open_options.write(true).create(true).truncate(true).mode(0o755);
     let infile = File::open(file_name).map_err(|_| BFCompileError::Basic {
         id: String::from("OPEN_R_FAILED"),
         msg: format!(
