@@ -6,7 +6,6 @@ pub trait SerializePhdr {
     fn serialize(&self) -> &[u8];
 }
 
-#[derive(Debug)]
 pub struct Ehdr {
     pub e_ident: [u8; 16],
     pub e_type: u16,
@@ -59,7 +58,6 @@ macro_rules! serialize_ehdr {
 macro_rules! serialize_phdr {
     ($item:ident, $func:ident) => {{
         let mut v = Vec::from($item.p_type.$func());
-        v.extend($item.p_type.$func());
         v.extend($item.p_flags.$func());
         v.extend($item.p_offset.$func());
         v.extend($item.p_vaddr.$func());
@@ -75,8 +73,8 @@ impl From<Ehdr> for Vec<u8> {
     fn from(item: Ehdr) -> Self {
         match super::instr_encoders::arch_info::ELFDATA_BYTE_ORDER {
             0 => panic!("ELFCLASSNONE is an invalid value for EI_CLASS!"),
-            1u8 => serialize_ehdr!(item, to_le_bytes),
-            2u8 => serialize_ehdr!(item, to_be_bytes),
+            1 => serialize_ehdr!(item, to_le_bytes),
+            2 => serialize_ehdr!(item, to_be_bytes),
             u => panic!("{u} is not a known value for EI_CLASS!"),
         }
     }
