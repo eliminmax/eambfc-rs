@@ -32,6 +32,8 @@
 // * RDX is 010b
 // * RBX is 011b
 
+use super::err::BFCompileError;
+
 pub mod registers {
     pub const REG_SC_NUM: u8 = 0b000u8;
     pub const REG_ARG1: u8 = 0b111u8;
@@ -245,6 +247,30 @@ pub fn bfc_add_reg_imm64(reg: u8, imm64: i64) -> Vec<u8> {
 
 pub fn bfc_sub_reg_imm64(reg: u8, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, OP_SUB)
+}
+
+pub fn bfc_add_reg(reg: u8, imm: usize) -> Result<Vec<u8>, BFCompileError> {
+    match imm {
+        i if i <= i8::MAX as usize => Ok(bfc_add_reg_imm8(reg, imm as i8)),
+        i if i <= i32::MAX as usize => Ok(bfc_add_reg_imm32(reg, imm as i32)),
+        i if i <= i64::MAX as usize => Ok(bfc_add_reg_imm64(reg, imm as i64)),
+        _ => Err(BFCompileError::Basic {
+            id: String::from("TOO_MANY_INSTRUCTIONS"),
+            msg: String::from("Over 8192 PiB of consecitive `>` instructions!"),
+        }),
+    }
+}
+
+pub fn bfc_sub_reg(reg: u8, imm: usize) -> Result<Vec<u8>, BFCompileError> {
+    match imm {
+        i if i <= i8::MAX as usize => Ok(bfc_sub_reg_imm8(reg, imm as i8)),
+        i if i <= i32::MAX as usize => Ok(bfc_sub_reg_imm32(reg, imm as i32)),
+        i if i <= i64::MAX as usize => Ok(bfc_sub_reg_imm64(reg, imm as i64)),
+        _ => Err(BFCompileError::Basic {
+            id: String::from("TOO_MANY_INSTRUCTIONS"),
+            msg: String::from("Over 8192 PiB of consecitive `<` instructions!"),
+        }),
+    }
 }
 
 pub fn bfc_add_mem(reg: u8, imm8: i8) -> Vec<u8> {

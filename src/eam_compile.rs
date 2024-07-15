@@ -7,7 +7,8 @@ use super::instr_encoders::arch_info::*;
 use super::instr_encoders::registers::*;
 use super::instr_encoders::syscall_nums::*;
 use super::instr_encoders::*;
-use std::io::{BufReader, Read, Write};
+use super::optimize::{to_condensed, CondensedInstruction};
+use std::io::{BufReader, Error, ErrorKind, Read, Write};
 
 struct Position {
     line: usize,
@@ -127,6 +128,46 @@ struct JumpLocation {
     index: usize,
 }
 
+fn compile_condensed(
+    condensed_instr: CondensedInstruction,
+    dst: &mut Vec<u8>,
+    jump_stack: &mut Vec<JumpLocation>,
+) -> Result<usize, BFCompileError> {
+    let result: Result<usize, std::io::Error>;
+    match condensed_instr {
+        CondensedInstruction::SetZero => result = dst.write(bfc_zero_mem(REG_BF_PTR).as_slice()),
+        CondensedInstruction::RepeatAdd(count) => {
+            result = dst.write(bfc_add_mem(REG_BF_PTR, count as i8).as_slice())
+        }
+        CondensedInstruction::RepeatSub(count) => {
+            result = dst.write(bfc_sub_mem(REG_BF_PTR, count as i8).as_slice())
+        }
+        CondensedInstruction::RepeatMoveR(count) => {
+            result = dst.write(bfc_add_reg(REG_BF_PTR, count)?.as_slice())
+        }
+        CondensedInstruction::RepeatMoveL(count) => {
+            result = dst.write(bfc_sub_reg(REG_BF_PTR, count)?.as_slice())
+        }
+        CondensedInstruction::BFInstruction(i) => {
+            result = compile_instr(
+                i,
+                dst,
+                // throwaway position value
+                &mut Position { line: 0, col: 0 },
+                jump_stack,
+            )
+            .map_err(|_| Error::from(ErrorKind::Other))
+        }
+    }
+    match result {
+        Err(_) => Err(BFCompileError::Basic {
+            id: String::from("FAILED_WRITE"),
+            msg: String::from("Failed to write to buffer."),
+        }),
+        Ok(size) => Ok(size),
+    }
+}
+
 fn compile_instr(
     instr: u8,
     dst: &mut Vec<u8>,
@@ -134,7 +175,7 @@ fn compile_instr(
     jump_stack: &mut Vec<JumpLocation>,
 ) -> Result<usize, BFCompileError> {
     pos.col += 1;
-    let mut result: Result<usize, std::io::Error> = Ok(0_usize);
+    let mut result: Result<usize, Error> = Ok(0_usize);
     match instr {
         // decrement the tape pointer registebr
         b'<' => result = dst.write(bfc_dec_reg(REG_BF_PTR).as_slice()),
@@ -201,7 +242,7 @@ fn compile_instr(
     match result {
         Err(_) => Err(BFCompileError::Position {
             id: String::from("FAILED_WRITE"),
-            msg: String::from(""),
+            msg: String::from("Failed to write to buffer."),
             instr: instr.into(),
             col: pos.col,
             line: pos.line,
@@ -217,25 +258,28 @@ pub fn bf_compile<W: Write, R: Read>(
 ) -> Result<(), BFCompileError> {
     let mut jump_stack = Vec::<JumpLocation>::new();
     let mut pos = Position { line: 1, col: 0 };
-    if optimize {
-        return Err(BFCompileError::Basic {
-            id: String::from("UNIMPLEMENTED"),
-            msg: String::from("Optimization not implemented"),
-        });
-    }
     let mut code_buf = bfc_set_reg(REG_BF_PTR, TAPE_ADDR as i64);
-    let _ = Result::<Vec<usize>, BFCompileError>::from_iter(BufReader::new(in_f).bytes().map(
-        |maybe_byte| {
-            let byte = maybe_byte.map_err(|_| BFCompileError::Position {
-                id: String::from("FAILED_READ"),
-                msg: String::from("Failed to read byte after current position"),
-                line: pos.line,
-                col: pos.col,
-                instr: b'\0',
-            })?;
-            compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack)
-        },
-    ))?;
+
+    if optimize {
+        let _ = Result::<Vec<usize>, BFCompileError>::from_iter(
+            to_condensed(BufReader::new(in_f))?
+                .into_iter()
+                .map(|i| compile_condensed(i, &mut code_buf, &mut jump_stack)),
+        )?;
+    } else {
+        let _ = Result::<Vec<usize>, BFCompileError>::from_iter(BufReader::new(in_f).bytes().map(
+            |maybe_byte| {
+                let byte = maybe_byte.map_err(|_| BFCompileError::Position {
+                    id: String::from("FAILED_READ"),
+                    msg: String::from("Failed to read byte after current position"),
+                    line: pos.line,
+                    col: pos.col,
+                    instr: b'\0',
+                })?;
+                compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack)
+            },
+        ))?;
+    }
 
     // quick check to make sure that there are no unterminated loops
     if let Some(jl) = jump_stack.pop() {
