@@ -122,7 +122,7 @@ fn bf_io(sc: i64, fd: i32) -> Vec<u8> {
     // descriptor into the arg1 register, and copy the destination address into the arg2 register,
     // and the number of bytes to read/write to the arg3 register. Finally, end with the syscall
     // instruction.
-    let mut instr_bytes = bfc_set_reg(REG_SC_NUM, sc.into());
+    let mut instr_bytes = bfc_set_reg(REG_SC_NUM, sc);
     instr_bytes.extend(bfc_set_reg(REG_ARG1, fd.into()));
     instr_bytes.extend(bfc_reg_copy(REG_ARG2, REG_BF_PTR));
     instr_bytes.extend(bfc_set_reg(REG_ARG3, 1));
@@ -141,13 +141,12 @@ fn compile_condensed(
     dst: &mut Vec<u8>,
     jump_stack: &mut Vec<JumpLocation>,
 ) -> Result<(), BFCompileError> {
-    let to_write: Vec<u8>;
-    match condensed_instr {
-        CondensedInstruction::SetZero => to_write = bfc_zero_mem(REG_BF_PTR),
-        CondensedInstruction::RepeatAdd(count) => to_write = bfc_add_mem(REG_BF_PTR, count as i8),
-        CondensedInstruction::RepeatSub(count) => to_write = bfc_sub_mem(REG_BF_PTR, count as i8),
-        CondensedInstruction::RepeatMoveR(count) => to_write = bfc_add_reg(REG_BF_PTR, count)?,
-        CondensedInstruction::RepeatMoveL(count) => to_write = bfc_sub_reg(REG_BF_PTR, count)?,
+    let to_write: Vec<u8> = match condensed_instr {
+        CondensedInstruction::SetZero => bfc_zero_mem(REG_BF_PTR),
+        CondensedInstruction::RepeatAdd(count) => bfc_add_mem(REG_BF_PTR, count as i8),
+        CondensedInstruction::RepeatSub(count) => bfc_sub_mem(REG_BF_PTR, count as i8),
+        CondensedInstruction::RepeatMoveR(count) => bfc_add_reg(REG_BF_PTR, count)?,
+        CondensedInstruction::RepeatMoveL(count) => bfc_sub_reg(REG_BF_PTR, count)?,
         CondensedInstruction::BFInstruction(i) => {
             return compile_instr(
                 i,
@@ -157,7 +156,7 @@ fn compile_condensed(
                 jump_stack,
             );
         }
-    }
+    };
     match dst.write(to_write.as_slice()) {
         Ok(count) if count == to_write.len() => Ok(()),
         Ok(count) => Err(BFCompileError::Basic {
@@ -182,20 +181,19 @@ fn compile_instr(
     jump_stack: &mut Vec<JumpLocation>,
 ) -> Result<(), BFCompileError> {
     pos.col += 1;
-    let to_write: Vec<u8>;
-    match instr {
+    let to_write: Vec<u8> = match instr {
         // decrement the tape pointer registebr
-        b'<' => to_write = bfc_dec_reg(REG_BF_PTR),
+        b'<' => bfc_dec_reg(REG_BF_PTR),
         // increment the tape pointer register
-        b'>' => to_write = bfc_inc_reg(REG_BF_PTR),
+        b'>' => bfc_inc_reg(REG_BF_PTR),
         // decrement the current cell value
-        b'-' => to_write = bfc_dec_byte(REG_BF_PTR),
+        b'-' => bfc_dec_byte(REG_BF_PTR),
         // increment the current cell value
-        b'+' => to_write = bfc_inc_byte(REG_BF_PTR),
+        b'+' => bfc_inc_byte(REG_BF_PTR),
         // Write 1 byte at [REG_BF_PTR] to STDOUT
-        b'.' => to_write = bf_io(SC_WRITE, 1),
+        b'.' => bf_io(SC_WRITE, 1),
         // Read 1 byte to [REG_BF_PTR] from STDIN
-        b',' => to_write = bf_io(SC_READ, 0),
+        b',' => bf_io(SC_READ, 0),
         // for this, skip over JUMP_SIZE bytes, and push the location to jump_stack.
         // will compile when reaching the corresponding ']' instruction
         b'[' => {
@@ -238,7 +236,7 @@ fn compile_instr(
                 .swap_with_slice(&mut bfc_jump_zero(REG_BF_PTR, distance as JumpDistance));
             // now, we know that distance fits within the 32-bit integer limit, so we can
             // simply cast without another check needed when compiling the `]` instruction itself
-            to_write = bfc_jump_not_zero(REG_BF_PTR, -(distance as JumpDistance));
+            bfc_jump_not_zero(REG_BF_PTR, -(distance as JumpDistance))
         }
         b'\n' => {
             pos.col = 1;
@@ -259,14 +257,14 @@ fn compile_instr(
                 count
             ),
 
-            instr: instr.into(),
+            instr,
             col: pos.col,
             line: pos.line,
         }),
         Err(_) => Err(BFCompileError::Position {
             id: String::from("FAILED_WRITE"),
             msg: String::from("Failed to write to buffer."),
-            instr: instr.into(),
+            instr,
             col: pos.col,
             line: pos.line,
         }),
@@ -318,12 +316,17 @@ pub fn bf_compile<W: Write, R: Read>(
     code_buf.extend(bfc_set_reg(REG_ARG1, 0));
     code_buf.extend(bfc_syscall());
 
-    write_headers(&mut out_f, code_buf.len())?;
+    let code_sz = code_buf.len();
+    write_headers(&mut out_f, code_sz)?;
     match out_f.write(code_buf.as_slice()) {
-        Ok(_) => Ok(()),
+        Ok(count) if count == code_sz => Ok(()),
+        Ok(count) => Err(BFCompileError::Basic {
+            id: String::from("FAILED_WRITE"),
+            msg: format!("Only wrote {count} out of expected {code_sz} machine code bytes"),
+        }),
         Err(_) => Err(BFCompileError::Basic {
             id: String::from("FAILED_WRITE"),
-            msg: String::from(""),
+            msg: String::from("Failed to write internal code buffer to output file"),
         }),
     }
 }

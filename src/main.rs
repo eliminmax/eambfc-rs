@@ -93,7 +93,7 @@ fn compile_wrapper(
         id: String::from("OPEN_R_FAILED"),
         msg: format!(
             "Failed to open {} for reading.",
-            file_name.to_string_lossy().to_string()
+            file_name.to_string_lossy()
         ),
     })?;
     let outfile = open_options
@@ -102,7 +102,7 @@ fn compile_wrapper(
             id: String::from("OPEN_W_FAILED"),
             msg: format!(
                 "Failed to open {} for writing.",
-                outfile_name.to_string_lossy().to_string()
+                outfile_name.to_string_lossy()
             ),
         })?;
     bf_compile(infile, outfile, optimize)
@@ -117,7 +117,7 @@ fn main() {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
-                match compile_wrapper(&f, &rc.extension, rc.optimize) {
+                match compile_wrapper(f, &rc.extension, rc.optimize) {
                     Ok(_) => {}
                     Err(e) => {
                         e.report(&rc.out_mode);

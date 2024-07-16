@@ -62,7 +62,7 @@ fn filter_non_bf(source_file_bytes: Vec<u8>) -> Result<Vec<u8>, BFCompileError> 
 fn loops_match(code_bytes: &[u8]) -> LoopsMatched {
     let mut ret: LoopsMatched = LoopsMatched::Balanced;
     let mut nest_level: usize = 0;
-    code_bytes.into_iter().for_each(|b| match b {
+    code_bytes.iter().for_each(|b| match b {
         b'[' => nest_level += 1,
         b']' => {
             if nest_level == 0 {
@@ -178,9 +178,9 @@ fn condense(stripped_bytes: Vec<u8>) -> Vec<CondensedInstruction> {
         .replace("[-]", "@")
         .replace("[+]", "@");
 
-    let mut instr_chars = instr_string.bytes();
+    let instr_chars = instr_string.bytes();
 
-    while let Some(current_instr) = instr_chars.next() {
+    for current_instr in instr_chars {
         if current_instr == prev_instr {
             count += 1
         } else {
