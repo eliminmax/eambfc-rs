@@ -84,7 +84,11 @@ fn compile_wrapper(
         ),
     })?;
     let mut open_options = OpenOptions::new();
-    open_options.write(true).create(true).truncate(true).mode(0o755);
+    open_options
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o755);
     let infile = File::open(file_name).map_err(|_| BFCompileError::Basic {
         id: String::from("OPEN_R_FAILED"),
         msg: format!(
@@ -141,7 +145,8 @@ License: GNU GPL version 3
 This is free software:
 you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.",
-                progname, "0.0.0-pre"
+                progname,
+                env!("CARGO_PKG_VERSION")
             );
             process::exit(exit_code);
         }
