@@ -8,7 +8,7 @@ use super::instr_encoders::registers::*;
 use super::instr_encoders::syscall_nums::*;
 use super::instr_encoders::*;
 use super::optimize::{to_condensed, CondensedInstruction};
-use std::io::{BufReader, Error, ErrorKind, Read, Write};
+use std::io::{BufReader, Read, Write};
 
 struct Position {
     line: usize,
@@ -92,7 +92,15 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
     // add padding bytes
     to_write.resize(START_PADDR as usize, 0u8);
     match output.write(to_write.as_slice()) {
-        Ok(_) => Ok(()),
+        Ok(count) if count == to_write.len() => Ok(()),
+        Ok(count) => Err(BFCompileError::Basic {
+            id: String::from("FAILED_WRITE"),
+            msg: format!(
+                "Expected to write {} bytes of ELF header and program header table, wrote {}",
+                to_write.len(),
+                count,
+            ),
+        }),
         Err(_) => Err(BFCompileError::Basic {
             id: String::from("FAILED_WRITE"),
             msg: String::from("Failed to write ELF header and program header table"),
@@ -132,39 +140,38 @@ fn compile_condensed(
     condensed_instr: CondensedInstruction,
     dst: &mut Vec<u8>,
     jump_stack: &mut Vec<JumpLocation>,
-) -> Result<usize, BFCompileError> {
-    let result: Result<usize, std::io::Error>;
+) -> Result<(), BFCompileError> {
+    let to_write: Vec<u8>;
     match condensed_instr {
-        CondensedInstruction::SetZero => result = dst.write(bfc_zero_mem(REG_BF_PTR).as_slice()),
-        CondensedInstruction::RepeatAdd(count) => {
-            result = dst.write(bfc_add_mem(REG_BF_PTR, count as i8).as_slice())
-        }
-        CondensedInstruction::RepeatSub(count) => {
-            result = dst.write(bfc_sub_mem(REG_BF_PTR, count as i8).as_slice())
-        }
-        CondensedInstruction::RepeatMoveR(count) => {
-            result = dst.write(bfc_add_reg(REG_BF_PTR, count)?.as_slice())
-        }
-        CondensedInstruction::RepeatMoveL(count) => {
-            result = dst.write(bfc_sub_reg(REG_BF_PTR, count)?.as_slice())
-        }
+        CondensedInstruction::SetZero => to_write = bfc_zero_mem(REG_BF_PTR),
+        CondensedInstruction::RepeatAdd(count) => to_write = bfc_add_mem(REG_BF_PTR, count as i8),
+        CondensedInstruction::RepeatSub(count) => to_write = bfc_sub_mem(REG_BF_PTR, count as i8),
+        CondensedInstruction::RepeatMoveR(count) => to_write = bfc_add_reg(REG_BF_PTR, count)?,
+        CondensedInstruction::RepeatMoveL(count) => to_write = bfc_sub_reg(REG_BF_PTR, count)?,
         CondensedInstruction::BFInstruction(i) => {
-            result = compile_instr(
+            return compile_instr(
                 i,
                 dst,
                 // throwaway position value
                 &mut Position { line: 0, col: 0 },
                 jump_stack,
-            )
-            .map_err(|_| Error::from(ErrorKind::Other))
+            );
         }
     }
-    match result {
+    match dst.write(to_write.as_slice()) {
+        Ok(count) if count == to_write.len() => Ok(()),
+        Ok(count) => Err(BFCompileError::Basic {
+            id: String::from("FAILED_WRITE"),
+            msg: format!(
+                "Expected to write {} bytes when compiling, wrote {}",
+                to_write.len(),
+                count
+            ),
+        }),
         Err(_) => Err(BFCompileError::Basic {
             id: String::from("FAILED_WRITE"),
             msg: String::from("Failed to write to buffer."),
         }),
-        Ok(size) => Ok(size),
     }
 }
 
@@ -173,22 +180,22 @@ fn compile_instr(
     dst: &mut Vec<u8>,
     pos: &mut Position,
     jump_stack: &mut Vec<JumpLocation>,
-) -> Result<usize, BFCompileError> {
+) -> Result<(), BFCompileError> {
     pos.col += 1;
-    let mut result: Result<usize, Error> = Ok(0_usize);
+    let to_write: Vec<u8>;
     match instr {
         // decrement the tape pointer registebr
-        b'<' => result = dst.write(bfc_dec_reg(REG_BF_PTR).as_slice()),
+        b'<' => to_write = bfc_dec_reg(REG_BF_PTR),
         // increment the tape pointer register
-        b'>' => result = dst.write(bfc_inc_reg(REG_BF_PTR).as_slice()),
+        b'>' => to_write = bfc_inc_reg(REG_BF_PTR),
         // decrement the current cell value
-        b'-' => result = dst.write(bfc_dec_byte(REG_BF_PTR).as_slice()),
+        b'-' => to_write = bfc_dec_byte(REG_BF_PTR),
         // increment the current cell value
-        b'+' => result = dst.write(bfc_inc_byte(REG_BF_PTR).as_slice()),
+        b'+' => to_write = bfc_inc_byte(REG_BF_PTR),
         // Write 1 byte at [REG_BF_PTR] to STDOUT
-        b'.' => result = dst.write(bf_io(SC_WRITE, 1).as_slice()),
+        b'.' => to_write = bf_io(SC_WRITE, 1),
         // Read 1 byte to [REG_BF_PTR] from STDIN
-        b',' => result = dst.write(bf_io(SC_READ, 0).as_slice()),
+        b',' => to_write = bf_io(SC_READ, 0),
         // for this, skip over JUMP_SIZE bytes, and push the location to jump_stack.
         // will compile when reaching the corresponding ']' instruction
         b'[' => {
@@ -198,6 +205,7 @@ fn compile_instr(
                 index: dst.len(),
             });
             dst.extend([0xffu8; JUMP_SIZE]);
+            return Ok(());
         }
         b']' => {
             // First, compile the skipped '[' instruction
@@ -230,16 +238,31 @@ fn compile_instr(
                 .swap_with_slice(&mut bfc_jump_zero(REG_BF_PTR, distance as JumpDistance));
             // now, we know that distance fits within the 32-bit integer limit, so we can
             // simply cast without another check needed when compiling the `]` instruction itself
-            result =
-                dst.write(bfc_jump_not_zero(REG_BF_PTR, -(distance as JumpDistance)).as_slice());
+            to_write = bfc_jump_not_zero(REG_BF_PTR, -(distance as JumpDistance));
         }
         b'\n' => {
             pos.col = 1;
             pos.line += 1;
+            return Ok(());
         }
-        _ => {}
+        _ => {
+            return Ok(());
+        }
     };
-    match result {
+    match dst.write(to_write.as_slice()) {
+        Ok(count) if count == to_write.len() => Ok(()),
+        Ok(count) => Err(BFCompileError::Position {
+            id: String::from("FAILED_WRITE"),
+            msg: format!(
+                "Expected to write {} bytes when compiling, wrote {}",
+                to_write.len(),
+                count
+            ),
+
+            instr: instr.into(),
+            col: pos.col,
+            line: pos.line,
+        }),
         Err(_) => Err(BFCompileError::Position {
             id: String::from("FAILED_WRITE"),
             msg: String::from("Failed to write to buffer."),
@@ -247,7 +270,6 @@ fn compile_instr(
             col: pos.col,
             line: pos.line,
         }),
-        Ok(size) => Ok(size),
     }
 }
 
@@ -261,13 +283,13 @@ pub fn bf_compile<W: Write, R: Read>(
     let mut code_buf = bfc_set_reg(REG_BF_PTR, TAPE_ADDR as i64);
 
     if optimize {
-        let _ = Result::<Vec<usize>, BFCompileError>::from_iter(
+        Result::<Vec<()>, BFCompileError>::from_iter(
             to_condensed(BufReader::new(in_f))?
                 .into_iter()
                 .map(|i| compile_condensed(i, &mut code_buf, &mut jump_stack)),
         )?;
     } else {
-        let _ = Result::<Vec<usize>, BFCompileError>::from_iter(BufReader::new(in_f).bytes().map(
+        Result::<Vec<()>, BFCompileError>::from_iter(BufReader::new(in_f).bytes().map(
             |maybe_byte| {
                 let byte = maybe_byte.map_err(|_| BFCompileError::Position {
                     id: String::from("FAILED_READ"),
