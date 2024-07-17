@@ -275,35 +275,50 @@ pub fn bf_compile<W: Write, R: Read>(
     in_f: R,
     mut out_f: W,
     optimize: bool,
-) -> Result<(), BFCompileError> {
+) -> Result<(), Vec<BFCompileError>> {
     let mut jump_stack = Vec::<JumpLocation>::new();
     let mut pos = Position { line: 1, col: 0 };
     let mut code_buf = bfc_set_reg(REG_BF_PTR, TAPE_ADDR as i64);
+    let mut errs = Vec::<BFCompileError>::new();
+
+    let reader = BufReader::new(in_f);
 
     if optimize {
-        Result::<Vec<()>, BFCompileError>::from_iter(
-            to_condensed(BufReader::new(in_f))?
+        errs.append(&mut match to_condensed(reader) {
+            Ok(condensed) => condensed
                 .into_iter()
-                .map(|i| compile_condensed(i, &mut code_buf, &mut jump_stack)),
-        )?;
+                .filter_map(|i| {
+                    if let Err(e) = compile_condensed(i, &mut code_buf, &mut jump_stack) {
+                        Some(e)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<BFCompileError>>(),
+            Err(e) => vec![e],
+        });
     } else {
-        Result::<Vec<()>, BFCompileError>::from_iter(BufReader::new(in_f).bytes().map(
-            |maybe_byte| {
-                let byte = maybe_byte.map_err(|_| BFCompileError::Position {
+        reader.bytes().for_each(|maybe_byte| match maybe_byte {
+            Ok(byte) => {
+                if let Err(e) = compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack) {
+                    errs.push(e);
+                }
+            }
+            Err(_) => {
+                errs.push(BFCompileError::Position {
                     id: String::from("FAILED_READ"),
                     msg: String::from("Failed to read byte after current position"),
                     line: pos.line,
                     col: pos.col,
                     instr: b'\0',
-                })?;
-                compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack)
-            },
-        ))?;
+                });
+            }
+        });
     }
 
     // quick check to make sure that there are no unterminated loops
     if let Some(jl) = jump_stack.pop() {
-        return Err(BFCompileError::Position {
+        errs.push(BFCompileError::Position {
             id: String::from("UNMATCHED_OPEN"),
             msg: String::from("Reached the end of the file with an unmatched '['"),
             line: jl.src_line,
@@ -317,17 +332,24 @@ pub fn bf_compile<W: Write, R: Read>(
     code_buf.extend(bfc_syscall());
 
     let code_sz = code_buf.len();
-    write_headers(&mut out_f, code_sz)?;
+    if let Err(e) = write_headers(&mut out_f, code_sz) {
+        errs.push(e);
+    }
     match out_f.write(code_buf.as_slice()) {
-        Ok(count) if count == code_sz => Ok(()),
-        Ok(count) => Err(BFCompileError::Basic {
+        Ok(count) if count == code_sz => (),
+        Ok(count) => errs.push(BFCompileError::Basic {
             id: String::from("FAILED_WRITE"),
             msg: format!("Only wrote {count} out of expected {code_sz} machine code bytes"),
         }),
-        Err(_) => Err(BFCompileError::Basic {
+        Err(_) => errs.push(BFCompileError::Basic {
             id: String::from("FAILED_WRITE"),
             msg: String::from("Failed to write internal code buffer to output file"),
         }),
+    };
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        Err(errs)
     }
 }
 
@@ -352,7 +374,7 @@ mod tests {
     fn unmatched_open() -> Result<(), String> {
         assert!(
             bf_compile(b"[".as_slice(), Vec::<u8>::new(), false).is_err_and(|e| {
-                match e {
+                match e.into_iter().next().unwrap() {
                     BFCompileError::Basic { id, .. }
                     | BFCompileError::Instruction { id, .. }
                     | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_OPEN"),
@@ -367,7 +389,7 @@ mod tests {
     fn unmatched_close() -> Result<(), String> {
         assert!(
             bf_compile(b"]".as_slice(), Vec::<u8>::new(), false).is_err_and(|e| {
-                match e {
+                match e.into_iter().next().unwrap() {
                     BFCompileError::Basic { id, .. }
                     | BFCompileError::Instruction { id, .. }
                     | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_CLOSE"),

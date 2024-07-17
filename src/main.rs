@@ -75,13 +75,15 @@ fn compile_wrapper(
     file_name: &OsString,
     extension: &OsStr,
     optimize: bool,
-) -> Result<(), BFCompileError> {
-    let outfile_name = rm_ext(file_name, extension).map_err(|e| BFCompileError::Basic {
-        id: String::from("BAD_EXTENSION"),
-        msg: format!(
-            "Filename {} does not end with expected extension.",
-            e.to_string_lossy()
-        ),
+) -> Result<(), Vec<BFCompileError>> {
+    let outfile_name = rm_ext(file_name, extension).map_err(|e| {
+        vec![BFCompileError::Basic {
+            id: String::from("BAD_EXTENSION"),
+            msg: format!(
+                "Filename {} does not end with expected extension.",
+                e.to_string_lossy()
+            ),
+        }]
     })?;
     let mut open_options = OpenOptions::new();
     open_options
@@ -89,22 +91,24 @@ fn compile_wrapper(
         .create(true)
         .truncate(true)
         .mode(0o755);
-    let infile = File::open(file_name).map_err(|_| BFCompileError::Basic {
-        id: String::from("OPEN_R_FAILED"),
-        msg: format!(
-            "Failed to open {} for reading.",
-            file_name.to_string_lossy()
-        ),
+    let infile = File::open(file_name).map_err(|_| {
+        vec![BFCompileError::Basic {
+            id: String::from("OPEN_R_FAILED"),
+            msg: format!(
+                "Failed to open {} for reading.",
+                file_name.to_string_lossy()
+            ),
+        }]
     })?;
-    let outfile = open_options
-        .open(&outfile_name)
-        .map_err(|_| BFCompileError::Basic {
+    let outfile = open_options.open(&outfile_name).map_err(|_| {
+        vec![BFCompileError::Basic {
             id: String::from("OPEN_W_FAILED"),
             msg: format!(
                 "Failed to open {} for writing.",
                 outfile_name.to_string_lossy()
             ),
-        })?;
+        }]
+    })?;
     bf_compile(infile, outfile, optimize)
 }
 
@@ -119,8 +123,8 @@ fn main() {
             rc.source_files.iter().for_each(|f| {
                 match compile_wrapper(f, &rc.extension, rc.optimize) {
                     Ok(_) => {}
-                    Err(e) => {
-                        e.report(&rc.out_mode);
+                    Err(errs) => {
+                        errs.into_iter().for_each(|e| e.report(&rc.out_mode));
                         if !rc.keep {
                             // try to delete the file
                             let _ =
