@@ -34,7 +34,7 @@ impl Default for StandardRunConfig {
             optimize: false,
             keep: false,
             cont: false,
-            tape_blocks: 4,
+            tape_blocks: 8,
             extension: OsString::from(".bf"),
             source_files: Vec::<OsString>::new(),
         }
@@ -186,7 +186,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
     if extension.is_empty() {
         extension = OsString::from(".bf");
     }
-    let tape_blocks = tape_blocks.unwrap_or(4);
+    let tape_blocks = tape_blocks.unwrap_or(8);
 
     Ok(RunConfig::StandardRun(StandardRunConfig {
         progname,
