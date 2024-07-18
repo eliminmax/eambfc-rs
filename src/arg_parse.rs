@@ -351,4 +351,43 @@ mod tests {
         );
         Ok(())
     }
+
+
+    #[test]
+    fn non_numeric_tape_size() -> Result<(), String> {
+        let args_set = vec![
+            OsString::from("eambfc-rs"),
+            OsString::from_vec(b"-t".into()),
+            OsString::from_vec(b"###".into()),
+        ]
+        .into_iter();
+        let (err, ..) = parse_args(args_set).unwrap_err();
+        assert_eq!(error_thrown(err), String::from("NOT_NUMERIC"));
+        Ok(())
+    }
+
+    #[test]
+    fn multiple_tape_size() -> Result<(), String> {
+        let args_set = vec![
+            OsString::from("eambfc-rs"),
+            OsString::from_vec(b"-t1".into()),
+            OsString::from_vec(b"-t1024".into()),
+        ]
+        .into_iter();
+        let (err, ..) = parse_args(args_set).unwrap_err();
+        assert_eq!(error_thrown(err), String::from("MULTIPLE_TAPE_SIZES"));
+        Ok(())
+    }
+
+    #[test]
+    fn tape_size_zero() -> Result<(), String> {
+        let args_set = vec![
+            OsString::from("eambfc-rs"),
+            OsString::from_vec(b"-t0".into()),
+        ]
+        .into_iter();
+        let (err, ..) = parse_args(args_set).unwrap_err();
+        assert_eq!(error_thrown(err), String::from("NO_TAPE"));
+        Ok(())
+    }
 }
