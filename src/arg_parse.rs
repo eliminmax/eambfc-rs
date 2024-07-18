@@ -40,6 +40,35 @@ impl Default for StandardRunConfig {
     }
 }
 
+// due to rust's hygenic macros, variable identifiers must be passed to macro to be usable in it.
+macro_rules! parameter_instr {
+    ($flag: literal, $arg_byte_iter: ident, $args: ident, $progname: ident, $out_mode: ident) => {{
+        let remainder = $arg_byte_iter.collect::<Vec<u8>>();
+        if remainder.len() > 0 {
+            OsString::from_vec(remainder)
+        } else {
+            if let Some(next_arg) = $args.next() {
+                next_arg
+            } else {
+                return Err((
+                    BFCompileError::Basic {
+                        id: String::from("MISSING_OPERAND"),
+                        msg: format!(
+                            "-{} requires an additional argument",
+                            match $flag {
+                                c if c < 0x80 => (c as char).to_string(),
+                                c => format!("\\x{c:02x}"),
+                            }
+                        ),
+                    },
+                    $progname,
+                    $out_mode,
+                ));
+            }
+        }
+    }};
+}
+
 pub fn parse_args<T: Iterator<Item = OsString>>(
     mut args: T,
 ) -> Result<RunConfig, (BFCompileError, String, OutMode)> {
@@ -76,23 +105,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                                 out_mode,
                             ));
                         }
-                        let remainder = arg_byte_iter.collect::<Vec<u8>>();
-                        if remainder.is_empty() {
-                            if let Some(new_extension) = args.next() {
-                                extension = new_extension;
-                            } else {
-                                return Err((
-                                    BFCompileError::Basic {
-                                        id: "MISSING_OPERAND".to_string(),
-                                        msg: "-e requires an additional argument".to_string(),
-                                    },
-                                    progname,
-                                    out_mode,
-                                ));
-                            }
-                        } else {
-                            extension = OsString::from_vec(remainder);
-                        }
+                        extension = parameter_instr!(b'e', arg_byte_iter, args, progname, out_mode);
                         break;
                     }
                     b'h' => return Ok(RunConfig::ShowHelp(progname.to_string())),
