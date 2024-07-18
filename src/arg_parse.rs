@@ -114,7 +114,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                         if tape_blocks.is_some() {
                             return Err((
                                 BFCompileError::Basic {
-                                    id: "MULTIPLE_TAPE_SIZES".to_string(),
+                                    id: "MULTIPLE_TAPE_BLOCK_COUNTS".to_string(),
                                     msg: "passed -t multiple times".to_string(),
                                 },
                                 progname,
@@ -380,7 +380,7 @@ mod tests {
         ]
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(error_thrown(err), String::from("MULTIPLE_TAPE_SIZES"));
+        assert_eq!(error_thrown(err), String::from("MULTIPLE_TAPE_BLOCK_COUNTS"));
         Ok(())
     }
 
