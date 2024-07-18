@@ -7,7 +7,6 @@ use super::OutMode;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 
-
 #[derive(PartialEq, Debug)]
 pub struct StandardRunConfig {
     pub progname: String,
@@ -82,6 +81,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
     let mut out_mode = OutMode::Basic;
     let mut optimize = false;
     let mut keep = false;
+    let mut tape_blocks: Option<u64> = None;
     let mut cont = false;
     while let Some(arg) = args.next() {
         // some logic to treat anything after `--` as literal values
@@ -106,6 +106,45 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                             ));
                         }
                         extension = parameter_instr!(b'e', arg_byte_iter, args, progname, out_mode);
+                        break;
+                    }
+                    b't' => {
+                        if tape_blocks.is_some() {
+                            return Err((
+                                BFCompileError::Basic {
+                                    id: "MULTIPLE_TAPE_SIZES".to_string(),
+                                    msg: "passed -t multiple times".to_string(),
+                                },
+                                progname,
+                                out_mode,
+                            ));
+                        }
+                        match parameter_instr!(b't', arg_byte_iter, args, progname, out_mode)
+                            .to_string_lossy()
+                            .parse::<u64>()
+                        {
+                            Ok(0) => {
+                                return Err((
+                                    BFCompileError::Basic {
+                                        id: String::from("NO_TAPE"),
+                                        msg: format!("Tape value for -t must be at least 1."),
+                                    },
+                                    progname,
+                                    out_mode,
+                                ));
+                            }
+                            Ok(i) => tape_blocks = Some(i),
+                            Err(s) => {
+                                return Err((
+                                    BFCompileError::Basic {
+                                        id: String::from("NOT_NUMERIC"),
+                                        msg: format!("{s} could not be parsed as a numeric value"),
+                                    },
+                                    progname,
+                                    out_mode,
+                                ));
+                            }
+                        }
                         break;
                     }
                     b'h' => return Ok(RunConfig::ShowHelp(progname.to_string())),
