@@ -198,6 +198,15 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[inline]
+    fn error_thrown(err: BFCompileError) -> String {
+        match err {
+            BFCompileError::UnknownFlag(_) => String::from("UNKNOWN_ARG"),
+            BFCompileError::Basic { id, .. }
+            | BFCompileError::Instruction { id, .. }
+            | BFCompileError::Position { id, .. } => id,
+        }
+    }
 
     #[test]
     fn combined_args() -> Result<(), String> {
@@ -302,11 +311,10 @@ mod tests {
     fn fallback_for_empty_args() -> Result<(), String> {
         let err = parse_args(vec![].into_iter()).unwrap_err();
         match err {
-            (BFCompileError::Basic { id, msg: _ }, name, _) => {
+            (bf_err, name, _) => {
                 assert_eq!(name, String::from("eambfc-rs"));
-                assert_eq!(id, "NO_SOURCE_FILES");
+                assert_eq!(error_thrown(bf_err), String::from("NO_SOURCE_FILES"));
             }
-            _ => panic!(),
         }
 
         Ok(())
