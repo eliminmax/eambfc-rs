@@ -10,19 +10,27 @@ pub mod eam_compile;
 pub mod elf_tools;
 pub mod err;
 pub mod optimize;
-pub mod run_config;
 pub mod x86_64_encoders;
 pub use x86_64_encoders as instr_encoders;
 
 use eam_compile::bf_compile;
 use err::{BFCompileError, BfErrDisplay};
-use run_config::{OutMode, RunConfig};
+use arg_parse::RunConfig;
 use std::env::args_os;
 use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
 use std::{io, process};
+
+
+
+#[derive(PartialEq, Debug)]
+pub enum OutMode {
+    Basic,
+    JSON,
+    Quiet,
+}
 
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
     let help_text = format!(

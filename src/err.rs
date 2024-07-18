@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::run_config::OutMode;
+use super::OutMode;
 
 #[derive(Debug, PartialEq)]
 pub enum BFCompileError {
