@@ -15,21 +15,24 @@ struct Position {
     col: usize,
 }
 
-// number of 4-KiB blocks to allocate for the tape
-const TAPE_BLOCKS: u64 = 8;
-
 // ELF addressing stuff
 const EHDR_SIZE: u16 = 64u16;
 const PHDR_SIZE: u16 = 56u16;
 const PHTB_SIZE: u64 = (PHDR_SIZE * PHNUM) as u64;
 const TAPE_ADDR: u64 = 0x10000;
 const PHNUM: u16 = 2;
-const TAPE_SIZE: u64 = TAPE_BLOCKS * 0x1000;
-const LOAD_VADDR: u64 = ((TAPE_ADDR + TAPE_SIZE) & (!0xffffu64)) + 0x10000u64;
-const START_PADDR: u64 = ((EHDR_SIZE as u64 + PHTB_SIZE) & (!0xffu64)) + 0x100u64;
-const START_VADDR: u64 = START_PADDR + LOAD_VADDR;
 
-fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFCompileError> {
+fn write_headers<W: Write>(
+    output: &mut W,
+    codesize: usize,
+    tape_blocks: u64,
+) -> Result<(), BFCompileError> {
+    // more ELF addressing stuff - depends on tape_blocks, so can't be const
+    let tape_size: u64 = tape_blocks * 0x1000;
+    let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffffu64)) + 0x10000u64;
+    let start_paddr: u64 = ((EHDR_SIZE as u64 + PHTB_SIZE) & (!0xffu64)) + 0x100u64;
+    let start_vaddr: u64 = start_paddr + load_vaddr;
+
     let e_ident_vals: [u8; 16] = [
         // first 4 bytes are the magic values pre-defined and used to mark this as an ELF file
         0x7fu8,
@@ -62,7 +65,7 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
         e_phentsize: PHDR_SIZE,
         e_shentsize: 0, // no section header table, must be 0
         e_shstrndx: 0,  // no section header table, must be 0
-        e_entry: START_VADDR,
+        e_entry: start_vaddr,
         e_flags: 0, // ISA-specific flags. None are defined for x86_64, so set to 0.
     };
     let tape_segment = Phdr {
@@ -72,17 +75,17 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
         p_vaddr: TAPE_ADDR, // load segment into this section of memory
         p_paddr: 0,         // load from this physical address
         p_filesz: 0,        // don't load anything from file, just zero-initialize it
-        p_memsz: TAPE_SIZE, // allocate this many bytes of memory for this segment
+        p_memsz: tape_size, // allocate this many bytes of memory for this segment
         p_align: 0x1000,    // align with this power of 2
     };
     let code_segment = Phdr {
         p_type: 1,                               // PT_LOAD ( loadable segment )
         p_flags: 4 | 1,                          // PF_R | PF_X (readable and executable)
         p_offset: 0,                             // load bytes from this index in the file
-        p_vaddr: LOAD_VADDR,                     // load segment into this section of memory
+        p_vaddr: load_vaddr,                     // load segment into this section of memory
         p_paddr: 0,                              // load from this physical address
-        p_filesz: START_PADDR + codesize as u64, // load this many bytes from file…
-        p_memsz: START_PADDR + codesize as u64,  // allocate this many bytes of memory…
+        p_filesz: start_paddr + codesize as u64, // load this many bytes from file…
+        p_memsz: start_paddr + codesize as u64,  // allocate this many bytes of memory…
         p_align: 1,                              // align with this power of 2
     };
     let mut to_write = Vec::<u8>::from(ehdr);
@@ -90,7 +93,7 @@ fn write_headers<W: Write>(output: &mut W, codesize: usize) -> Result<(), BFComp
     to_write.extend(Vec::<u8>::from(code_segment).as_slice());
 
     // add padding bytes
-    to_write.resize(START_PADDR as usize, 0u8);
+    to_write.resize(start_paddr as usize, 0u8);
     match output.write(to_write.as_slice()) {
         Ok(count) if count == to_write.len() => Ok(()),
         Ok(count) => Err(BFCompileError::Basic {
@@ -275,6 +278,7 @@ pub fn bf_compile<W: Write, R: Read>(
     in_f: R,
     mut out_f: W,
     optimize: bool,
+    tape_blocks: u64,
 ) -> Result<(), Vec<BFCompileError>> {
     let mut jump_stack = Vec::<JumpLocation>::new();
     let mut pos = Position { line: 1, col: 0 };
@@ -332,7 +336,7 @@ pub fn bf_compile<W: Write, R: Read>(
     code_buf.extend(bfc_syscall());
 
     let code_sz = code_buf.len();
-    if let Err(e) = write_headers(&mut out_f, code_sz) {
+    if let Err(e) = write_headers(&mut out_f, code_sz, tape_blocks) {
         errs.push(e);
     }
     match out_f.write(code_buf.as_slice()) {
@@ -358,7 +362,7 @@ mod tests {
     use super::*;
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
-        bf_compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false)
+        bf_compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false, 8)
             .map_err(|e| format!("Failed to compile: {:?}", e))
     }
 
@@ -366,14 +370,14 @@ mod tests {
     fn compile_nested_loops() -> Result<(), String> {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
-        bf_compile(b">+[-->---[-<]>]>+".as_slice(), Vec::<u8>::new(), false)
+        bf_compile(b">+[-->---[-<]>]>+".as_slice(), Vec::<u8>::new(), false, 8)
             .map_err(|e| format!("Failed to compile: {:?}", e))
     }
 
     #[test]
     fn unmatched_open() -> Result<(), String> {
         assert!(
-            bf_compile(b"[".as_slice(), Vec::<u8>::new(), false).is_err_and(|e| {
+            bf_compile(b"[".as_slice(), Vec::<u8>::new(), false, 8).is_err_and(|e| {
                 match e.into_iter().next().unwrap() {
                     BFCompileError::Basic { id, .. }
                     | BFCompileError::Instruction { id, .. }
@@ -388,7 +392,7 @@ mod tests {
     #[test]
     fn unmatched_close() -> Result<(), String> {
         assert!(
-            bf_compile(b"]".as_slice(), Vec::<u8>::new(), false).is_err_and(|e| {
+            bf_compile(b"]".as_slice(), Vec::<u8>::new(), false, 8).is_err_and(|e| {
                 match e.into_iter().next().unwrap() {
                     BFCompileError::Basic { id, .. }
                     | BFCompileError::Instruction { id, .. }

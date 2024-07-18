@@ -83,6 +83,7 @@ fn compile_wrapper(
     file_name: &OsString,
     extension: &OsStr,
     optimize: bool,
+    tape_blocks: u64,
 ) -> Result<(), Vec<BFCompileError>> {
     let outfile_name = rm_ext(file_name, extension).map_err(|e| {
         vec![BFCompileError::Basic {
@@ -117,7 +118,7 @@ fn compile_wrapper(
             ),
         }]
     })?;
-    bf_compile(infile, outfile, optimize)
+    bf_compile(infile, outfile, optimize, tape_blocks)
 }
 
 fn main() {
@@ -129,7 +130,7 @@ fn main() {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
-                match compile_wrapper(f, &rc.extension, rc.optimize) {
+                match compile_wrapper(f, &rc.extension, rc.optimize, rc.tape_blocks) {
                     Ok(_) => {}
                     Err(errs) => {
                         errs.into_iter().for_each(|e| e.report(&rc.out_mode));
