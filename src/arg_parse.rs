@@ -14,6 +14,7 @@ pub struct StandardRunConfig {
     pub optimize: bool,
     pub keep: bool,
     pub cont: bool,
+    pub tape_blocks: u64,
     pub extension: OsString,
     pub source_files: Vec<OsString>,
 }
@@ -33,6 +34,7 @@ impl Default for StandardRunConfig {
             optimize: false,
             keep: false,
             cont: false,
+            tape_blocks: 4,
             extension: OsString::from(".bf"),
             source_files: Vec::<OsString>::new(),
         }
@@ -180,16 +182,19 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
             out_mode,
         ));
     }
-    // fall back to default extension if none was provided
+    // fall back to default extension/tape size if none was provided
     if extension.is_empty() {
         extension = OsString::from(".bf");
     }
+    let tape_blocks = tape_blocks.unwrap_or(4);
+
     Ok(RunConfig::StandardRun(StandardRunConfig {
         progname,
         out_mode,
         optimize,
         keep,
         cont,
+        tape_blocks,
         extension,
         source_files,
     }))
