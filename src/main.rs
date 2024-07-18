@@ -44,12 +44,14 @@ fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
  -k        - keep files that failed to compile (for debugging)
  -c        - continue to the next file instead of quitting if a
              file fails to compile
- -e ext    - (only provide once) use 'ext' as the extension for
-             source files instead of '.bf'
+ -t count  - allocate <count> 4-KiB blocks for the tape
+             (defaults to 8 if not specified)**
+ -e ext    - use 'ext' as the extension for source files instead of '.bf'
              (This program will remove this at the end of the input
-             file to create the output file name)
+             file to create the output file name)**
 
 * Optimization can make error reporting less precise.
+** -t and -e can only be passed at most once each.
 
 Remaining options are treated as source file names. If they don't
 end with '.bf' (or the extension specified with '-e'), the program
