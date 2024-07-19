@@ -135,6 +135,20 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                                     out_mode,
                                 ));
                             }
+                            // if it's any larger than this, the tape sise would exceed the 64-bit
+                            // integer limit.
+                            Ok(i) if i >= u64::MAX >> 12 => {
+                                return Err((
+                                    BFCompileError::Basic {
+                                        id: String::from("TAPE_TOO_LARGE"),
+                                        msg: format!(
+                                            "{i} * 0x1000 exceeds the 64-bit integer limit."
+                                        ),
+                                    },
+                                    progname,
+                                    out_mode,
+                                ));
+                            }
                             Ok(i) => tape_blocks = Some(i),
                             Err(s) => {
                                 return Err((
@@ -357,7 +371,6 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     fn non_numeric_tape_size() -> Result<(), String> {
         let args_set = vec![
@@ -380,7 +393,10 @@ mod tests {
         ]
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(error_thrown(err), String::from("MULTIPLE_TAPE_BLOCK_COUNTS"));
+        assert_eq!(
+            error_thrown(err),
+            String::from("MULTIPLE_TAPE_BLOCK_COUNTS")
+        );
         Ok(())
     }
 
