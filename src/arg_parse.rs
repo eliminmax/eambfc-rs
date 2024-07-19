@@ -129,7 +129,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                                 return Err((
                                     BFCompileError::Basic {
                                         id: String::from("NO_TAPE"),
-                                        msg: format!("Tape value for -t must be at least 1."),
+                                        msg: String::from("Tape value for -t must be at least 1."),
                                     },
                                     progname,
                                     out_mode,
