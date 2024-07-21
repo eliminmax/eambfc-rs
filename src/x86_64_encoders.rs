@@ -290,3 +290,30 @@ pub fn bfc_zero_mem(reg: u8) -> Vec<u8> {
     // MOV byte [reg], 0
     vec![0x67_u8, 0xc6_u8, reg, 0x00_u8]
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_reg() -> Result<(), String> {
+        // test that appropriate encodings are used for different immediates
+        assert_eq!(bfc_set_reg(registers::REG_BF_PTR, 0), vec![0x31, 0xc0 | 0b00011011]);
+        assert_eq!(
+            bfc_set_reg(registers::REG_BF_PTR, 101),
+            vec![0x6a, 101, 0x58 + 0b011]
+        );
+        assert_eq!(
+            bfc_set_reg(registers::REG_BF_PTR, 128),
+            vec![0xb8 + 0b011, 128, 0, 0, 0]
+        );
+        assert_eq!(
+            bfc_set_reg(registers::REG_BF_PTR, i64::MAX - 0xffff),
+            vec![0x48, 0xb8 + 0b011, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
+        );
+
+        Ok(())
+    }
+
+}

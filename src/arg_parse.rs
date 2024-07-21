@@ -411,4 +411,16 @@ mod tests {
         assert_eq!(error_thrown(err), String::from("NO_TAPE"));
         Ok(())
     }
+
+    #[test]
+    fn missing_tape_size() -> Result<(), String> {
+        let args_set = vec![
+            OsString::from("eambfc-rs"),
+            OsString::from_vec(b"-t".into())
+        ]
+        .into_iter();
+        let (err, ..) = parse_args(args_set).unwrap_err();
+        assert_eq!(error_thrown(err), String::from("MISSING_OPERAND"));
+        Ok(())
+    }
 }
