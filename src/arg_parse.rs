@@ -41,35 +41,6 @@ impl Default for StandardRunConfig {
     }
 }
 
-// due to rust's hygienic macros, variable identifiers must be passed to macro to be usable in it.
-macro_rules! parameter_instr {
-    ($flag: literal, $arg_byte_iter: ident, $args: ident, $progname: ident, $out_mode: ident) => {{
-        let remainder = $arg_byte_iter.collect::<Vec<u8>>();
-        if remainder.len() > 0 {
-            OsString::from_vec(remainder)
-        } else {
-            if let Some(next_arg) = $args.next() {
-                next_arg
-            } else {
-                return Err((
-                    BFCompileError::Basic {
-                        id: String::from("MISSING_OPERAND"),
-                        msg: format!(
-                            "-{} requires an additional argument",
-                            match $flag {
-                                c if c < 0x80 => (c as char).to_string(),
-                                c => format!("\\x{c:02x}"),
-                            }
-                        ),
-                    },
-                    $progname,
-                    $out_mode,
-                ));
-            }
-        }
-    }};
-}
-
 pub fn parse_args<T: Iterator<Item = OsString>>(
     mut args: T,
 ) -> Result<RunConfig, (BFCompileError, String, OutMode)> {
@@ -95,6 +66,34 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
         if arg_bytes[0] == b'-' {
             let mut arg_byte_iter = arg_bytes.into_iter().skip(1);
             while let Some(b) = arg_byte_iter.next() {
+                // define macro here so that all of the values it references are in scope
+                macro_rules! parameter_instr {
+                    ($flag: literal) => {{
+                        let remainder = arg_byte_iter.collect::<Vec<u8>>();
+                        if remainder.len() > 0 {
+                            OsString::from_vec(remainder)
+                        } else {
+                            if let Some(next_arg) = args.next() {
+                                next_arg
+                            } else {
+                                return Err((
+                                    BFCompileError::Basic {
+                                        id: String::from("MISSING_OPERAND"),
+                                        msg: format!(
+                                            "-{} requires an additional argument",
+                                            match $flag {
+                                                c if c < 0x80 => (c as char).to_string(),
+                                                c => format!("\\x{c:02x}"),
+                                            }
+                                        ),
+                                    },
+                                    progname,
+                                    out_mode,
+                                ));
+                            }
+                        }
+                    }};
+                }
                 match b {
                     b'e' => {
                         if !extension.is_empty() {
@@ -107,7 +106,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                                 out_mode,
                             ));
                         }
-                        extension = parameter_instr!(b'e', arg_byte_iter, args, progname, out_mode);
+                        extension = parameter_instr!(b'e');
                         break;
                     }
                     b't' => {
@@ -121,10 +120,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                                 out_mode,
                             ));
                         }
-                        match parameter_instr!(b't', arg_byte_iter, args, progname, out_mode)
-                            .to_string_lossy()
-                            .parse::<u64>()
-                        {
+                        match parameter_instr!(b't').to_string_lossy().parse::<u64>() {
                             Ok(0) => {
                                 return Err((
                                     BFCompileError::Basic {
