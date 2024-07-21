@@ -41,7 +41,7 @@ impl Default for StandardRunConfig {
     }
 }
 
-// due to rust's hygenic macros, variable identifiers must be passed to macro to be usable in it.
+// due to rust's hygienic macros, variable identifiers must be passed to macro to be usable in it.
 macro_rules! parameter_instr {
     ($flag: literal, $arg_byte_iter: ident, $args: ident, $progname: ident, $out_mode: ident) => {{
         let remainder = $arg_byte_iter.collect::<Vec<u8>>();
@@ -135,7 +135,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                                     out_mode,
                                 ));
                             }
-                            // if it's any larger than this, the tape sise would exceed the 64-bit
+                            // if it's any larger than this, the tape size would exceed the 64-bit
                             // integer limit.
                             Ok(i) if i >= u64::MAX >> 12 => {
                                 return Err((

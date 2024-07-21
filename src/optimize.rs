@@ -129,7 +129,6 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
             remove_loop_at(0, &mut new_filtered);
         }
         // find location of dead loop that may exist later in the program
-        // only
         let mut dead_loop_starts = new_filtered
             .as_slice()
             .windows(2)
