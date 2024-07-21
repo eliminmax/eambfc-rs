@@ -67,6 +67,8 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
             let mut arg_byte_iter = arg_bytes.into_iter().skip(1);
             while let Some(b) = arg_byte_iter.next() {
                 // define macro here so that all of the values it references are in scope
+                // this macro is just because -e and -t have the following in common in
+                // their implementation
                 macro_rules! parameter_instr {
                     ($flag: literal) => {{
                         let remainder = arg_byte_iter.collect::<Vec<u8>>();
@@ -81,10 +83,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                                         id: String::from("MISSING_OPERAND"),
                                         msg: format!(
                                             "-{} requires an additional argument",
-                                            match $flag {
-                                                c if c < 0x80 => (c as char).to_string(),
-                                                c => format!("\\x{c:02x}"),
-                                            }
+                                            $flag as char
                                         ),
                                     },
                                     progname,
