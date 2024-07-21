@@ -2,9 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#[cfg(not(unix))]
-compile_error!("Unsupported platform! This program relies on std::os::unix!");
-
 pub mod arg_parse;
 pub mod eam_compile;
 pub mod elf_tools;
@@ -32,7 +29,7 @@ pub enum OutMode {
 
 fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
     let help_text = format!(
-        "Usage: {} [options] <program.bf> [<program2.bf> ...]
+        "Usage: {progname} [options] <program.bf> [<program2.bf> ...]
 
  -h        - display this help text and exit
  -V        - print version information and exit
@@ -54,8 +51,7 @@ fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
 Remaining options are treated as source file names. If they don't
 end with '.bf' (or the extension specified with '-e'), the program
 will raise an error.
-",
-        progname
+"
     );
     let _ = outfile.write(help_text.as_bytes());
 }
@@ -150,16 +146,18 @@ fn main() {
         }
         Ok(RunConfig::ShowVersion(progname)) => {
             println!(
-                "{}: eambfc-rs version {}
+                "{progname}: eambfc-rs version {}
 
 Copyright (c) 2024 Eli Array Minkoff
 License: GNU GPL version 3
 <https://gnu.org/licenses/gpl.html>
 This is free software:
 you are free to change and redistribute it.
-There is NO WARRANTY, to the extent permitted by law.",
-                progname,
-                env!("CARGO_PKG_VERSION")
+There is NO WARRANTY, to the extent permitted by law.
+
+{}",
+                env!("CARGO_PKG_VERSION"),
+                env!("EAMBFC_RS_GIT_COMMIT")
             );
             process::exit(exit_code);
         }
