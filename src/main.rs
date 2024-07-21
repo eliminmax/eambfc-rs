@@ -13,17 +13,15 @@ pub mod optimize;
 pub mod x86_64_encoders;
 pub use x86_64_encoders as instr_encoders;
 
+use arg_parse::RunConfig;
 use eam_compile::bf_compile;
 use err::{BFCompileError, BfErrDisplay};
-use arg_parse::RunConfig;
 use std::env::args_os;
 use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
 use std::{io, process};
-
-
 
 #[derive(PartialEq, Debug)]
 pub enum OutMode {

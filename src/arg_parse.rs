@@ -412,7 +412,7 @@ mod tests {
     fn missing_tape_size() -> Result<(), String> {
         let args_set = vec![
             OsString::from("eambfc-rs"),
-            OsString::from_vec(b"-t".into())
+            OsString::from_vec(b"-t".into()),
         ]
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();

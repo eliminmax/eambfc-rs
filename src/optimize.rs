@@ -149,7 +149,11 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
 
 macro_rules! condense_to {
     ($item:literal, $count:ident, $instr:expr) => {{
-        vec![if $count == 1 {CondensedInstruction::BFInstruction($item)} else {$instr($count)}]
+        vec![if $count == 1 {
+            CondensedInstruction::BFInstruction($item)
+        } else {
+            $instr($count)
+        }]
     }};
 }
 
