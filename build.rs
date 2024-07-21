@@ -34,7 +34,7 @@ fn main() {
                     .args(["status", "--short"])
                     .output()
                     .expect("Failed to determine whether or not local changes were made");
-                if git_status.stdout.len() != 0 {
+                if !git_status.stdout.is_empty() {
                     s.push_str(" (with local changes)");
                 }
 
