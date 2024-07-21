@@ -17,7 +17,7 @@ fn git_found() -> bool {
 }
 
 fn main() {
-    if cfg!(not(unix)) {}
+    println!("cargo::rerun-if-changed=.git/index");
     let git_invocation = Command::new("git")
         .args(["log", "-n1", "--pretty=format:built from git commit: %h"])
         .output();
