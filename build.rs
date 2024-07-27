@@ -5,9 +5,6 @@
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
-#[cfg(not(unix))]
-compiler_error!("Unsupported platform! This program relies on std::os::unix APIs.");
-
 #[inline]
 fn git_found() -> bool {
     match Command::new("git").arg("--help").output() {
