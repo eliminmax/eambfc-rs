@@ -131,6 +131,11 @@ pub fn bfc_jump_zero(reg: u8, offset: arch_info::JumpDistance) -> Vec<u8> {
     test_jcc(0b0100_u8, reg, offset)
 }
 
+pub fn bfc_nop_loop_open() -> [u8; arch_info::JUMP_SIZE] {
+    // times JUMP_SIZE NOP
+    [0x90; arch_info::JUMP_SIZE]
+}
+
 // INC and DEC are encoded very similarly with very few differences between
 // the encoding for operating on registers and operating on bytes pointed to by
 // registers. Because of the similarity, one function can be used for all 4 of

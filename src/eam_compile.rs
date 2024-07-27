@@ -197,15 +197,15 @@ fn compile_instr(
         b'.' => bf_io(SC_WRITE, 1),
         // Read 1 byte to [REG_BF_PTR] from STDIN
         b',' => bf_io(SC_READ, 0),
-        // for this, skip over JUMP_SIZE bytes, and push the location to jump_stack.
-        // will compile when reaching the corresponding ']' instruction
+        // for this, fill JUMP_SIZE bytes with NOPs, and push the location to jump_stack.
+        // will replace when reaching the corresponding ']' instruction
         b'[' => {
             jump_stack.push(JumpLocation {
                 src_line: pos.line,
                 src_col: pos.col,
                 index: dst.len(),
             });
-            dst.extend([0xffu8; JUMP_SIZE]);
+            dst.extend(bfc_nop_loop_open());
             return Ok(());
         }
         b']' => {
