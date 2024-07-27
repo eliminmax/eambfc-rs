@@ -10,10 +10,7 @@ compiler_error!("Unsupported platform! This program relies on std::os::unix APIs
 
 #[inline]
 fn git_found() -> bool {
-    match Command::new("/bin/sh")
-        .args(["-c", "command -v git"])
-        .output()
-    {
+    match Command::new("git").arg("--help").output() {
         Ok(Output { status, .. }) => status.success(),
         Err(_) => false,
     }
