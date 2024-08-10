@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 use super::arch_inter::{ArchInfo, ArchInter};
-use super::elf_tools::{Ehdr, Phdr};
+use super::elf_tools::{EIClass, EIdent, ELFType, ELFVersion, Ehdr, Phdr, PType, ELFOSABI};
 use super::err::BFCompileError;
 use super::optimize::{to_condensed, CondensedInstruction as CI};
 use std::io::{BufReader, Read, Write};
@@ -31,30 +31,15 @@ fn write_headers<W: Write, T: Copy, I: ArchInter>(
     let start_paddr: u64 = ((EHDR_SIZE as u64 + PHTB_SIZE) & (!0xffu64)) + 0x100u64;
     let start_vaddr: u64 = start_paddr + load_vaddr;
 
-    let e_ident_vals: [u8; 16] = [
-        // first 4 bytes are the magic values pre-defined and used to mark this as an ELF file
-        0x7fu8,
-        b'E',
-        b'L',
-        b'F',
-        2u8, // EI_CLASS = ELFCLASS64 (i.e. this is a 64-bit ELF file)
-        arch_info.elfdata_byte_order as u8,
-        1u8, // EI_VERSION = EV_CURRENT (the only valid option)
-        0u8, // EI_OSABI = ELFOSABI_SYSV,
-        0u8, // EI_ABIVERSION = 0 (ELFOSABI_SYSV doesn't define any ABI versions)
-        0u8, // remaining bytes are for padding
-        0u8,
-        0u8,
-        0u8,
-        0u8,
-        0u8,
-        0u8,
-    ];
     let ehdr = Ehdr {
-        e_ident: e_ident_vals,
-        e_type: 2, // ET_EXEC
-        e_machine: arch_info.em_arch as u16,
-        e_version: 1, // The only valid version number
+        e_ident: EIdent {
+            ei_class: EIClass::ELFClass64,
+            ei_data: arch_info.elfdata_byte_order,
+            ei_osabi: ELFOSABI::SYSV,
+        },
+        e_type: ELFType::Exec,
+        e_machine: arch_info.em_arch,
+        e_version: ELFVersion::EvCurrent, // The only valid version number
         e_phnum: PHNUM,
         e_shnum: 0,
         e_phoff: EHDR_SIZE as u64,
@@ -68,18 +53,18 @@ fn write_headers<W: Write, T: Copy, I: ArchInter>(
     };
     let tape_segment = Phdr {
         e_data: arch_info.elfdata_byte_order,
-        p_type: 1,          // PT_LOAD ( loadable segment )
-        p_flags: 4 | 2,     // PF_R | PF_W (readable and writable)
-        p_offset: 0,        // load bytes from this index in the file
-        p_vaddr: TAPE_ADDR, // load segment into this section of memory
-        p_paddr: 0,         // load from this physical address
-        p_filesz: 0,        // don't load anything from file, just zero-initialize it
-        p_memsz: tape_size, // allocate this many bytes of memory for this segment
-        p_align: 0x1000,    // align with this power of 2
+        p_type: PType::Load, // loadable segment
+        p_flags: 4 | 2,      // PF_R | PF_W (readable and writable)
+        p_offset: 0,         // load bytes from this index in the file
+        p_vaddr: TAPE_ADDR,  // load segment into this section of memory
+        p_paddr: 0,          // load from this physical address
+        p_filesz: 0,         // don't load anything from file, just zero-initialize it
+        p_memsz: tape_size,  // allocate this many bytes of memory for this segment
+        p_align: 0x1000,     // align with this power of 2
     };
     let code_segment = Phdr {
         e_data: arch_info.elfdata_byte_order,
-        p_type: 1,                               // PT_LOAD ( loadable segment )
+        p_type: PType::Load,                     // loadable segment
         p_flags: 4 | 1,                          // PF_R | PF_X (readable and executable)
         p_offset: 0,                             // load bytes from this index in the file
         p_vaddr: load_vaddr,                     // load segment into this section of memory

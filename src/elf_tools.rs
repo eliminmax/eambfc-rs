@@ -6,6 +6,11 @@ pub trait SerializePhdr {
     fn serialize(&self) -> &[u8];
 }
 
+#[derive(Debug)]
+pub enum EIClass {
+    ELFClass64 = 2,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum EIData {
     ELFDATA2LSB = 1, // 2's complement, little endian
@@ -17,13 +22,60 @@ pub enum ELFArch {
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 
+#[derive(Debug)]
+pub enum ELFVersion {
+    EvCurrent = 1,
+}
+
+#[derive(Debug)]
+pub enum ELFOSABI {
+    None,
+    SYSV,
+}
+
+#[derive(Debug)]
+pub enum ELFType {
+    Exec = 2
+}
+
+#[derive(Debug)]
+pub struct EIdent {
+    pub ei_class: EIClass,
+    pub ei_data: EIData,
+    pub ei_osabi: ELFOSABI,
+}
+
+impl From<EIdent> for [u8; 16] {
+    fn from(e_ident: EIdent) -> [u8; 16] {
+        let (osabi, abi_version) = match e_ident.ei_osabi {
+            ELFOSABI::None | ELFOSABI::SYSV => (0u8, 0u8)
+        };
+        #[rustfmt::skip]
+        let arr: [u8; 16] = [
+            // magic numbers
+            0x7fu8, b'E', b'L', b'F',
+            // 32 or 64 bit
+            e_ident.ei_class as u8,
+            // byte ordering
+            e_ident.ei_data as u8,
+            // Version of an ELF file - only valid value
+            ELFVersion::EvCurrent as u8,
+            // ABI and ABI version
+            osabi, abi_version,
+            // padding bytes
+            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8
+        ];
+        arr
+    }
+}
+
 use EIData::{ELFDATA2LSB as LSB, ELFDATA2MSB as MSB};
 
 pub struct Ehdr {
-    pub e_ident: [u8; 16],
-    pub e_type: u16,
-    pub e_machine: u16,
-    pub e_version: u32,
+    pub e_ident: EIdent,
+    pub e_type: ELFType,
+    pub e_machine: ELFArch,
+    pub e_version: ELFVersion,
     pub e_entry: u64,
     pub e_phoff: u64,
     pub e_shoff: u64,
@@ -36,9 +88,14 @@ pub struct Ehdr {
     pub e_shstrndx: u16,
 }
 
+#[derive(Debug)]
+pub enum PType {
+    Load = 1
+}
+
 pub struct Phdr {
     pub e_data: EIData,
-    pub p_type: u32,
+    pub p_type: PType,
     pub p_flags: u32,
     pub p_offset: u64,
     pub p_vaddr: u64,
@@ -52,10 +109,11 @@ pub struct Phdr {
 // to_be_bytes are called.
 macro_rules! serialize_ehdr {
     ($item:ident, $func:ident) => {{
-        let mut v = Vec::from($item.e_ident);
-        v.extend($item.e_type.$func());
-        v.extend($item.e_machine.$func());
-        v.extend($item.e_version.$func());
+        let e_ident: [u8; 16] = $item.e_ident.into();
+        let mut v = Vec::from(e_ident);
+        v.extend(($item.e_type as u16).$func());
+        v.extend(($item.e_machine as u16).$func());
+        v.extend(($item.e_version as u32).$func());
         v.extend($item.e_entry.$func());
         v.extend($item.e_phoff.$func());
         v.extend($item.e_shoff.$func());
@@ -69,9 +127,10 @@ macro_rules! serialize_ehdr {
         v
     }};
 }
+
 macro_rules! serialize_phdr {
     ($item:ident, $func:ident) => {{
-        let mut v = Vec::from($item.p_type.$func());
+        let mut v = Vec::from(($item.p_type as u32).$func());
         v.extend($item.p_flags.$func());
         v.extend($item.p_offset.$func());
         v.extend($item.p_vaddr.$func());
@@ -85,10 +144,9 @@ macro_rules! serialize_phdr {
 
 impl From<Ehdr> for Vec<u8> {
     fn from(item: Ehdr) -> Self {
-        match item.e_ident[5] {
-            1 => serialize_ehdr!(item, to_le_bytes),
-            2 => serialize_ehdr!(item, to_be_bytes),
-            _ => unreachable!(),
+        match item.e_ident.ei_data {
+            LSB => serialize_ehdr!(item, to_le_bytes),
+            MSB => serialize_ehdr!(item, to_be_bytes),
         }
     }
 }
