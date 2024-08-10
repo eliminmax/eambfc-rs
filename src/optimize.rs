@@ -147,27 +147,25 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
     }
 }
 
-macro_rules! condense_to {
-    ($item:literal, $count:ident, $instr:expr) => {{
-        vec![if $count == 1 {
-            CondensedInstruction::BFInstruction($item)
-        } else {
-            $instr($count)
-        }]
-    }};
-}
-
 #[inline]
 fn condense_instr(instr: u8, count: usize) -> Vec<CondensedInstruction> {
+    macro_rules! condense_to {
+        ($condensed_instr:expr) => {{
+            if count == 1 {
+                vec![CondensedInstruction::BFInstruction(instr)]
+            } else {
+                vec![$condensed_instr(count)]
+            }
+        }};
+    }
     match instr {
-        // null char used as a placeholder
-        b'\0' => vec![],
+        b'\0' => vec![], // null char used as a placeholder
         b'[' | b'.' | b']' | b',' => [CondensedInstruction::BFInstruction(instr)].repeat(count),
         b'@' => [CondensedInstruction::SetZero].repeat(count),
-        b'+' => condense_to!(b'+', count, CondensedInstruction::RepeatAdd),
-        b'-' => condense_to!(b'-', count, CondensedInstruction::RepeatSub),
-        b'<' => condense_to!(b'<', count, CondensedInstruction::RepeatMoveL),
-        b'>' => condense_to!(b'>', count, CondensedInstruction::RepeatMoveR),
+        b'+' => condense_to!(CondensedInstruction::RepeatAdd),
+        b'-' => condense_to!(CondensedInstruction::RepeatSub),
+        b'<' => condense_to!(CondensedInstruction::RepeatMoveL),
+        b'>' => condense_to!(CondensedInstruction::RepeatMoveR),
         b => panic!("Invalid byte value: {b}"),
     }
 }
