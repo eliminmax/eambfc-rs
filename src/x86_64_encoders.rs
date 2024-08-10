@@ -47,9 +47,7 @@ pub enum Register {
 
 
 pub mod arch_info {
-    use super::super::elf_tools::{ELFArch, ELFDataByteOrder};
-    pub const JUMP_SIZE: usize = 9; // size of the TEST + JUMP instructions
-    pub const EM_ARCH: ELFArch = ELFArch::X86_64; // EM_X86_64 (i.e. amd64)
+    use super::super::elf_tools::ELFDataByteOrder;
     pub const ELFDATA_BYTE_ORDER: ELFDataByteOrder = ELFDataByteOrder::ELFDATA2LSB;
 }
 
