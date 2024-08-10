@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: NONE
+// SPDX-FileCopyrightText: Eli Array Minkoff
 //
 // SPDX-License-Identifier: 0BSD
 
