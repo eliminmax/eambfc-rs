@@ -53,8 +53,6 @@ pub mod arch_info {
     pub const JUMP_SIZE: usize = 9; // size of the TEST + JUMP instructions
     pub const EM_ARCH: u16 = 62u16; // EM_X86_64 (i.e. amd64)
     pub const ELFDATA_BYTE_ORDER: u8 = 1; // ELFDATA2LSB (i.e. 2's complement, little endian)
-    pub const MAX_JUMP_DISTANCE: usize = i32::MAX as usize; // how far can we jump
-    pub type JumpDistance = i32; // type to pass to bfc_jump_not_zero and bfc_jump_zero
 }
 
 // Chooses the shortest instrution to set a register to an immediate value, from the following:
@@ -99,37 +97,45 @@ pub fn bfc_syscall() -> Vec<u8> {
     vec![0x0f_u8, 0x05_u8]
 }
 
-#[inline]
-#[rustfmt::skip]
-// Given condition tttn (a 4-bit condition defined in Vol. 2D B.1.4.7 Condition Test (tttn) Field),
-// returns the encoding for the instructions to test that condition when testing the byte pointed
-// to by `reg` against 0xff, and jump `offset` bytes away should the condition be met.
-fn test_jcc(tttn: u8, reg: u8, offset: i32) -> Vec<u8> {
-    // Ensure only lower 4 bits of tttn are used
-    debug_assert!(tttn & 0xf0_u8 == 0);
-    // Ensure reg is a valid register
-    debug_assert!(reg < 8);
-    let mut v = vec![
-        // TEST byte [reg], 0xff
-        0xf6_u8, reg, 0xff_u8,
-        // Jcc|ttn (must be followed by a 32-bit immediate jump offset)
-        0x0f_u8, 0x80_u8|tttn
-    ];
-    v.extend(offset.to_le_bytes());
-    v
+// macro to declare a conditional jump instruction.
+// Takes a function identifier, and a 4-bit condition as defined in the Manual, specifically the
+// Vol. 2D B.1.4.7 Condition Test (tttn) Field table, and generates a function which takes a
+// register and a signed 64-bit offset, and if the offset is within range, returns a vector of
+// bytes representing a TEST instruction that runs on the byte pointed to by the register, and
+// returns a BFCompileError::Basic with the identifier "JUMP_TOO_LONG" if it's out of range. The
+// reason it takes an i64 instead of an i32 is so that other architectures with different maximum
+// jump lenghts could have the same interface as x86_64.
+macro_rules! fn_test_jcc {
+    ($fn_name:ident, $tttn:literal) => {
+        pub fn $fn_name(reg: u8, offset: i64) -> Result<Vec<u8>, BFCompileError> {
+            // Ensure only lower 4 bits of tttn are used - the const _: () mess forces the check to
+            // run at compile time rather than runtime.
+            const _: () = assert!($tttn & 0xf0_u8 == 0);
+            let offset_bytes = TryInto::<i32>::try_into(offset)
+                .map_err(|_| BFCompileError::Basic {
+                    id: String::from("JUMP_TOO_LONG"),
+                    msg: format!("{offset} is outside the range of possible 32-bit signed values"),
+                })?
+                .to_le_bytes();
+            // Ensure reg is a valid register
+            assert!(reg < 8);
+            #[rustfmt::skip]
+            let mut v = vec![
+                // TEST byte [reg], 0xff
+                0xf6_u8, reg, 0xff_u8,
+                // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
+                0x0f_u8, 0x80_u8|$tttn
+            ];
+            v.extend(offset_bytes);
+            Ok(v)
+        }
+    };
 }
 
-pub fn bfc_jump_not_zero(reg: u8, offset: arch_info::JumpDistance) -> Vec<u8> {
-    // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
-    // TEST byte [reg], 0xff; JNZ offset
-    test_jcc(0b0101_u8, reg, offset)
-}
-
-pub fn bfc_jump_zero(reg: u8, offset: arch_info::JumpDistance) -> Vec<u8> {
-    // according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
-    // TEST byte [reg], 0xff; JZ offset
-    test_jcc(0b0100_u8, reg, offset)
-}
+// according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
+fn_test_jcc!(bfc_jump_not_zero, 0b0101_u8);
+// according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
+fn_test_jcc!(bfc_jump_zero, 0b0100_u8);
 
 pub fn bfc_nop_loop_open() -> [u8; arch_info::JUMP_SIZE] {
     // times JUMP_SIZE NOP

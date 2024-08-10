@@ -222,24 +222,11 @@ fn compile_instr(
                     })?;
             let open_address = open_location.index;
             let distance = dst.len() - open_address;
-            // This gets messy. Jump length must be within the limit allowed by the architecture.
-            // usize may be longer than 32 bits on 64-bit platforms.
-            // need to cast to 32 bit signed integer, but if it's too big, throw a JUMP_TOO_LONG
-            if distance > MAX_JUMP_DISTANCE {
-                return Err(BFCompileError::Position {
-                    id: String::from("JUMP_TOO_LONG"),
-                    msg: String::from("Attempted a jump longer than the maximum length."),
-                    instr: b'[',
-                    col: open_location.src_col,
-                    line: open_location.src_line,
-                });
-            }
-
             dst[open_address..open_address + JUMP_SIZE]
-                .swap_with_slice(&mut bfc_jump_zero(REG_BF_PTR, distance as JumpDistance));
+                .swap_with_slice(&mut bfc_jump_zero(REG_BF_PTR, distance as i64)?);
             // now, we know that distance fits within the 32-bit integer limit, so we can
             // simply cast without another check needed when compiling the `]` instruction itself
-            bfc_jump_not_zero(REG_BF_PTR, -(distance as JumpDistance))
+            bfc_jump_not_zero(REG_BF_PTR, -(distance as i64))?
         }
         b'\n' => {
             pos.col = 1;
