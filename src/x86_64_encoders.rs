@@ -325,30 +325,25 @@ mod tests {
         // test that appropriate encodings are used for different immediates
         assert_eq!(
             bfc_set_reg(registers::REG_BF_PTR, 0),
-            vec![0x31, 0xc0 | 0b00011011]
+            // XOR EBX, EBX
+            vec![0x31, 0xc0 | 0b011000 | 0b011]
         );
         assert_eq!(
             bfc_set_reg(registers::REG_BF_PTR, 101),
-            vec![0x6a, 101, 0x58 + 0b011]
+            // PUSH 101; POP RBX
+            vec![0x6a, 101, 0x58 | 0b011]
         );
         assert_eq!(
             bfc_set_reg(registers::REG_BF_PTR, 128),
-            vec![0xb8 + 0b011, 128, 0, 0, 0]
+            // MOV EBX, 128
+            vec![0xb8 | 0b011, 128, 0, 0, 0]
         );
+
+        #[rustfmt::skip]
         assert_eq!(
             bfc_set_reg(registers::REG_BF_PTR, i64::MAX - 0xffff),
-            vec![
-                0x48,
-                0xb8 + 0b011,
-                0x00,
-                0x00,
-                0xff,
-                0xff,
-                0xff,
-                0xff,
-                0xff,
-                0x7f
-            ]
+            // MOV RBX, 0x7fffffffffff0000
+            vec![0x48, 0xb8 | 0b011, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
         );
 
         Ok(())
