@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 use super::arch_inter::{ArchInfo, ArchInter};
-use super::elf_tools::{EIClass, EIdent, ELFType, ELFVersion, Ehdr, Phdr, PType, ELFOSABI};
+use super::elf_tools::{EIClass, EIdent, ELFType, ELFVersion, Ehdr, PType, Phdr, ELFOSABI};
 use super::err::BFCompileError;
 use super::optimize::{to_condensed, CondensedInstruction as CI};
 use std::io::{BufReader, Read, Write};
@@ -351,7 +351,7 @@ pub fn bf_compile<W: Write, R: Read, T: Copy, I: ArchInter<RegType = T>>(
 
 #[cfg(test)]
 mod tests {
-    use super::super::INSTR_INTER;
+    use super::super::X86_64_INTER;
     use super::*;
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
@@ -360,7 +360,7 @@ mod tests {
             Vec::<u8>::new(),
             false,
             8,
-            INSTR_INTER,
+            X86_64_INTER,
         )
         .map_err(|e| format!("Failed to compile: {:?}", e))
     }
@@ -374,7 +374,7 @@ mod tests {
             Vec::<u8>::new(),
             false,
             8,
-            INSTR_INTER,
+            X86_64_INTER,
         )
         .map_err(|e| format!("Failed to compile: {:?}", e))
     }
@@ -382,7 +382,7 @@ mod tests {
     #[test]
     fn unmatched_open() -> Result<(), String> {
         assert!(
-            bf_compile(b"[".as_slice(), Vec::<u8>::new(), false, 8, INSTR_INTER).is_err_and(|e| {
+            bf_compile(b"[".as_slice(), Vec::<u8>::new(), false, 8, X86_64_INTER).is_err_and(|e| {
                 match e.into_iter().next().unwrap() {
                     BFCompileError::Basic { id, .. }
                     | BFCompileError::Instruction { id, .. }
@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn unmatched_close() -> Result<(), String> {
         assert!(
-            bf_compile(b"]".as_slice(), Vec::<u8>::new(), false, 8, INSTR_INTER).is_err_and(|e| {
+            bf_compile(b"]".as_slice(), Vec::<u8>::new(), false, 8, X86_64_INTER).is_err_and(|e| {
                 match e.into_iter().next().unwrap() {
                     BFCompileError::Basic { id, .. }
                     | BFCompileError::Instruction { id, .. }
