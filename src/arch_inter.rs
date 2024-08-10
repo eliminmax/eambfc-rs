@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::elf_tools::{ELFArch, EIData};
+use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
 
 pub trait ArchInter {

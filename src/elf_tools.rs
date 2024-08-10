@@ -35,7 +35,7 @@ pub enum ELFOSABI {
 
 #[derive(Debug)]
 pub enum ELFType {
-    Exec = 2
+    Exec = 2,
 }
 
 #[derive(Debug)]
@@ -48,7 +48,7 @@ pub struct EIdent {
 impl From<EIdent> for [u8; 16] {
     fn from(e_ident: EIdent) -> [u8; 16] {
         let (osabi, abi_version) = match e_ident.ei_osabi {
-            ELFOSABI::None | ELFOSABI::SYSV => (0u8, 0u8)
+            ELFOSABI::None | ELFOSABI::SYSV => (0u8, 0u8),
         };
         #[rustfmt::skip]
         let arr: [u8; 16] = [
@@ -90,7 +90,7 @@ pub struct Ehdr {
 
 #[derive(Debug)]
 pub enum PType {
-    Load = 1
+    Load = 1,
 }
 
 pub struct Phdr {

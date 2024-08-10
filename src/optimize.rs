@@ -272,7 +272,6 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     fn unmatched_loops_detected() -> Result<(), String> {
         assert_eq!(loops_match(b"["), LoopsMatched::UnmatchedOpen);

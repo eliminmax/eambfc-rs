@@ -123,7 +123,6 @@ fn json_str(s: &str) -> String {
         .join("")
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,7 +135,10 @@ mod tests {
 
     #[test]
     fn json_str_special_escapes() -> Result<(), String> {
-        assert_eq!(json_str("\n\r\x0c\t\x08\\\""), String::from("\\n\\r\\f\\t\\b\\\\\\\""));
+        assert_eq!(
+            json_str("\n\r\x0c\t\x08\\\""),
+            String::from("\\n\\r\\f\\t\\b\\\\\\\"")
+        );
         Ok(())
     }
 }
