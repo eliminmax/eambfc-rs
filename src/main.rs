@@ -10,6 +10,7 @@ pub mod err;
 pub mod optimize;
 pub mod x86_64_encoders;
 pub use x86_64_encoders as instr_encoders;
+pub use x86_64_encoders::X86_64_INTER as INSTR_INTER;
 
 use arg_parse::RunConfig;
 use eam_compile::bf_compile;
@@ -115,7 +116,7 @@ fn compile_wrapper(
             ),
         }]
     })?;
-    bf_compile(infile, outfile, optimize, tape_blocks)
+    bf_compile(infile, outfile, optimize, tape_blocks, INSTR_INTER)
 }
 
 fn main() {

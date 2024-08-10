@@ -1,13 +1,10 @@
 // SPDX-FileCopyrightText: 2024 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
+use super::arch_inter::{ArchInfo, EAMBFCArch};
 use super::elf_tools::{Ehdr, Phdr};
 use super::err::BFCompileError;
-use super::instr_encoders::arch_info::*;
-use super::instr_encoders::registers::*;
-use super::instr_encoders::syscall_nums::*;
-use super::instr_encoders::*;
-use super::optimize::{to_condensed, CondensedInstruction};
+use super::optimize::{to_condensed, CondensedInstruction as CI};
 use std::io::{BufReader, Read, Write};
 
 struct Position {
@@ -22,10 +19,11 @@ const PHTB_SIZE: u64 = (PHDR_SIZE * PHNUM) as u64;
 const TAPE_ADDR: u64 = 0x10000;
 const PHNUM: u16 = 2;
 
-fn write_headers<W: Write>(
+fn write_headers<W: Write, T: Copy, I: EAMBFCArch>(
     output: &mut W,
     codesize: usize,
     tape_blocks: u64,
+    arch_info: &ArchInfo<T, I>,
 ) -> Result<(), BFCompileError> {
     // more ELF addressing stuff - depends on tape_blocks, so can't be const
     let tape_size: u64 = tape_blocks * 0x1000;
@@ -40,7 +38,7 @@ fn write_headers<W: Write>(
         b'L',
         b'F',
         2u8, // EI_CLASS = ELFCLASS64 (i.e. this is a 64-bit ELF file)
-        ELFDATA_BYTE_ORDER as u8,
+        arch_info.elfdata_byte_order as u8,
         1u8, // EI_VERSION = EV_CURRENT (the only valid option)
         0u8, // EI_OSABI = ELFOSABI_SYSV,
         0u8, // EI_ABIVERSION = 0 (ELFOSABI_SYSV doesn't define any ABI versions)
@@ -55,7 +53,7 @@ fn write_headers<W: Write>(
     let ehdr = Ehdr {
         e_ident: e_ident_vals,
         e_type: 2, // ET_EXEC
-        e_machine: EM_ARCH as u16,
+        e_machine: arch_info.em_arch as u16,
         e_version: 1, // The only valid version number
         e_phnum: PHNUM,
         e_shnum: 0,
@@ -111,7 +109,6 @@ fn write_headers<W: Write>(
     }
 }
 
-
 // The brainfuck instructions "." and "," are similar from an implementation
 // perspective. Both require making system calls for I/O, and the system calls
 // have 3 nearly identical arguments:
@@ -120,22 +117,27 @@ fn write_headers<W: Write>(
 //  - arg3 is the number of bytes to write/read
 //
 // Due to their similarity, ',' and '.' are both implemented with bf_io.
-
-macro_rules! bf_io {
-    ($sc_num:ident, $fd:literal) => {{
-        // set the system call number register to $sc_num
-        let mut instr_bytes = bfc_set_reg(REG_SC_NUM, $sc_num);
-        // set the first argument to the file descriptor
-        instr_bytes.extend(bfc_set_reg(REG_ARG1, $fd));
-        // byte to read in to or write out from is in the brainfuck pointer
-        instr_bytes.extend(bfc_reg_copy(REG_ARG2, REG_BF_PTR));
-        // only one byte is read/written
-        instr_bytes.extend(bfc_set_reg(REG_ARG2, 1));
-        // append the system call instruction
-        instr_bytes.extend(bfc_syscall());
-        // return the instr_bytes vector
-        instr_bytes
-    }}
+#[inline]
+fn bf_io<T: Copy, I: EAMBFCArch<RegType = T>>(
+    sc: i64,
+    fd: i64,
+    arch_info: &ArchInfo<T, I>,
+) -> Vec<u8> {
+    // set the system call number register to $sc_num
+    let mut instr_bytes = I::set_reg(arch_info.registers.sc_num, sc);
+    // set the first argument to the file descriptor
+    instr_bytes.extend(I::set_reg(arch_info.registers.arg1, fd));
+    // byte to read in to or write out from is in the brainfuck pointer
+    instr_bytes.extend(I::reg_copy(
+        arch_info.registers.arg2,
+        arch_info.registers.bf_ptr,
+    ));
+    // only one byte is read/written
+    instr_bytes.extend(I::set_reg(arch_info.registers.arg3, 1));
+    // append the system call instruction
+    instr_bytes.extend(I::syscall());
+    // return the instr_bytes vector
+    instr_bytes
 }
 
 struct JumpLocation {
@@ -144,24 +146,26 @@ struct JumpLocation {
     index: usize,
 }
 
-fn compile_condensed(
-    condensed_instr: CondensedInstruction,
+fn compile_condensed<T: Copy, I: EAMBFCArch<RegType = T>>(
+    condensed_instr: CI,
     dst: &mut Vec<u8>,
     jump_stack: &mut Vec<JumpLocation>,
+    arch_info: &ArchInfo<T, I>,
 ) -> Result<(), BFCompileError> {
     let to_write: Vec<u8> = match condensed_instr {
-        CondensedInstruction::SetZero => bfc_zero_mem(REG_BF_PTR),
-        CondensedInstruction::RepeatAdd(count) => bfc_add_mem(REG_BF_PTR, count as i8),
-        CondensedInstruction::RepeatSub(count) => bfc_sub_mem(REG_BF_PTR, count as i8),
-        CondensedInstruction::RepeatMoveR(count) => bfc_add_reg(REG_BF_PTR, count)?,
-        CondensedInstruction::RepeatMoveL(count) => bfc_sub_reg(REG_BF_PTR, count)?,
-        CondensedInstruction::BFInstruction(i) => {
+        CI::SetZero => I::zero_byte(arch_info.registers.bf_ptr),
+        CI::RepeatAdd(count) => I::add_byte(arch_info.registers.bf_ptr, count as i8),
+        CI::RepeatSub(count) => I::sub_byte(arch_info.registers.bf_ptr, count as i8),
+        CI::RepeatMoveR(count) => I::add_reg(arch_info.registers.bf_ptr, count as u64)?,
+        CI::RepeatMoveL(count) => I::sub_reg(arch_info.registers.bf_ptr, count as u64)?,
+        CI::BFInstruction(i) => {
             return compile_instr(
                 i,
                 dst,
                 // throwaway position value
                 &mut Position { line: 0, col: 0 },
                 jump_stack,
+                arch_info,
             );
         }
     };
@@ -182,27 +186,28 @@ fn compile_condensed(
     }
 }
 
-fn compile_instr(
+fn compile_instr<T: Copy, I: EAMBFCArch<RegType = T>>(
     instr: u8,
     dst: &mut Vec<u8>,
     pos: &mut Position,
     jump_stack: &mut Vec<JumpLocation>,
+    arch_info: &ArchInfo<T, I>,
 ) -> Result<(), BFCompileError> {
     pos.col += 1;
     let to_write: Vec<u8> = match instr {
-        // decrement the tape pointer registebr
-        b'<' => bfc_dec_reg(REG_BF_PTR),
+        // decrement the tape pointer register
+        b'<' => I::dec_reg(arch_info.registers.bf_ptr),
         // increment the tape pointer register
-        b'>' => bfc_inc_reg(REG_BF_PTR),
+        b'>' => I::inc_reg(arch_info.registers.bf_ptr),
         // decrement the current cell value
-        b'-' => bfc_dec_byte(REG_BF_PTR),
+        b'-' => I::dec_byte(arch_info.registers.bf_ptr),
         // increment the current cell value
-        b'+' => bfc_inc_byte(REG_BF_PTR),
-        // Write 1 byte at [REG_BF_PTR] to STDOUT
-        b'.' => bf_io!(SC_WRITE, 1),
-        // Read 1 byte to [REG_BF_PTR] from STDIN
-        b',' => bf_io!(SC_READ, 0),
-        // for this, fill JUMP_SIZE bytes with NOPs, and push the location to jump_stack.
+        b'+' => I::inc_byte(arch_info.registers.bf_ptr),
+        // Write 1 byte at [bf_ptr] to STDOUT
+        b'.' => bf_io(arch_info.sc_nums.sc_write, 1, arch_info),
+        // Read 1 byte to [bf_ptr] from STDIN
+        b',' => bf_io(arch_info.sc_nums.sc_read, 0, arch_info),
+        // for this, fill jump_size bytes with NOPs, and push the location to jump_stack.
         // will replace when reaching the corresponding ']' instruction
         b'[' => {
             jump_stack.push(JumpLocation {
@@ -210,7 +215,7 @@ fn compile_instr(
                 src_col: pos.col,
                 index: dst.len(),
             });
-            dst.extend(bfc_nop_loop_open());
+            dst.extend(I::nop_loop_open());
             return Ok(());
         }
         b']' => {
@@ -227,11 +232,11 @@ fn compile_instr(
                     })?;
             let open_address = open_location.index;
             let distance = dst.len() - open_address;
-            dst[open_address..open_address + JUMP_SIZE]
-                .swap_with_slice(&mut bfc_jump_zero(REG_BF_PTR, distance as i64)?);
+            dst[open_address..open_address + arch_info.jump_size]
+                .swap_with_slice(&mut I::jump_zero(arch_info.registers.bf_ptr, distance as i64)?);
             // now, we know that distance fits within the 32-bit integer limit, so we can
             // simply cast without another check needed when compiling the `]` instruction itself
-            bfc_jump_not_zero(REG_BF_PTR, -(distance as i64))?
+            I::jump_not_zero(arch_info.registers.bf_ptr, -(distance as i64))?
         }
         b'\n' => {
             pos.col = 1;
@@ -266,15 +271,16 @@ fn compile_instr(
     }
 }
 
-pub fn bf_compile<W: Write, R: Read>(
+pub fn bf_compile<W: Write, R: Read, T: Copy, I: EAMBFCArch<RegType = T>>(
     in_f: R,
     mut out_f: W,
     optimize: bool,
     tape_blocks: u64,
+    arch_info: ArchInfo<T, I>,
 ) -> Result<(), Vec<BFCompileError>> {
     let mut jump_stack = Vec::<JumpLocation>::new();
     let mut pos = Position { line: 1, col: 0 };
-    let mut code_buf = bfc_set_reg(REG_BF_PTR, TAPE_ADDR as i64);
+    let mut code_buf = I::set_reg(arch_info.registers.bf_ptr, TAPE_ADDR as i64);
     let mut errs = Vec::<BFCompileError>::new();
 
     let reader = BufReader::new(in_f);
@@ -284,7 +290,8 @@ pub fn bf_compile<W: Write, R: Read>(
             Ok(condensed) => condensed
                 .into_iter()
                 .filter_map(|i| {
-                    if let Err(e) = compile_condensed(i, &mut code_buf, &mut jump_stack) {
+                    if let Err(e) = compile_condensed(i, &mut code_buf, &mut jump_stack, &arch_info)
+                    {
                         Some(e)
                     } else {
                         None
@@ -296,7 +303,9 @@ pub fn bf_compile<W: Write, R: Read>(
     } else {
         reader.bytes().for_each(|maybe_byte| match maybe_byte {
             Ok(byte) => {
-                if let Err(e) = compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack) {
+                if let Err(e) =
+                    compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack, &arch_info)
+                {
                     errs.push(e);
                 }
             }
@@ -323,12 +332,15 @@ pub fn bf_compile<W: Write, R: Read>(
         });
     }
     // finally, after that mess, end with an exit(0)
-    code_buf.extend(bfc_set_reg(REG_SC_NUM, SC_EXIT));
-    code_buf.extend(bfc_set_reg(REG_ARG1, 0));
-    code_buf.extend(bfc_syscall());
+    code_buf.extend(I::set_reg(
+        arch_info.registers.sc_num,
+        arch_info.sc_nums.sc_exit,
+    ));
+    code_buf.extend(I::set_reg(arch_info.registers.arg1, 0));
+    code_buf.extend(I::syscall());
 
     let code_sz = code_buf.len();
-    if let Err(e) = write_headers(&mut out_f, code_sz, tape_blocks) {
+    if let Err(e) = write_headers(&mut out_f, code_sz, tape_blocks, &arch_info) {
         errs.push(e);
     }
     match out_f.write(code_buf.as_slice()) {
@@ -351,25 +363,38 @@ pub fn bf_compile<W: Write, R: Read>(
 
 #[cfg(test)]
 mod tests {
+    use super::super::INSTR_INTER;
     use super::*;
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
-        bf_compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false, 8)
-            .map_err(|e| format!("Failed to compile: {:?}", e))
+        bf_compile(
+            b"+[>]<-,.".as_slice(),
+            Vec::<u8>::new(),
+            false,
+            8,
+            INSTR_INTER,
+        )
+        .map_err(|e| format!("Failed to compile: {:?}", e))
     }
 
     #[test]
     fn compile_nested_loops() -> Result<(), String> {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
-        bf_compile(b">+[-->---[-<]>]>+".as_slice(), Vec::<u8>::new(), false, 8)
-            .map_err(|e| format!("Failed to compile: {:?}", e))
+        bf_compile(
+            b">+[-->---[-<]>]>+".as_slice(),
+            Vec::<u8>::new(),
+            false,
+            8,
+            INSTR_INTER,
+        )
+        .map_err(|e| format!("Failed to compile: {:?}", e))
     }
 
     #[test]
     fn unmatched_open() -> Result<(), String> {
         assert!(
-            bf_compile(b"[".as_slice(), Vec::<u8>::new(), false, 8).is_err_and(|e| {
+            bf_compile(b"[".as_slice(), Vec::<u8>::new(), false, 8, INSTR_INTER).is_err_and(|e| {
                 match e.into_iter().next().unwrap() {
                     BFCompileError::Basic { id, .. }
                     | BFCompileError::Instruction { id, .. }
@@ -384,7 +409,7 @@ mod tests {
     #[test]
     fn unmatched_close() -> Result<(), String> {
         assert!(
-            bf_compile(b"]".as_slice(), Vec::<u8>::new(), false, 8).is_err_and(|e| {
+            bf_compile(b"]".as_slice(), Vec::<u8>::new(), false, 8, INSTR_INTER).is_err_and(|e| {
                 match e.into_iter().next().unwrap() {
                     BFCompileError::Basic { id, .. }
                     | BFCompileError::Instruction { id, .. }

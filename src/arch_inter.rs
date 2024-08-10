@@ -26,7 +26,7 @@ pub trait EAMBFCArch {
 }
 
 #[derive(Debug)]
-pub struct Registers<R> {
+pub struct Registers<R: Copy + Clone> {
     pub sc_num: R,
     pub arg1: R,
     pub arg2: R,
@@ -42,7 +42,7 @@ pub struct SyscallNums {
 }
 
 #[derive(Debug)]
-pub struct ArchInfo<R, I: EAMBFCArch> {
+pub struct ArchInfo<R: Copy + Clone, I: EAMBFCArch> {
     pub registers: Registers<R>,
     pub sc_nums: SyscallNums,
     pub jump_size: usize,
