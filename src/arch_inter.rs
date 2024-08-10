@@ -5,7 +5,7 @@
 use super::err::BFCompileError;
 use super::elf_tools::{ELFArch, ELFDataByteOrder};
 
-pub trait EAMBFCArch {
+pub trait ArchInter {
     type RegType;
     fn set_reg(reg: Self::RegType, imm: i64) -> Vec<u8>;
     fn reg_copy(dst: Self::RegType, src: Self::RegType) -> Vec<u8>;
@@ -42,7 +42,7 @@ pub struct SyscallNums {
 }
 
 #[derive(Debug)]
-pub struct ArchInfo<R: Copy + Clone, I: EAMBFCArch> {
+pub struct ArchInfo<R: Copy + Clone, I: ArchInter> {
     pub registers: Registers<R>,
     pub sc_nums: SyscallNums,
     pub jump_size: usize,

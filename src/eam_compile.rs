@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
-use super::arch_inter::{ArchInfo, EAMBFCArch};
+use super::arch_inter::{ArchInfo, ArchInter};
 use super::elf_tools::{Ehdr, Phdr};
 use super::err::BFCompileError;
 use super::optimize::{to_condensed, CondensedInstruction as CI};
@@ -19,7 +19,7 @@ const PHTB_SIZE: u64 = (PHDR_SIZE * PHNUM) as u64;
 const TAPE_ADDR: u64 = 0x10000;
 const PHNUM: u16 = 2;
 
-fn write_headers<W: Write, T: Copy, I: EAMBFCArch>(
+fn write_headers<W: Write, T: Copy, I: ArchInter>(
     output: &mut W,
     codesize: usize,
     tape_blocks: u64,
@@ -118,7 +118,7 @@ fn write_headers<W: Write, T: Copy, I: EAMBFCArch>(
 //
 // Due to their similarity, ',' and '.' are both implemented with bf_io.
 #[inline]
-fn bf_io<T: Copy, I: EAMBFCArch<RegType = T>>(
+fn bf_io<T: Copy, I: ArchInter<RegType = T>>(
     sc: i64,
     fd: i64,
     arch_info: &ArchInfo<T, I>,
@@ -146,7 +146,7 @@ struct JumpLocation {
     index: usize,
 }
 
-fn compile_condensed<T: Copy, I: EAMBFCArch<RegType = T>>(
+fn compile_condensed<T: Copy, I: ArchInter<RegType = T>>(
     condensed_instr: CI,
     dst: &mut Vec<u8>,
     jump_stack: &mut Vec<JumpLocation>,
@@ -186,7 +186,7 @@ fn compile_condensed<T: Copy, I: EAMBFCArch<RegType = T>>(
     }
 }
 
-fn compile_instr<T: Copy, I: EAMBFCArch<RegType = T>>(
+fn compile_instr<T: Copy, I: ArchInter<RegType = T>>(
     instr: u8,
     dst: &mut Vec<u8>,
     pos: &mut Position,
@@ -271,7 +271,7 @@ fn compile_instr<T: Copy, I: EAMBFCArch<RegType = T>>(
     }
 }
 
-pub fn bf_compile<W: Write, R: Read, T: Copy, I: EAMBFCArch<RegType = T>>(
+pub fn bf_compile<W: Write, R: Read, T: Copy, I: ArchInter<RegType = T>>(
     in_f: R,
     mut out_f: W,
     optimize: bool,

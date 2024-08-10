@@ -32,7 +32,7 @@
 // * RDX is 010b
 // * RBX is 011b
 
-use super::arch_inter::{ArchInfo, EAMBFCArch, Registers, SyscallNums};
+use super::arch_inter::{ArchInfo, ArchInter, Registers, SyscallNums};
 use super::elf_tools::{ELFArch, ELFDataByteOrder};
 use super::err::BFCompileError;
 
@@ -142,7 +142,7 @@ macro_rules! fn_test_jcc {
 }
 
 pub struct X86_64Inter();
-impl EAMBFCArch for X86_64Inter {
+impl ArchInter for X86_64Inter {
     type RegType = Register;
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
     // XOR reg, reg
