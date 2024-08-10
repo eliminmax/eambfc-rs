@@ -258,47 +258,6 @@ pub const X86_64_INTER: ArchInfo<Register, X86_64Inter> = ArchInfo::<Register, X
     inter: X86_64Inter {},
 };
 
-pub fn bfc_set_reg(reg: Register, imm: i64) -> Vec<u8> {
-    X86_64Inter::set_reg(reg, imm)
-}
-
-// Returns instruction that copies the contents of the register src to the register dst
-pub fn bfc_reg_copy(dst: Register, src: Register) -> Vec<u8> {
-    X86_64Inter::reg_copy(dst, src)
-}
-
-// Returns the syscall instruction
-pub fn bfc_syscall() -> Vec<u8> {
-    X86_64Inter::syscall()
-}
-
-pub fn bfc_jump_zero(reg: Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
-    X86_64Inter::jump_zero(reg, offset)
-}
-
-pub fn bfc_jump_not_zero(reg: Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
-    X86_64Inter::jump_not_zero(reg, offset)
-}
-
-pub fn bfc_nop_loop_open() -> Vec<u8> {
-    X86_64Inter::nop_loop_open()
-}
-pub fn bfc_inc_reg(reg: Register) -> Vec<u8> {
-    X86_64Inter::inc_reg(reg)
-}
-
-pub fn bfc_dec_reg(reg: Register) -> Vec<u8> {
-    X86_64Inter::dec_reg(reg)
-}
-
-pub fn bfc_inc_byte(reg: Register) -> Vec<u8> {
-    X86_64Inter::inc_byte(reg)
-}
-
-pub fn bfc_dec_byte(reg: Register) -> Vec<u8> {
-    X86_64Inter::dec_byte(reg)
-}
-
 fn bfc_add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
     vec![0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]
 }
@@ -356,26 +315,6 @@ fn bfc_sub_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, ArithOp::Sub)
 }
 
-pub fn bfc_add_reg(reg: Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
-    X86_64Inter::add_reg(reg, imm)
-}
-
-pub fn bfc_sub_reg(reg: Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
-    X86_64Inter::sub_reg(reg, imm)
-}
-
-pub fn bfc_add_mem(reg: Register, imm8: i8) -> Vec<u8> {
-    X86_64Inter::add_byte(reg, imm8)
-}
-
-pub fn bfc_sub_mem(reg: Register, imm8: i8) -> Vec<u8> {
-    X86_64Inter::sub_byte(reg, imm8)
-}
-
-pub fn bfc_zero_mem(reg: Register) -> Vec<u8> {
-    X86_64Inter::zero_byte(reg)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -384,24 +323,24 @@ mod tests {
     fn test_set_reg() -> Result<(), String> {
         // test that appropriate encodings are used for different immediates
         assert_eq!(
-            bfc_set_reg(registers::REG_BF_PTR, 0),
+            X86_64Inter::set_reg(Register::BfPtr, 0),
             // XOR EBX, EBX
             vec![0x31, 0xc0 | 0b011000 | 0b011]
         );
         assert_eq!(
-            bfc_set_reg(registers::REG_BF_PTR, 101),
+            X86_64Inter::set_reg(Register::BfPtr, 101),
             // PUSH 101; POP RBX
             vec![0x6a, 101, 0x58 | 0b011]
         );
         assert_eq!(
-            bfc_set_reg(registers::REG_BF_PTR, 128),
+            X86_64Inter::set_reg(Register::BfPtr, 128),
             // MOV EBX, 128
             vec![0xb8 | 0b011, 128, 0, 0, 0]
         );
 
         #[rustfmt::skip]
         assert_eq!(
-            bfc_set_reg(registers::REG_BF_PTR, i64::MAX - 0xffff),
+            X86_64Inter::set_reg(Register::BfPtr, i64::MAX - 0xffff),
             // MOV RBX, 0x7fffffffffff0000
             vec![0x48, 0xb8 | 0b011, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
         );
