@@ -1,0 +1,47 @@
+// SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
+use super::err::BFCompileError;
+use super::elf_tools::{ELFArch, ELFDataByteOrder};
+
+pub trait EAMBFCArch {
+    type RegType;
+    fn set_reg(reg: Self::RegType, imm: i64) -> Vec<u8>;
+    fn reg_copy(dst: Self::RegType, src: Self::RegType) -> Vec<u8>;
+    fn syscall() -> Vec<u8>;
+    fn jump_zero(reg: Self::RegType, offset: i64) -> Result<Vec<u8>, BFCompileError>;
+    fn jump_not_zero(reg: Self::RegType, offset: i64) -> Result<Vec<u8>, BFCompileError>;
+    fn nop_loop_open() -> Vec<u8>;
+    fn inc_reg(reg: Self::RegType) -> Vec<u8>;
+    fn inc_byte(reg: Self::RegType) -> Vec<u8>;
+    fn dec_reg(reg: Self::RegType) -> Vec<u8>;
+    fn dec_byte(reg: Self::RegType) -> Vec<u8>;
+
+}
+
+#[derive(Debug)]
+pub struct Registers<R> {
+    pub sc_num: R,
+    pub arg1: R,
+    pub arg2: R,
+    pub arg3: R,
+    pub bf_ptr: R,
+}
+
+#[derive(Debug)]
+pub struct SyscallNums {
+    pub sc_read: i64,
+    pub sc_write: i64,
+    pub sc_exit: i64,
+}
+
+#[derive(Debug)]
+pub struct ArchInfo<R, I: EAMBFCArch> {
+    pub registers: Registers<R>,
+    pub sc_nums: SyscallNums,
+    pub jump_size: usize,
+    pub em_arch: ELFArch,
+    pub elfdata_byte_order: ELFDataByteOrder,
+    pub inter: I,
+}

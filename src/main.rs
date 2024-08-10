@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+pub mod arch_inter;
 pub mod arg_parse;
 pub mod eam_compile;
 pub mod elf_tools;

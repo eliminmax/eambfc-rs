@@ -6,6 +6,17 @@ pub trait SerializePhdr {
     fn serialize(&self) -> &[u8];
 }
 
+#[derive(Debug)]
+pub enum ELFDataByteOrder {
+    ELFDATA2LSB = 1, // 2's complement, little endian
+    ELFDATA2MSB = 2, // 2's complement, big endian
+}
+
+#[derive(Debug)]
+pub enum ELFArch {
+    X86_64 = 62, // EM_X86_64 (i.e. amd64)
+}
+
 pub struct Ehdr {
     pub e_ident: [u8; 16],
     pub e_type: u16,
