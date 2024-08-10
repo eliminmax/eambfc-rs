@@ -113,7 +113,7 @@ fn json_str(s: &str) -> String {
             '\r' => "\\r".to_string(),
             '\x0c' => "\\f".to_string(),
             '\t' => "\\t".to_string(),
-            '\x08' => "\\x08".to_string(),
+            '\x08' => "\\b".to_string(),
             '\\' => "\\\\".to_string(),
             '"' => "\\\"".to_string(),
             n if n < '\x20' => format!("\\u00{:02x}", n as u32),
