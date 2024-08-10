@@ -28,6 +28,7 @@ pub fn to_condensed<R: Read>(mut file: R) -> Result<Vec<CondensedInstruction>, B
     Ok(condense(stripped_bytes))
 }
 
+#[derive(Debug, PartialEq)]
 enum LoopsMatched {
     Balanced,
     UnmatchedOpen,
@@ -198,6 +199,16 @@ fn condense(stripped_bytes: Vec<u8>) -> Vec<CondensedInstruction> {
 mod tests {
     use super::*;
 
+    #[inline]
+    fn error_thrown(err: BFCompileError) -> String {
+        match err {
+            BFCompileError::UnknownFlag(_) => String::from("UNKNOWN_ARG"),
+            BFCompileError::Basic { id, .. }
+            | BFCompileError::Instruction { id, .. }
+            | BFCompileError::Position { id, .. } => id,
+        }
+    }
+
     #[test]
     fn strip_dead_code_test() -> Result<(), String> {
         let code = filter_non_bf(
@@ -236,6 +247,36 @@ mod tests {
                 CondensedInstruction::BFInstruction(b'.'),
             ]
         );
+        Ok(())
+    }
+
+    use std::io::ErrorKind;
+    struct Unreadable {}
+    impl Read for Unreadable {
+        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(ErrorKind::Unsupported, "Unreadable"))
+        }
+    }
+
+    #[test]
+    fn read_failure_handled() -> Result<(), String> {
+        let unreadable = Unreadable {};
+        match to_condensed(unreadable) {
+            Ok(_) => {
+                return Err(String::from(
+                    "Did not see error when trying to read from unreadable",
+                ))
+            }
+            Err(e) => assert_eq!(error_thrown(e), String::from("FAILED_READ")),
+        };
+        Ok(())
+    }
+
+
+    #[test]
+    fn unmatched_loops_detected() -> Result<(), String> {
+        assert_eq!(loops_match(b"["), LoopsMatched::UnmatchedOpen);
+        assert_eq!(loops_match(b"]"), LoopsMatched::UnmatchedClose);
         Ok(())
     }
 }
