@@ -204,24 +204,27 @@ pub fn bfc_dec_byte(reg: Register) -> Vec<u8> {
 
 // many add/subtract instructions use these bit values for the upper five bits and the target
 // register for the lower 3 bits to encode instructions.
-const OP_ADD: u8 = 0b11000000_u8;
-const OP_SUB: u8 = 0b11101000_u8;
+enum ArithOp {
+    Add = 0b11000000,
+    Sub = 0b11101000,
+}
+
 fn bfc_add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
-    vec![0x83, OP_ADD | reg as u8, imm8 as u8]
+    vec![0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]
 }
 
 fn bfc_sub_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
-    vec![0x83, OP_SUB | reg as u8, imm8 as u8]
+    vec![0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]
 }
 
 fn bfc_add_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
-    let mut v = vec![0x81, OP_ADD + reg as u8];
+    let mut v = vec![0x81, ArithOp::Add as u8 | reg as u8];
     v.extend(imm32.to_le_bytes());
     v
 }
 
 fn bfc_sub_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
-    let mut v = vec![0x81, OP_SUB + reg as u8];
+    let mut v = vec![0x81, ArithOp::Sub as u8 | reg as u8];
     v.extend(imm32.to_le_bytes());
     v
 }
@@ -232,8 +235,7 @@ fn bfc_sub_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
 // target register, then POP that temporary register, to restore its
 // original value.
 #[inline]
-fn add_sub_qw(reg: Register, imm64: i64, op: u8) -> Vec<u8> {
-    debug_assert!(op == OP_ADD || op == OP_SUB);
+fn add_sub_qw(reg: Register, imm64: i64, op: ArithOp) -> Vec<u8> {
     // cast reg in advanced as it's used multiple times
     let reg = reg as u8;
     // the temporary register shouldn't be the target register. This guarantees it won't be.
@@ -249,7 +251,7 @@ fn add_sub_qw(reg: Register, imm64: i64, op: u8) -> Vec<u8> {
     #[rustfmt::skip]
     v.extend([
         // (ADD||SUB) reg, tmp_reg
-        0x48_u8, 0x01_u8 | op, 0xc0_u8 + (tmp_reg << 3) + reg,
+        0x48_u8, 0x01_u8 | op as u8, 0xc0_u8 + (tmp_reg << 3) + reg,
         // POP tmp_reg
         0x58 + tmp_reg,
     ]);
@@ -257,11 +259,11 @@ fn add_sub_qw(reg: Register, imm64: i64, op: u8) -> Vec<u8> {
 }
 
 fn bfc_add_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
-    add_sub_qw(reg, imm64, OP_ADD)
+    add_sub_qw(reg, imm64, ArithOp::Add)
 }
 
 fn bfc_sub_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
-    add_sub_qw(reg, imm64, OP_SUB)
+    add_sub_qw(reg, imm64, ArithOp::Sub)
 }
 
 pub fn bfc_add_reg(reg: Register, imm: usize) -> Result<Vec<u8>, BFCompileError> {
