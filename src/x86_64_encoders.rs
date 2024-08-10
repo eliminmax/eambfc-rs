@@ -214,29 +214,29 @@ pub fn bfc_dec_byte(reg: Register) -> Vec<u8> {
 // register for the lower 3 bits to encode instructions.
 const OP_ADD: u8 = 0b11000000_u8;
 const OP_SUB: u8 = 0b11101000_u8;
-pub fn bfc_add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
+fn bfc_add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
     vec![0x83, OP_ADD | *reg, imm8 as u8]
 }
 
-pub fn bfc_sub_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
+fn bfc_sub_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
     vec![0x83, OP_SUB | *reg, imm8 as u8]
 }
 
-pub fn bfc_add_reg_imm16(reg: Register, imm16: i16) -> Vec<u8> {
+fn bfc_add_reg_imm16(reg: Register, imm16: i16) -> Vec<u8> {
     bfc_add_reg_imm32(reg, imm16.into())
 }
 
-pub fn bfc_sub_reg_imm16(reg: Register, imm16: i16) -> Vec<u8> {
+fn bfc_sub_reg_imm16(reg: Register, imm16: i16) -> Vec<u8> {
     bfc_sub_reg_imm32(reg, imm16.into())
 }
 
-pub fn bfc_add_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
+fn bfc_add_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
     let mut v = vec![0x81, OP_ADD + *reg];
     v.extend(imm32.to_le_bytes());
     v
 }
 
-pub fn bfc_sub_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
+fn bfc_sub_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
     let mut v = vec![0x81, OP_SUB + *reg];
     v.extend(imm32.to_le_bytes());
     v
@@ -269,11 +269,11 @@ fn add_sub_qw(reg: Register, imm64: i64, op: u8) -> Vec<u8> {
     v
 }
 
-pub fn bfc_add_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
+fn bfc_add_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, OP_ADD)
 }
 
-pub fn bfc_sub_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
+fn bfc_sub_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, OP_SUB)
 }
 
