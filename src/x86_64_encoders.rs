@@ -125,8 +125,6 @@ macro_rules! fn_test_jcc {
                     msg: format!("{offset} is outside the range of possible 32-bit signed values"),
                 })?
                 .to_le_bytes();
-            // Ensure reg is a valid register
-            assert!(reg < 8);
             #[rustfmt::skip]
             let mut v = vec![
                 // TEST byte [reg], 0xff
