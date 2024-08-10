@@ -36,7 +36,7 @@ use super::arch_inter::{ArchInfo, EAMBFCArch, Registers, SyscallNums};
 use super::elf_tools::{ELFArch, ELFDataByteOrder};
 use super::err::BFCompileError;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Register {
     ScNum = 0b000,
     Arg1 = 0b111,
@@ -203,6 +203,40 @@ impl EAMBFCArch for X86_64Inter {
         // DEC byte [reg]
         x86_offset(OffsetOp::Dec, OffsetMode::BytePtr, reg)
     }
+    fn add_reg(reg: Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
+        match imm {
+            i if i <= i8::MAX as u64 => Ok(bfc_add_reg_imm8(reg, imm as i8)),
+            i if i <= i32::MAX as u64 => Ok(bfc_add_reg_imm32(reg, imm as i32)),
+            i if i <= i64::MAX as u64 => Ok(bfc_add_reg_imm64(reg, imm as i64)),
+            _ => Err(BFCompileError::Basic {
+                id: String::from("TOO_MANY_INSTRUCTIONS"),
+                msg: String::from("Over 8192 PiB of consecitive `>` instructions!"),
+            }),
+        }
+    }
+    fn add_byte(reg: Register, imm: i8) -> Vec<u8> {
+        // ADD byte [reg], imm8
+        vec![0x80_u8, reg as u8, imm as u8]
+    }
+    fn sub_reg(reg: Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
+        match imm {
+            i if i <= i8::MAX as u64 => Ok(bfc_sub_reg_imm8(reg, imm as i8)),
+            i if i <= i32::MAX as u64 => Ok(bfc_sub_reg_imm32(reg, imm as i32)),
+            i if i <= i64::MAX as u64 => Ok(bfc_sub_reg_imm64(reg, imm as i64)),
+            _ => Err(BFCompileError::Basic {
+                id: String::from("TOO_MANY_INSTRUCTIONS"),
+                msg: String::from("Over 8192 PiB of consecitive `<` instructions!"),
+            }),
+        }
+    }
+    fn sub_byte(reg: Register, imm: i8) -> Vec<u8> {
+        // SUB byte [reg], imm8
+        vec![0x80_u8, 0b00101000_u8 | (reg as u8), imm as u8]
+    }
+    fn zero_byte(reg: Register) -> Vec<u8> {
+        // MOV byte [reg], 0
+        vec![0x67_u8, 0xc6_u8, reg as u8, 0x00_u8]
+    }
 }
 
 pub const X86_64_INTER: ArchInfo<Register, X86_64Inter> = ArchInfo::<Register, X86_64Inter> {
@@ -322,43 +356,24 @@ fn bfc_sub_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, ArithOp::Sub)
 }
 
-pub fn bfc_add_reg(reg: Register, imm: usize) -> Result<Vec<u8>, BFCompileError> {
-    match imm {
-        i if i <= i8::MAX as usize => Ok(bfc_add_reg_imm8(reg, imm as i8)),
-        i if i <= i32::MAX as usize => Ok(bfc_add_reg_imm32(reg, imm as i32)),
-        i if i <= i64::MAX as usize => Ok(bfc_add_reg_imm64(reg, imm as i64)),
-        _ => Err(BFCompileError::Basic {
-            id: String::from("TOO_MANY_INSTRUCTIONS"),
-            msg: String::from("Over 8192 PiB of consecitive `>` instructions!"),
-        }),
-    }
+pub fn bfc_add_reg(reg: Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
+    X86_64Inter::add_reg(reg, imm)
 }
 
-pub fn bfc_sub_reg(reg: Register, imm: usize) -> Result<Vec<u8>, BFCompileError> {
-    match imm {
-        i if i <= i8::MAX as usize => Ok(bfc_sub_reg_imm8(reg, imm as i8)),
-        i if i <= i32::MAX as usize => Ok(bfc_sub_reg_imm32(reg, imm as i32)),
-        i if i <= i64::MAX as usize => Ok(bfc_sub_reg_imm64(reg, imm as i64)),
-        _ => Err(BFCompileError::Basic {
-            id: String::from("TOO_MANY_INSTRUCTIONS"),
-            msg: String::from("Over 8192 PiB of consecitive `<` instructions!"),
-        }),
-    }
+pub fn bfc_sub_reg(reg: Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
+    X86_64Inter::sub_reg(reg, imm)
 }
 
 pub fn bfc_add_mem(reg: Register, imm8: i8) -> Vec<u8> {
-    // ADD byte [reg], imm8
-    vec![0x80_u8, reg as u8, imm8 as u8]
+    X86_64Inter::add_byte(reg, imm8)
 }
 
 pub fn bfc_sub_mem(reg: Register, imm8: i8) -> Vec<u8> {
-    // SUB byte [reg], imm8
-    vec![0x80_u8, 0b00101000_u8 | (reg as u8), imm8 as u8]
+    X86_64Inter::sub_byte(reg, imm8)
 }
 
 pub fn bfc_zero_mem(reg: Register) -> Vec<u8> {
-    // MOV byte [reg], 0
-    vec![0x67_u8, 0xc6_u8, reg as u8, 0x00_u8]
+    X86_64Inter::zero_byte(reg)
 }
 
 #[cfg(test)]

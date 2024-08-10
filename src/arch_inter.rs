@@ -17,6 +17,11 @@ pub trait EAMBFCArch {
     fn inc_byte(reg: Self::RegType) -> Vec<u8>;
     fn dec_reg(reg: Self::RegType) -> Vec<u8>;
     fn dec_byte(reg: Self::RegType) -> Vec<u8>;
+    fn add_reg(reg: Self::RegType, imm: u64) -> Result<Vec<u8>, BFCompileError>;
+    fn add_byte(reg: Self::RegType, imm: i8) -> Vec<u8>;
+    fn sub_reg(reg: Self::RegType, imm: u64) -> Result<Vec<u8>, BFCompileError>;
+    fn sub_byte(reg: Self::RegType, imm: i8) -> Vec<u8>;
+    fn zero_byte(reg: Self::RegType) -> Vec<u8>;
 
 }
 
