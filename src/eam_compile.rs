@@ -232,8 +232,9 @@ fn compile_instr<T: Copy, I: ArchInter<RegType = T>>(
                     })?;
             let open_address = open_location.index;
             let distance = dst.len() - open_address;
-            dst[open_address..open_address + arch_info.jump_size]
-                .swap_with_slice(&mut I::jump_zero(arch_info.registers.bf_ptr, distance as i64)?);
+            dst[open_address..open_address + arch_info.jump_size].swap_with_slice(
+                &mut I::jump_zero(arch_info.registers.bf_ptr, distance as i64)?,
+            );
             // now, we know that distance fits within the 32-bit integer limit, so we can
             // simply cast without another check needed when compiling the `]` instruction itself
             I::jump_not_zero(arch_info.registers.bf_ptr, -(distance as i64))?

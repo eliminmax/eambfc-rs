@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::err::BFCompileError;
 use super::elf_tools::{ELFArch, ELFDataByteOrder};
+use super::err::BFCompileError;
 
 pub trait ArchInter {
     type RegType;
@@ -22,7 +22,6 @@ pub trait ArchInter {
     fn sub_reg(reg: Self::RegType, imm: u64) -> Result<Vec<u8>, BFCompileError>;
     fn sub_byte(reg: Self::RegType, imm: i8) -> Vec<u8>;
     fn zero_byte(reg: Self::RegType) -> Vec<u8>;
-
 }
 
 #[derive(Debug)]

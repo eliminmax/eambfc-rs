@@ -17,10 +17,7 @@ pub enum ELFArch {
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 
-use ELFDataByteOrder::{
-    ELFDATA2LSB as LSB,
-    ELFDATA2MSB as MSB,
-};
+use ELFDataByteOrder::{ELFDATA2LSB as LSB, ELFDATA2MSB as MSB};
 
 pub struct Ehdr {
     pub e_ident: [u8; 16],
