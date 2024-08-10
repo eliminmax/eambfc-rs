@@ -45,12 +45,6 @@ pub enum Register {
     BfPtr = 0b011,
 }
 
-
-pub mod arch_info {
-    use super::super::elf_tools::ELFDataByteOrder;
-    pub const ELFDATA_BYTE_ORDER: ELFDataByteOrder = ELFDataByteOrder::ELFDATA2LSB;
-}
-
 // many add/subtract instructions use these bit values for the upper five bits and the target
 // register for the lower 3 bits to encode instructions.
 enum ArithOp {

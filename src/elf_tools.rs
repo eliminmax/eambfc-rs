@@ -37,6 +37,7 @@ pub struct Ehdr {
 }
 
 pub struct Phdr {
+    pub e_data: ELFDataByteOrder,
     pub p_type: u32,
     pub p_flags: u32,
     pub p_offset: u64,
@@ -84,9 +85,10 @@ macro_rules! serialize_phdr {
 
 impl From<Ehdr> for Vec<u8> {
     fn from(item: Ehdr) -> Self {
-        match super::instr_encoders::arch_info::ELFDATA_BYTE_ORDER {
-            LSB => serialize_ehdr!(item, to_le_bytes),
-            MSB => serialize_ehdr!(item, to_be_bytes),
+        match item.e_ident[5] {
+            1 => serialize_ehdr!(item, to_le_bytes),
+            2 => serialize_ehdr!(item, to_be_bytes),
+            _ => unreachable!(),
         }
     }
 }
@@ -95,7 +97,7 @@ impl From<Ehdr> for Vec<u8> {
 // provided in the arch_info module
 impl From<Phdr> for Vec<u8> {
     fn from(item: Phdr) -> Self {
-        match super::instr_encoders::arch_info::ELFDATA_BYTE_ORDER {
+        match item.e_data {
             LSB => serialize_phdr!(item, to_le_bytes),
             MSB => serialize_phdr!(item, to_be_bytes),
         }

@@ -67,6 +67,7 @@ fn write_headers<W: Write, T: Copy, I: ArchInter>(
         e_flags: 0, // ISA-specific flags. None are defined for x86_64, so set to 0.
     };
     let tape_segment = Phdr {
+        e_data: arch_info.elfdata_byte_order,
         p_type: 1,          // PT_LOAD ( loadable segment )
         p_flags: 4 | 2,     // PF_R | PF_W (readable and writable)
         p_offset: 0,        // load bytes from this index in the file
@@ -77,6 +78,7 @@ fn write_headers<W: Write, T: Copy, I: ArchInter>(
         p_align: 0x1000,    // align with this power of 2
     };
     let code_segment = Phdr {
+        e_data: arch_info.elfdata_byte_order,
         p_type: 1,                               // PT_LOAD ( loadable segment )
         p_flags: 4 | 1,                          // PF_R | PF_X (readable and executable)
         p_offset: 0,                             // load bytes from this index in the file
