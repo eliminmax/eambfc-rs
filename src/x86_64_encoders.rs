@@ -33,7 +33,7 @@
 // * RBX is 011b
 
 use super::arch_inter::{ArchInfo, ArchInter, Registers, SyscallNums};
-use super::elf_tools::{ELFArch, ELFDataByteOrder};
+use super::elf_tools::{ELFArch, EIData};
 use super::err::BFCompileError;
 
 #[derive(Debug, Copy, Clone)]
@@ -231,7 +231,7 @@ pub const X86_64_INTER: ArchInfo<Register, X86_64Inter> = ArchInfo::<Register, X
     },
     jump_size: 9usize,
     em_arch: ELFArch::X86_64,
-    elfdata_byte_order: ELFDataByteOrder::ELFDATA2LSB,
+    elfdata_byte_order: EIData::ELFDATA2LSB,
     inter: X86_64Inter {},
 };
 

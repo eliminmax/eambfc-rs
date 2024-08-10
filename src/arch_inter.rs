@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::elf_tools::{ELFArch, ELFDataByteOrder};
+use super::elf_tools::{ELFArch, EIData};
 use super::err::BFCompileError;
 
 pub trait ArchInter {
@@ -46,6 +46,6 @@ pub struct ArchInfo<R: Copy + Clone, I: ArchInter> {
     pub sc_nums: SyscallNums,
     pub jump_size: usize,
     pub em_arch: ELFArch,
-    pub elfdata_byte_order: ELFDataByteOrder,
+    pub elfdata_byte_order: EIData,
     pub inter: I,
 }

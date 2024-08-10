@@ -7,7 +7,7 @@ pub trait SerializePhdr {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum ELFDataByteOrder {
+pub enum EIData {
     ELFDATA2LSB = 1, // 2's complement, little endian
     ELFDATA2MSB = 2, // 2's complement, big endian
 }
@@ -17,7 +17,7 @@ pub enum ELFArch {
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 
-use ELFDataByteOrder::{ELFDATA2LSB as LSB, ELFDATA2MSB as MSB};
+use EIData::{ELFDATA2LSB as LSB, ELFDATA2MSB as MSB};
 
 pub struct Ehdr {
     pub e_ident: [u8; 16],
@@ -37,7 +37,7 @@ pub struct Ehdr {
 }
 
 pub struct Phdr {
-    pub e_data: ELFDataByteOrder,
+    pub e_data: EIData,
     pub p_type: u32,
     pub p_flags: u32,
     pub p_offset: u64,
