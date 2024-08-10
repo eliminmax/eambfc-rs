@@ -40,7 +40,7 @@ fn write_headers<W: Write>(
         b'L',
         b'F',
         2u8, // EI_CLASS = ELFCLASS64 (i.e. this is a 64-bit ELF file)
-        ELFDATA_BYTE_ORDER,
+        ELFDATA_BYTE_ORDER as u8,
         1u8, // EI_VERSION = EV_CURRENT (the only valid option)
         0u8, // EI_OSABI = ELFOSABI_SYSV,
         0u8, // EI_ABIVERSION = 0 (ELFOSABI_SYSV doesn't define any ABI versions)
@@ -55,7 +55,7 @@ fn write_headers<W: Write>(
     let ehdr = Ehdr {
         e_ident: e_ident_vals,
         e_type: 2, // ET_EXEC
-        e_machine: EM_ARCH,
+        e_machine: EM_ARCH as u16,
         e_version: 1, // The only valid version number
         e_phnum: PHNUM,
         e_shnum: 0,

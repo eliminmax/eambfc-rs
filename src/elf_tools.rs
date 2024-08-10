@@ -17,6 +17,11 @@ pub enum ELFArch {
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 
+use ELFDataByteOrder::{
+    ELFDATA2LSB as LSB,
+    ELFDATA2MSB as MSB,
+};
+
 pub struct Ehdr {
     pub e_ident: [u8; 16],
     pub e_type: u16,
@@ -83,10 +88,8 @@ macro_rules! serialize_phdr {
 impl From<Ehdr> for Vec<u8> {
     fn from(item: Ehdr) -> Self {
         match super::instr_encoders::arch_info::ELFDATA_BYTE_ORDER {
-            0 => panic!("ELFCLASSNONE is an invalid value for EI_CLASS!"),
-            1 => serialize_ehdr!(item, to_le_bytes),
-            2 => serialize_ehdr!(item, to_be_bytes),
-            u => panic!("{u} is not a known value for EI_CLASS!"),
+            LSB => serialize_ehdr!(item, to_le_bytes),
+            MSB => serialize_ehdr!(item, to_be_bytes),
         }
     }
 }
@@ -96,10 +99,8 @@ impl From<Ehdr> for Vec<u8> {
 impl From<Phdr> for Vec<u8> {
     fn from(item: Phdr) -> Self {
         match super::instr_encoders::arch_info::ELFDATA_BYTE_ORDER {
-            0 => panic!("ELFCLASSNONE is an invalid value for EI_CLASS!"),
-            1 => serialize_phdr!(item, to_le_bytes),
-            2 => serialize_phdr!(item, to_be_bytes),
-            u => panic!("{u} is not a known value for EI_CLASS!"),
+            LSB => serialize_phdr!(item, to_le_bytes),
+            MSB => serialize_phdr!(item, to_be_bytes),
         }
     }
 }

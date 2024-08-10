@@ -59,9 +59,10 @@ pub mod syscall_nums {
 }
 
 pub mod arch_info {
+    use super::super::elf_tools::{ELFArch,ELFDataByteOrder};
     pub const JUMP_SIZE: usize = 9; // size of the TEST + JUMP instructions
-    pub const EM_ARCH: u16 = 62u16; // EM_X86_64 (i.e. amd64)
-    pub const ELFDATA_BYTE_ORDER: u8 = 1; // ELFDATA2LSB (i.e. 2's complement, little endian)
+    pub const EM_ARCH: ELFArch = ELFArch::X86_64; // EM_X86_64 (i.e. amd64)
+    pub const ELFDATA_BYTE_ORDER: ELFDataByteOrder = ELFDataByteOrder::ELFDATA2LSB;
 }
 
 // Chooses the shortest instrution to set a register to an immediate value, from the following:
