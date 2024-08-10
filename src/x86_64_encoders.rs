@@ -62,10 +62,50 @@ pub mod syscall_nums {
 }
 
 pub mod arch_info {
-    use super::super::elf_tools::{ELFArch,ELFDataByteOrder};
+    use super::super::elf_tools::{ELFArch, ELFDataByteOrder};
     pub const JUMP_SIZE: usize = 9; // size of the TEST + JUMP instructions
     pub const EM_ARCH: ELFArch = ELFArch::X86_64; // EM_X86_64 (i.e. amd64)
     pub const ELFDATA_BYTE_ORDER: ELFDataByteOrder = ELFDataByteOrder::ELFDATA2LSB;
+}
+
+// many add/subtract instructions use these bit values for the upper five bits and the target
+// register for the lower 3 bits to encode instructions.
+enum ArithOp {
+    Add = 0b11000000,
+    Sub = 0b11101000,
+}
+
+// INC and DEC are encoded very similarly with very few differences between
+// the encoding for operating on registers and operating on bytes pointed to by
+// registers. Because of the similarity, one function can be used for all 4 of
+// the `+`, `-`, `>`, and `<` brainfuck instructions in one inline function.
+//
+// `+` is INC byte [reg], which is encoded as 0xfe reg
+// `-` is DEC byte [reg], which is encoded as 0xfe 0x08|reg
+// `>` is INC reg, which is encoded as 0xff 0xc0|reg
+// `<` is DEC reg, which is encoded as 0xff 0xc8|reg
+//
+// Therefore, setting op to 0 for INC and 8 for DEC and adm (Address Mode) to 3
+// when working on registers and 0 when working on memory, then doing some messy
+// bitwise hackery, the following constants and function can be used.
+
+#[derive(Debug)]
+enum OffsetOp {
+    Inc = 0,
+    Dec = 8,
+}
+
+#[derive(Debug)]
+enum OffsetMode {
+    BytePtr = 0,
+    Reg = 3,
+}
+
+#[inline]
+fn x86_offset(op: OffsetOp, mode: OffsetMode, reg: Register) -> Vec<u8> {
+    // as it's used more than once, cast mode in advance
+    let mode = mode as u8;
+    vec![0xfe_u8 | (mode & 1), (op as u8) | (reg as u8) | (mode << 6)]
 }
 
 // macro to declare a conditional jump instruction.
@@ -148,16 +188,20 @@ impl EAMBFCArch for X86_64Inter {
         Vec::<u8>::from([0x90; X86_64_INTER.jump_size])
     }
     fn inc_reg(reg: Register) -> Vec<u8> {
-        todo!("inc_reg({reg:?}");
+        // INC reg
+        x86_offset(OffsetOp::Inc, OffsetMode::Reg, reg)
     }
     fn inc_byte(reg: Register) -> Vec<u8> {
-        todo!("inc_byte({reg:?}");
+        // INC byte [reg]
+        x86_offset(OffsetOp::Inc, OffsetMode::BytePtr, reg)
     }
     fn dec_reg(reg: Register) -> Vec<u8> {
-        todo!("dec_reg({reg:?}");
+        // DEC reg
+        x86_offset(OffsetOp::Dec, OffsetMode::Reg, reg)
     }
     fn dec_byte(reg: Register) -> Vec<u8> {
-        todo!("dec_byte({reg:?}");
+        // DEC byte [reg]
+        x86_offset(OffsetOp::Dec, OffsetMode::BytePtr, reg)
     }
 }
 
@@ -181,133 +225,44 @@ pub const X86_64_INTER: ArchInfo<Register, X86_64Inter> = ArchInfo::<Register, X
 };
 
 pub fn bfc_set_reg(reg: Register, imm: i64) -> Vec<u8> {
-    let reg = reg as u8;
-    match imm {
-        // XOR reg, reg
-        0 => vec![0x31_u8, 0xc0_u8 | (reg << 3) | reg],
-        // PUSH imm8; POP reg
-        i if i < i8::MAX.into() => vec![0x6a, imm as u8, 0x58 + reg],
-        // MOV reg, imm32
-        i if i < i32::MAX.into() => {
-            let mut v = vec![0xb8 + reg];
-            v.extend((i as i32).to_le_bytes());
-            v
-        }
-        // MOV reg, imm64
-        i => {
-            let mut v = vec![0x48, 0xb8 + reg];
-            v.extend(i.to_le_bytes());
-            v
-        }
-    }
+    X86_64Inter::set_reg(reg, imm)
 }
 
 // Returns instruction that copies the contents of the register src to the register dst
 pub fn bfc_reg_copy(dst: Register, src: Register) -> Vec<u8> {
-    // MOV dst, src
-    vec![0x89_u8, 0xc0 + ((src as u8) << 3) + (dst as u8)]
+    X86_64Inter::reg_copy(dst, src)
 }
 
 // Returns the syscall instruction
 pub fn bfc_syscall() -> Vec<u8> {
-    // SYSCALL
-    vec![0x0f_u8, 0x05_u8]
+    X86_64Inter::syscall()
 }
 
-macro_rules! fn_test_jcc {
-    ($fn_name:ident, $tttn:literal) => {
-        pub fn $fn_name(reg: Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
-            let reg = reg as u8;
-            // Ensure only lower 4 bits of tttn are used - the const _: () mess forces the check to
-            // run at compile time rather than runtime.
-            const _: () = assert!($tttn & 0xf0_u8 == 0);
-            let offset_bytes = TryInto::<i32>::try_into(offset)
-                .map_err(|_| BFCompileError::Basic {
-                    id: String::from("JUMP_TOO_LONG"),
-                    msg: format!("{offset} is outside the range of possible 32-bit signed values"),
-                })?
-                .to_le_bytes();
-            #[rustfmt::skip]
-            let mut v = vec![
-                // TEST byte [reg], 0xff
-                0xf6_u8, reg, 0xff_u8,
-                // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
-                0x0f_u8, 0x80_u8|$tttn
-            ];
-            v.extend(offset_bytes);
-            Ok(v)
-        }
-    };
+pub fn bfc_jump_zero(reg: Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
+    X86_64Inter::jump_zero(reg, offset)
 }
 
-// according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
-fn_test_jcc!(bfc_jump_not_zero, 0b0101_u8);
-// according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
-fn_test_jcc!(bfc_jump_zero, 0b0100_u8);
-
-pub fn bfc_nop_loop_open() -> [u8; arch_info::JUMP_SIZE] {
-    // times JUMP_SIZE NOP
-    [0x90; arch_info::JUMP_SIZE]
+pub fn bfc_jump_not_zero(reg: Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
+    X86_64Inter::jump_not_zero(reg, offset)
 }
 
-// INC and DEC are encoded very similarly with very few differences between
-// the encoding for operating on registers and operating on bytes pointed to by
-// registers. Because of the similarity, one function can be used for all 4 of
-// the `+`, `-`, `>`, and `<` brainfuck instructions in one inline function.
-//
-// `+` is INC byte [reg], which is encoded as 0xfe reg
-// `-` is DEC byte [reg], which is encoded as 0xfe 0x08|reg
-// `>` is INC reg, which is encoded as 0xff 0xc0|reg
-// `<` is DEC reg, which is encoded as 0xff 0xc8|reg
-//
-// Therefore, setting op to 0 for INC and 8 for DEC and adm (Address Mode) to 3
-// when working on registers and 0 when working on memory, then doing some messy
-// bitwise hackery, the following constants and function can be used.
-
-#[derive(Debug)]
-enum OffsetOp {
-    Inc = 0,
-    Dec = 8,
+pub fn bfc_nop_loop_open() -> Vec<u8> {
+    X86_64Inter::nop_loop_open()
 }
-
-#[derive(Debug)]
-enum OffsetMode {
-    BytePtr = 0,
-    Reg = 3,
-}
-
-#[inline]
-fn x86_offset(op: OffsetOp, mode: OffsetMode, reg: Register) -> Vec<u8> {
-    // as it's used more than once, cast mode in advance
-    let mode = mode as u8;
-    vec![0xfe_u8 | (mode & 1), (op as u8) | (reg as u8) | (mode << 6)]
-}
-
 pub fn bfc_inc_reg(reg: Register) -> Vec<u8> {
-    // INC reg
-    x86_offset(OffsetOp::Inc, OffsetMode::Reg, reg)
+    X86_64Inter::inc_reg(reg)
 }
 
 pub fn bfc_dec_reg(reg: Register) -> Vec<u8> {
-    // DEC reg
-    x86_offset(OffsetOp::Dec, OffsetMode::Reg, reg)
+    X86_64Inter::dec_reg(reg)
 }
 
 pub fn bfc_inc_byte(reg: Register) -> Vec<u8> {
-    // INC byte [reg]
-    x86_offset(OffsetOp::Inc, OffsetMode::BytePtr, reg)
+    X86_64Inter::inc_byte(reg)
 }
 
 pub fn bfc_dec_byte(reg: Register) -> Vec<u8> {
-    // DEC byte [reg]
-    x86_offset(OffsetOp::Dec, OffsetMode::BytePtr, reg)
-}
-
-// many add/subtract instructions use these bit values for the upper five bits and the target
-// register for the lower 3 bits to encode instructions.
-enum ArithOp {
-    Add = 0b11000000,
-    Sub = 0b11101000,
+    X86_64Inter::dec_byte(reg)
 }
 
 fn bfc_add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
