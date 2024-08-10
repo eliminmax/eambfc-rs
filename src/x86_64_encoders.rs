@@ -32,8 +32,11 @@
 // * RDX is 010b
 // * RBX is 011b
 
+use super::arch_inter::{ArchInfo, EAMBFCArch, Registers, SyscallNums};
+use super::elf_tools::{ELFArch, ELFDataByteOrder};
 use super::err::BFCompileError;
 
+#[derive(Debug)]
 pub enum Register {
     ScNum = 0b000,
     Arg1 = 0b111,
@@ -65,11 +68,118 @@ pub mod arch_info {
     pub const ELFDATA_BYTE_ORDER: ELFDataByteOrder = ELFDataByteOrder::ELFDATA2LSB;
 }
 
-// Chooses the shortest instrution to set a register to an immediate value, from the following:
-// XOR reg, reg
-// PUSH imm8; POP reg
-// MOV reg, imm32
-// MOV reg, imm64
+// macro to declare a conditional jump instruction.
+// Takes a function identifier, and a 4-bit condition as defined in the Manual, specifically the
+// Vol. 2D B.1.4.7 Condition Test (tttn) Field table, and generates a function which takes a
+// register and a signed 64-bit offset, and if the offset is within range, returns a vector of
+// bytes representing a TEST instruction that runs on the byte pointed to by the register, and
+// returns a BFCompileError::Basic with the identifier "JUMP_TOO_LONG" if it's out of range. The
+// reason it takes an i64 instead of an i32 is so that other architectures with different maximum
+// jump lenghts could have the same interface as x86_64.
+macro_rules! fn_test_jcc {
+    ($fn_name:ident, $tttn:literal) => {
+        fn $fn_name(reg: Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
+            // Ensure only lower 4 bits of tttn are used - the const _: () mess forces the check to
+            // run at compile time rather than runtime.
+            const _: () = assert!($tttn & 0xf0_u8 == 0);
+            let offset_bytes = TryInto::<i32>::try_into(offset)
+                .map_err(|_| BFCompileError::Basic {
+                    id: String::from("JUMP_TOO_LONG"),
+                    msg: format!("{offset} is outside the range of possible 32-bit signed values"),
+                })?
+                .to_le_bytes();
+            #[rustfmt::skip]
+            let mut v = vec![
+                // TEST byte [reg], 0xff
+                0xf6_u8, reg as u8, 0xff_u8,
+                // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
+                0x0f_u8, 0x80_u8|$tttn
+            ];
+            v.extend(offset_bytes);
+            Ok(v)
+        }
+    };
+}
+
+pub struct X86_64Inter();
+impl EAMBFCArch for X86_64Inter {
+    type RegType = Register;
+    // Chooses the shortest instrution to set a register to an immediate value, from the following:
+    // XOR reg, reg
+    // PUSH imm8; POP reg
+    // MOV reg, imm32
+    // MOV reg, imm64
+    fn set_reg(reg: Register, imm: i64) -> Vec<u8> {
+        let reg = reg as u8;
+        match imm {
+            // XOR reg, reg
+            0 => vec![0x31_u8, 0xc0_u8 | (reg << 3) | reg],
+            // PUSH imm8; POP reg
+            i if i < i8::MAX.into() => vec![0x6a, imm as u8, 0x58 + reg],
+            // MOV reg, imm32
+            i if i < i32::MAX.into() => {
+                let mut v = vec![0xb8 + reg];
+                v.extend((i as i32).to_le_bytes());
+                v
+            }
+            // MOV reg, imm64
+            i => {
+                let mut v = vec![0x48, 0xb8 + reg];
+                v.extend(i.to_le_bytes());
+                v
+            }
+        }
+    }
+    fn reg_copy(dst: Register, src: Register) -> Vec<u8> {
+        // MOV dst, src
+        vec![0x89_u8, 0xc0 + ((src as u8) << 3) + dst as u8]
+    }
+    fn syscall() -> Vec<u8> {
+        // SYSCALL
+        vec![0x0f_u8, 0x05_u8]
+    }
+    // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
+    fn_test_jcc!(jump_not_zero, 0b0101_u8);
+    // according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
+    fn_test_jcc!(jump_zero, 0b0100_u8);
+
+    fn nop_loop_open() -> Vec<u8> {
+        // times JUMP_SIZE NOP
+        Vec::<u8>::from([0x90; X86_64_INTER.jump_size])
+    }
+    fn inc_reg(reg: Register) -> Vec<u8> {
+        todo!("inc_reg({reg:?}");
+    }
+    fn inc_byte(reg: Register) -> Vec<u8> {
+        todo!("inc_byte({reg:?}");
+    }
+    fn dec_reg(reg: Register) -> Vec<u8> {
+        todo!("dec_reg({reg:?}");
+    }
+    fn dec_byte(reg: Register) -> Vec<u8> {
+        todo!("dec_byte({reg:?}");
+    }
+}
+
+pub const X86_64_INTER: ArchInfo<Register, X86_64Inter> = ArchInfo::<Register, X86_64Inter> {
+    registers: Registers::<Register> {
+        sc_num: Register::ScNum,
+        arg1: Register::Arg1,
+        arg2: Register::Arg2,
+        arg3: Register::Arg3,
+        bf_ptr: Register::BfPtr,
+    },
+    sc_nums: SyscallNums {
+        sc_read: 0,
+        sc_write: 1,
+        sc_exit: 60,
+    },
+    jump_size: 9usize,
+    em_arch: ELFArch::X86_64,
+    elfdata_byte_order: ELFDataByteOrder::ELFDATA2LSB,
+    inter: X86_64Inter {},
+};
+
 pub fn bfc_set_reg(reg: Register, imm: i64) -> Vec<u8> {
     let reg = reg as u8;
     match imm {
@@ -104,14 +214,6 @@ pub fn bfc_syscall() -> Vec<u8> {
     vec![0x0f_u8, 0x05_u8]
 }
 
-// macro to declare a conditional jump instruction.
-// Takes a function identifier, and a 4-bit condition as defined in the Manual, specifically the
-// Vol. 2D B.1.4.7 Condition Test (tttn) Field table, and generates a function which takes a
-// register and a signed 64-bit offset, and if the offset is within range, returns a vector of
-// bytes representing a TEST instruction that runs on the byte pointed to by the register, and
-// returns a BFCompileError::Basic with the identifier "JUMP_TOO_LONG" if it's out of range. The
-// reason it takes an i64 instead of an i32 is so that other architectures with different maximum
-// jump lenghts could have the same interface as x86_64.
 macro_rules! fn_test_jcc {
     ($fn_name:ident, $tttn:literal) => {
         pub fn $fn_name(reg: Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
