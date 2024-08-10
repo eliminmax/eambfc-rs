@@ -111,7 +111,7 @@ fn write_headers<W: Write>(
     }
 }
 
-#[inline]
+
 // The brainfuck instructions "." and "," are similar from an implementation
 // perspective. Both require making system calls for I/O, and the system calls
 // have 3 nearly identical arguments:
@@ -119,18 +119,23 @@ fn write_headers<W: Write>(
 //  - arg2 is the memory address of the data source (write)/dest (read)
 //  - arg3 is the number of bytes to write/read
 //
-// Due to their similarity, ',' and '.' are both implemented with bf_io./
-fn bf_io(sc: i64, fd: i32) -> Vec<u8> {
-    // To start, move the system call number into the system call register, then, move the file
-    // descriptor into the arg1 register, and copy the destination address into the arg2 register,
-    // and the number of bytes to read/write to the arg3 register. Finally, end with the syscall
-    // instruction.
-    let mut instr_bytes = bfc_set_reg(REG_SC_NUM, sc);
-    instr_bytes.extend(bfc_set_reg(REG_ARG1, fd.into()));
-    instr_bytes.extend(bfc_reg_copy(REG_ARG2, REG_BF_PTR));
-    instr_bytes.extend(bfc_set_reg(REG_ARG3, 1));
-    instr_bytes.extend(bfc_syscall());
-    instr_bytes
+// Due to their similarity, ',' and '.' are both implemented with bf_io.
+
+macro_rules! bf_io {
+    ($sc_num:ident, $fd:literal) => {{
+        // set the system call number register to $sc_num
+        let mut instr_bytes = bfc_set_reg(REG_SC_NUM, $sc_num);
+        // set the first argument to the file descriptor
+        instr_bytes.extend(bfc_set_reg(REG_ARG1, $fd));
+        // byte to read in to or write out from is in the brainfuck pointer
+        instr_bytes.extend(bfc_reg_copy(REG_ARG2, REG_BF_PTR));
+        // only one byte is read/written
+        instr_bytes.extend(bfc_set_reg(REG_ARG2, 1));
+        // append the system call instruction
+        instr_bytes.extend(bfc_syscall());
+        // return the instr_bytes vector
+        instr_bytes
+    }}
 }
 
 struct JumpLocation {
@@ -194,9 +199,9 @@ fn compile_instr(
         // increment the current cell value
         b'+' => bfc_inc_byte(REG_BF_PTR),
         // Write 1 byte at [REG_BF_PTR] to STDOUT
-        b'.' => bf_io(SC_WRITE, 1),
+        b'.' => bf_io!(SC_WRITE, 1),
         // Read 1 byte to [REG_BF_PTR] from STDIN
-        b',' => bf_io(SC_READ, 0),
+        b',' => bf_io!(SC_READ, 0),
         // for this, fill JUMP_SIZE bytes with NOPs, and push the location to jump_stack.
         // will replace when reaching the corresponding ']' instruction
         b'[' => {
