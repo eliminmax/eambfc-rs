@@ -35,11 +35,37 @@
 use super::err::BFCompileError;
 
 pub mod registers {
-    pub const REG_SC_NUM: u8 = 0b000u8;
-    pub const REG_ARG1: u8 = 0b111u8;
-    pub const REG_ARG2: u8 = 0b110u8;
-    pub const REG_ARG3: u8 = 0b010u8;
-    pub const REG_BF_PTR: u8 = 0b011u8;
+    use super::Register;
+    pub const REG_SC_NUM: Register = Register(0b000_u8);
+    pub const REG_ARG1: Register = Register(0b111_u8);
+    pub const REG_ARG2: Register = Register(0b110_u8);
+    pub const REG_ARG3: Register = Register(0b010_u8);
+    pub const REG_BF_PTR: Register = Register(0b011_u8);
+}
+
+// type representing a 3-bit x86_64 register identifier.
+// Heavily influenced by Redditor SleeplessSloth79's LimitedInt implementation.
+// See https://www.reddit.com/r/learnrust/comments/pkxmzg/comment/hc6j8lf/
+#[derive(Debug)]
+pub struct Register(u8);
+
+impl Register {
+    pub fn try_new(id: u8) -> Result<Register, BFCompileError> {
+        if id & 0b11111000 == 0 {
+            Ok(Register(id))
+        } else {
+            Err(BFCompileError::Basic {
+                id: String::from("INVALID_REGISTER"),
+                msg: format!("{id:03b} is more than 3 bits."),
+            })
+        }
+    }
+}
+impl std::ops::Deref for Register {
+    type Target = u8;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 // Numbers used for the read, write, and exit system calls on linux/x86_64
@@ -60,23 +86,21 @@ pub mod arch_info {
 // PUSH imm8; POP reg
 // MOV reg, imm32
 // MOV reg, imm64
-pub fn bfc_set_reg(reg: u8, imm: i64) -> Vec<u8> {
-    // ensure reg is a valid register
-    debug_assert!(reg < 8);
+pub fn bfc_set_reg(reg: Register, imm: i64) -> Vec<u8> {
     match imm {
         // XOR reg, reg
-        0 => vec![0x31_u8, 0xc0_u8 | (reg << 3) | reg],
+        0 => vec![0x31_u8, 0xc0_u8 | (*reg << 3) | *reg],
         // PUSH imm8; POP reg
-        i if i < i8::MAX.into() => vec![0x6a, imm as u8, 0x58 + reg],
+        i if i < i8::MAX.into() => vec![0x6a, imm as u8, 0x58 + *reg],
         // MOV reg, imm32
         i if i < i32::MAX.into() => {
-            let mut v = vec![0xb8 + reg];
+            let mut v = vec![0xb8 + *reg];
             v.extend((i as i32).to_le_bytes());
             v
         }
         // MOV reg, imm64
         i => {
-            let mut v = vec![0x48, 0xb8 + reg];
+            let mut v = vec![0x48, 0xb8 + *reg];
             v.extend(i.to_le_bytes());
             v
         }
@@ -84,11 +108,9 @@ pub fn bfc_set_reg(reg: u8, imm: i64) -> Vec<u8> {
 }
 
 // Returns instruction that copies the contents of the register src to the register dst
-pub fn bfc_reg_copy(dst: u8, src: u8) -> Vec<u8> {
-    // ensure src and dst are valid registers
-    debug_assert!(src < 8 && dst < 8);
+pub fn bfc_reg_copy(dst: Register, src: Register) -> Vec<u8> {
     // MOV dst, src
-    vec![0x89_u8, 0xc0 + (src << 3) + dst]
+    vec![0x89_u8, 0xc0 + (*src << 3) + *dst]
 }
 
 // Returns the syscall instruction
@@ -107,7 +129,7 @@ pub fn bfc_syscall() -> Vec<u8> {
 // jump lenghts could have the same interface as x86_64.
 macro_rules! fn_test_jcc {
     ($fn_name:ident, $tttn:literal) => {
-        pub fn $fn_name(reg: u8, offset: i64) -> Result<Vec<u8>, BFCompileError> {
+        pub fn $fn_name(reg: Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
             // Ensure only lower 4 bits of tttn are used - the const _: () mess forces the check to
             // run at compile time rather than runtime.
             const _: () = assert!($tttn & 0xf0_u8 == 0);
@@ -118,11 +140,11 @@ macro_rules! fn_test_jcc {
                 })?
                 .to_le_bytes();
             // Ensure reg is a valid register
-            assert!(reg < 8);
+            assert!(*reg < 8);
             #[rustfmt::skip]
             let mut v = vec![
                 // TEST byte [reg], 0xff
-                0xf6_u8, reg, 0xff_u8,
+                0xf6_u8, *reg, 0xff_u8,
                 // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
                 0x0f_u8, 0x80_u8|$tttn
             ];
@@ -161,29 +183,29 @@ const OFFSET_OP_DEC: u8 = 8_u8;
 const OFFSET_MODE_BYTEPTR: u8 = 0_u8;
 const OFFSET_MODE_REG: u8 = 3_u8;
 #[inline]
-fn x86_offset(op: u8, mode: u8, reg: u8) -> Vec<u8> {
+fn x86_offset(op: u8, mode: u8, reg: Register) -> Vec<u8> {
     debug_assert!(op == OFFSET_OP_INC || op == OFFSET_OP_DEC);
     debug_assert!(mode == OFFSET_MODE_BYTEPTR || mode == OFFSET_MODE_REG);
-    debug_assert!(reg < 8);
-    vec![0xfe_u8 | (mode & 1), op | reg | (mode << 6)]
+    debug_assert!(*reg < 8);
+    vec![0xfe_u8 | (mode & 1), op | *reg | (mode << 6)]
 }
 
-pub fn bfc_inc_reg(reg: u8) -> Vec<u8> {
+pub fn bfc_inc_reg(reg: Register) -> Vec<u8> {
     // INC reg
     x86_offset(OFFSET_OP_INC, OFFSET_MODE_REG, reg)
 }
 
-pub fn bfc_dec_reg(reg: u8) -> Vec<u8> {
+pub fn bfc_dec_reg(reg: Register) -> Vec<u8> {
     // DEC reg
     x86_offset(OFFSET_OP_DEC, OFFSET_MODE_REG, reg)
 }
 
-pub fn bfc_inc_byte(reg: u8) -> Vec<u8> {
+pub fn bfc_inc_byte(reg: Register) -> Vec<u8> {
     // INC byte [reg]
     x86_offset(OFFSET_OP_INC, OFFSET_MODE_BYTEPTR, reg)
 }
 
-pub fn bfc_dec_byte(reg: u8) -> Vec<u8> {
+pub fn bfc_dec_byte(reg: Register) -> Vec<u8> {
     // DEC byte [reg]
     x86_offset(OFFSET_OP_DEC, OFFSET_MODE_BYTEPTR, reg)
 }
@@ -192,34 +214,30 @@ pub fn bfc_dec_byte(reg: u8) -> Vec<u8> {
 // register for the lower 3 bits to encode instructions.
 const OP_ADD: u8 = 0b11000000_u8;
 const OP_SUB: u8 = 0b11101000_u8;
-pub fn bfc_add_reg_imm8(reg: u8, imm8: i8) -> Vec<u8> {
-    debug_assert!(reg < 8);
-    vec![0x83, OP_ADD | reg, imm8 as u8]
+pub fn bfc_add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
+    vec![0x83, OP_ADD | *reg, imm8 as u8]
 }
 
-pub fn bfc_sub_reg_imm8(reg: u8, imm8: i8) -> Vec<u8> {
-    debug_assert!(reg < 8);
-    vec![0x83, OP_SUB | reg, imm8 as u8]
+pub fn bfc_sub_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
+    vec![0x83, OP_SUB | *reg, imm8 as u8]
 }
 
-pub fn bfc_add_reg_imm16(reg: u8, imm16: i16) -> Vec<u8> {
+pub fn bfc_add_reg_imm16(reg: Register, imm16: i16) -> Vec<u8> {
     bfc_add_reg_imm32(reg, imm16.into())
 }
 
-pub fn bfc_sub_reg_imm16(reg: u8, imm16: i16) -> Vec<u8> {
+pub fn bfc_sub_reg_imm16(reg: Register, imm16: i16) -> Vec<u8> {
     bfc_sub_reg_imm32(reg, imm16.into())
 }
 
-pub fn bfc_add_reg_imm32(reg: u8, imm32: i32) -> Vec<u8> {
-    debug_assert!(reg < 8);
-    let mut v = vec![0x81, OP_ADD + reg];
+pub fn bfc_add_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
+    let mut v = vec![0x81, OP_ADD + *reg];
     v.extend(imm32.to_le_bytes());
     v
 }
 
-pub fn bfc_sub_reg_imm32(reg: u8, imm32: i32) -> Vec<u8> {
-    debug_assert!(reg < 8);
-    let mut v = vec![0x81, OP_SUB + reg];
+pub fn bfc_sub_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
+    let mut v = vec![0x81, OP_SUB + *reg];
     v.extend(imm32.to_le_bytes());
     v
 }
@@ -231,11 +249,10 @@ pub fn bfc_sub_reg_imm32(reg: u8, imm32: i32) -> Vec<u8> {
 // original value.
 #[inline]
 #[rustfmt::skip]
-fn add_sub_qw(reg: u8, imm64: i64, op: u8) -> Vec<u8> {
-    debug_assert!(reg < 8);
+fn add_sub_qw(reg: Register, imm64: i64, op: u8) -> Vec<u8> {
     debug_assert!(op == OP_ADD || op == OP_SUB);
     // the temporary register shouldn't be the target register. This guarantees it won't be.
-    let tmp_reg = if reg == 0_u8 { 1_u8 } else { 0_u8 };
+    let tmp_reg = if *reg == 0_u8 { 1_u8 } else { 0_u8 };
     let mut v = vec![
         // PUSH tmp_reg
         0x50_u8|tmp_reg,
@@ -245,22 +262,22 @@ fn add_sub_qw(reg: u8, imm64: i64, op: u8) -> Vec<u8> {
     v.extend(imm64.to_le_bytes());
     v.extend([
         // (ADD||SUB) reg, tmp_reg
-        0x48_u8, 0x01_u8|op, 0xc0_u8 + (tmp_reg << 3) + reg,
+        0x48_u8, 0x01_u8|op, 0xc0_u8 + (tmp_reg << 3) + *reg,
         // POP tmp_reg
         0x58 + tmp_reg
     ]);
     v
 }
 
-pub fn bfc_add_reg_imm64(reg: u8, imm64: i64) -> Vec<u8> {
+pub fn bfc_add_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, OP_ADD)
 }
 
-pub fn bfc_sub_reg_imm64(reg: u8, imm64: i64) -> Vec<u8> {
+pub fn bfc_sub_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, OP_SUB)
 }
 
-pub fn bfc_add_reg(reg: u8, imm: usize) -> Result<Vec<u8>, BFCompileError> {
+pub fn bfc_add_reg(reg: Register, imm: usize) -> Result<Vec<u8>, BFCompileError> {
     match imm {
         i if i <= i8::MAX as usize => Ok(bfc_add_reg_imm8(reg, imm as i8)),
         i if i <= i32::MAX as usize => Ok(bfc_add_reg_imm32(reg, imm as i32)),
@@ -272,7 +289,7 @@ pub fn bfc_add_reg(reg: u8, imm: usize) -> Result<Vec<u8>, BFCompileError> {
     }
 }
 
-pub fn bfc_sub_reg(reg: u8, imm: usize) -> Result<Vec<u8>, BFCompileError> {
+pub fn bfc_sub_reg(reg: Register, imm: usize) -> Result<Vec<u8>, BFCompileError> {
     match imm {
         i if i <= i8::MAX as usize => Ok(bfc_sub_reg_imm8(reg, imm as i8)),
         i if i <= i32::MAX as usize => Ok(bfc_sub_reg_imm32(reg, imm as i32)),
@@ -284,22 +301,19 @@ pub fn bfc_sub_reg(reg: u8, imm: usize) -> Result<Vec<u8>, BFCompileError> {
     }
 }
 
-pub fn bfc_add_mem(reg: u8, imm8: i8) -> Vec<u8> {
-    debug_assert!(reg < 8);
+pub fn bfc_add_mem(reg: Register, imm8: i8) -> Vec<u8> {
     // ADD byte [reg], imm8
-    vec![0x80_u8, reg, imm8 as u8]
+    vec![0x80_u8, *reg, imm8 as u8]
 }
 
-pub fn bfc_sub_mem(reg: u8, imm8: i8) -> Vec<u8> {
-    debug_assert!(reg < 8);
+pub fn bfc_sub_mem(reg: Register, imm8: i8) -> Vec<u8> {
     // SUB byte [reg], imm8
-    vec![0x80_u8, 0b00101000_u8 | reg, imm8 as u8]
+    vec![0x80_u8, 0b00101000_u8 | *reg, imm8 as u8]
 }
 
-pub fn bfc_zero_mem(reg: u8) -> Vec<u8> {
-    debug_assert!(reg < 8);
+pub fn bfc_zero_mem(reg: Register) -> Vec<u8> {
     // MOV byte [reg], 0
-    vec![0x67_u8, 0xc6_u8, reg, 0x00_u8]
+    vec![0x67_u8, 0xc6_u8, *reg, 0x00_u8]
 }
 
 #[cfg(test)]
