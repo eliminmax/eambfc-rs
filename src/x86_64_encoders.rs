@@ -222,14 +222,6 @@ fn bfc_sub_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
     vec![0x83, OP_SUB | *reg, imm8 as u8]
 }
 
-fn bfc_add_reg_imm16(reg: Register, imm16: i16) -> Vec<u8> {
-    bfc_add_reg_imm32(reg, imm16.into())
-}
-
-fn bfc_sub_reg_imm16(reg: Register, imm16: i16) -> Vec<u8> {
-    bfc_sub_reg_imm32(reg, imm16.into())
-}
-
 fn bfc_add_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
     let mut v = vec![0x81, OP_ADD + *reg];
     v.extend(imm32.to_le_bytes());
