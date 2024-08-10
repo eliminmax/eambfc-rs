@@ -182,9 +182,9 @@ impl ArchInter for X86_64Inter {
     }
     fn add_reg(reg: Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
         match imm {
-            i if i <= i8::MAX as u64 => Ok(bfc_add_reg_imm8(reg, imm as i8)),
-            i if i <= i32::MAX as u64 => Ok(bfc_add_reg_imm32(reg, imm as i32)),
-            i if i <= i64::MAX as u64 => Ok(bfc_add_reg_imm64(reg, imm as i64)),
+            i if i <= i8::MAX as u64 => Ok(add_reg_imm8(reg, imm as i8)),
+            i if i <= i32::MAX as u64 => Ok(add_reg_imm32(reg, imm as i32)),
+            i if i <= i64::MAX as u64 => Ok(add_reg_imm64(reg, imm as i64)),
             _ => Err(BFCompileError::Basic {
                 id: String::from("TOO_MANY_INSTRUCTIONS"),
                 msg: String::from("Over 8192 PiB of consecitive `>` instructions!"),
@@ -197,9 +197,9 @@ impl ArchInter for X86_64Inter {
     }
     fn sub_reg(reg: Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
         match imm {
-            i if i <= i8::MAX as u64 => Ok(bfc_sub_reg_imm8(reg, imm as i8)),
-            i if i <= i32::MAX as u64 => Ok(bfc_sub_reg_imm32(reg, imm as i32)),
-            i if i <= i64::MAX as u64 => Ok(bfc_sub_reg_imm64(reg, imm as i64)),
+            i if i <= i8::MAX as u64 => Ok(sub_reg_imm8(reg, imm as i8)),
+            i if i <= i32::MAX as u64 => Ok(sub_reg_imm32(reg, imm as i32)),
+            i if i <= i64::MAX as u64 => Ok(sub_reg_imm64(reg, imm as i64)),
             _ => Err(BFCompileError::Basic {
                 id: String::from("TOO_MANY_INSTRUCTIONS"),
                 msg: String::from("Over 8192 PiB of consecitive `<` instructions!"),
@@ -235,21 +235,21 @@ pub const X86_64_INTER: ArchInfo<Register, X86_64Inter> = ArchInfo::<Register, X
     inter: X86_64Inter {},
 };
 
-fn bfc_add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
+fn add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
     vec![0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]
 }
 
-fn bfc_sub_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
+fn sub_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
     vec![0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]
 }
 
-fn bfc_add_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
+fn add_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
     let mut v = vec![0x81, ArithOp::Add as u8 | reg as u8];
     v.extend(imm32.to_le_bytes());
     v
 }
 
-fn bfc_sub_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
+fn sub_reg_imm32(reg: Register, imm32: i32) -> Vec<u8> {
     let mut v = vec![0x81, ArithOp::Sub as u8 | reg as u8];
     v.extend(imm32.to_le_bytes());
     v
@@ -284,11 +284,11 @@ fn add_sub_qw(reg: Register, imm64: i64, op: ArithOp) -> Vec<u8> {
     v
 }
 
-fn bfc_add_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
+fn add_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, ArithOp::Add)
 }
 
-fn bfc_sub_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
+fn sub_reg_imm64(reg: Register, imm64: i64) -> Vec<u8> {
     add_sub_qw(reg, imm64, ArithOp::Sub)
 }
 
