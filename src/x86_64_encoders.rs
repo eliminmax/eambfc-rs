@@ -45,21 +45,6 @@ pub enum Register {
     BfPtr = 0b011,
 }
 
-pub mod registers {
-    use super::Register;
-    pub const REG_SC_NUM: Register = Register::ScNum;
-    pub const REG_ARG1: Register = Register::Arg1;
-    pub const REG_ARG2: Register = Register::Arg2;
-    pub const REG_ARG3: Register = Register::Arg3;
-    pub const REG_BF_PTR: Register = Register::BfPtr;
-}
-
-// Numbers used for the read, write, and exit system calls on linux/x86_64
-pub mod syscall_nums {
-    pub const SC_READ: i64 = 0;
-    pub const SC_WRITE: i64 = 1;
-    pub const SC_EXIT: i64 = 60;
-}
 
 pub mod arch_info {
     use super::super::elf_tools::{ELFArch, ELFDataByteOrder};
