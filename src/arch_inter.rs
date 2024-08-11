@@ -5,8 +5,13 @@
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
 
-pub trait ArchInter {
+pub trait ArchInter where <Self as ArchInter>::RegType: Copy {
     type RegType;
+    const JUMP_SIZE: usize;
+    const REGISTERS: Registers<Self::RegType>;
+    const SC_NUMS: SyscallNums;
+    const ARCH: ELFArch;
+    const EI_DATA: EIData;
     fn set_reg(reg: Self::RegType, imm: i64) -> Vec<u8>;
     fn reg_copy(dst: Self::RegType, src: Self::RegType) -> Vec<u8>;
     fn syscall() -> Vec<u8>;

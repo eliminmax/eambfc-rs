@@ -121,7 +121,22 @@ macro_rules! fn_test_jcc {
 
 pub struct X86_64Inter;
 impl ArchInter for X86_64Inter {
-    type RegType = Register;
+    type RegType = X86_64Register;
+    const JUMP_SIZE: usize = 9;
+    const REGISTERS: Registers<X86_64Register> = Registers {
+        sc_num: Register::ScNum,
+        arg1: Register::Arg1,
+        arg2: Register::Arg2,
+        arg3: Register::Arg3,
+        bf_ptr: Register::BfPtr,
+    };
+    const SC_NUMS: SyscallNums = SyscallNums {
+        sc_read: 0,
+        sc_write: 1,
+        sc_exit: 60,
+    };
+    const ARCH: ELFArch = ELFArch::X86_64;
+    const EI_DATA: EIData = EIData::ELFDATA2LSB;
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
     // XOR reg, reg
     // PUSH imm8; POP reg
@@ -163,7 +178,7 @@ impl ArchInter for X86_64Inter {
 
     fn nop_loop_open() -> Vec<u8> {
         // times JUMP_SIZE NOP
-        Vec::<u8>::from([0x90; X86_64_INTER.jump_size])
+        Vec::<u8>::from([0x90; Self::JUMP_SIZE])
     }
     fn inc_reg(reg: Register) -> Vec<u8> {
         // INC reg
