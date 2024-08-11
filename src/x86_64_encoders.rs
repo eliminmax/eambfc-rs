@@ -37,13 +37,15 @@ use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
 
 #[derive(Debug, Copy, Clone)]
-pub enum Register {
+pub enum X86_64Register {
     ScNum = 0b000,
     Arg1 = 0b111,
     Arg2 = 0b110,
     Arg3 = 0b010,
     BfPtr = 0b011,
 }
+type Register = X86_64Register;
+
 
 // many add/subtract instructions use these bit values for the upper five bits and the target
 // register for the lower 3 bits to encode instructions.
