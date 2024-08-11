@@ -38,11 +38,11 @@ use super::err::BFCompileError;
 
 #[derive(Debug, Copy, Clone)]
 pub enum X86_64Register {
-    ScNum = 0b000,
-    Arg1 = 0b111,
-    Arg2 = 0b110,
-    Arg3 = 0b010,
-    BfPtr = 0b011,
+    RAX = 0b000,
+    RDI = 0b111,
+    RSI = 0b110,
+    RDX = 0b010,
+    RBX = 0b011,
 }
 type Register = X86_64Register;
 
@@ -124,11 +124,11 @@ impl ArchInter for X86_64Inter {
     type RegType = X86_64Register;
     const JUMP_SIZE: usize = 9;
     const REGISTERS: Registers<X86_64Register> = Registers {
-        sc_num: Register::ScNum,
-        arg1: Register::Arg1,
-        arg2: Register::Arg2,
-        arg3: Register::Arg3,
-        bf_ptr: Register::BfPtr,
+        sc_num: Register::RAX,
+        arg1: Register::RDI,
+        arg2: Register::RSI,
+        arg3: Register::RDX,
+        bf_ptr: Register::RBX,
     };
     const SC_NUMS: SyscallNums = SyscallNums {
         sc_read: 0,
@@ -234,11 +234,11 @@ impl ArchInter for X86_64Inter {
 
 pub const X86_64_INTER: ArchInfo<Register, X86_64Inter> = ArchInfo::<Register, X86_64Inter> {
     registers: Registers::<Register> {
-        sc_num: Register::ScNum,
-        arg1: Register::Arg1,
-        arg2: Register::Arg2,
-        arg3: Register::Arg3,
-        bf_ptr: Register::BfPtr,
+        sc_num: Register::RAX,
+        arg1: Register::RDI,
+        arg2: Register::RSI,
+        arg3: Register::RDX,
+        bf_ptr: Register::RBX,
     },
     sc_nums: SyscallNums {
         sc_read: 0,
@@ -316,24 +316,24 @@ mod tests {
     fn test_set_reg() -> Result<(), String> {
         // test that appropriate encodings are used for different immediates
         assert_eq!(
-            X86_64Inter::set_reg(Register::BfPtr, 0),
+            X86_64Inter::set_reg(Register::RBX, 0),
             // XOR EBX, EBX
             vec![0x31, 0xc0 | 0b011000 | 0b011]
         );
         assert_eq!(
-            X86_64Inter::set_reg(Register::BfPtr, 101),
+            X86_64Inter::set_reg(Register::RBX, 101),
             // PUSH 101; POP RBX
             vec![0x6a, 101, 0x58 | 0b011]
         );
         assert_eq!(
-            X86_64Inter::set_reg(Register::BfPtr, 128),
+            X86_64Inter::set_reg(Register::RBX, 128),
             // MOV EBX, 128
             vec![0xb8 | 0b011, 128, 0, 0, 0]
         );
 
         #[rustfmt::skip]
         assert_eq!(
-            X86_64Inter::set_reg(Register::BfPtr, i64::MAX - 0xffff),
+            X86_64Inter::set_reg(Register::RBX, i64::MAX - 0xffff),
             // MOV RBX, 0x7fffffffffff0000
             vec![0x48, 0xb8 | 0b011, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
         );
