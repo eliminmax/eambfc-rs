@@ -118,7 +118,7 @@ macro_rules! fn_test_jcc {
     };
 }
 
-pub struct X86_64Inter();
+pub struct X86_64Inter;
 impl ArchInter for X86_64Inter {
     type RegType = Register;
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
