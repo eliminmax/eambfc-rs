@@ -351,7 +351,7 @@ pub fn bf_compile<W: Write, R: Read, T: Copy, I: ArchInter<RegType = T>>(
 
 #[cfg(test)]
 mod tests {
-    use super::super::X86_64_INTER;
+    use super::super::x86_64_encoders::X86_64_INTER;
     use super::*;
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {

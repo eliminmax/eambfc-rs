@@ -9,7 +9,6 @@ pub mod elf_tools;
 pub mod err;
 pub mod optimize;
 pub mod x86_64_encoders;
-pub use x86_64_encoders::X86_64_INTER;
 
 use arg_parse::RunConfig;
 use compile::bf_compile;
@@ -20,6 +19,7 @@ use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
 use std::{io, process};
+use x86_64_encoders::X86_64_INTER;
 
 #[derive(PartialEq, Debug)]
 pub enum OutMode {
