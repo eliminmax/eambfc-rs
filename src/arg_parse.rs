@@ -5,8 +5,8 @@
 use super::elf_tools::ELFArch;
 use super::err::BFCompileError;
 use super::OutMode;
-use std::ffi::{OsString,OsStr};
-use std::os::unix::ffi::{OsStringExt, OsStrExt};
+use std::ffi::{OsStr, OsString};
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
 #[derive(PartialEq, Debug)]
 pub struct StandardRunConfig {
@@ -110,10 +110,9 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                             ));
                         }
                         match parameter_instr!(b'a').as_bytes() {
-                            b"x86_64"
-                            | b"x64"
-                            | b"amd64"
-                            | b"x86-64" => arch = Some(ELFArch::X86_64),
+                            b"x86_64" | b"x64" | b"amd64" | b"x86-64" => {
+                                arch = Some(ELFArch::X86_64)
+                            }
                             f => {
                                 return Err((
                                     BFCompileError::Basic {

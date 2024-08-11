@@ -46,7 +46,6 @@ pub enum X86_64Register {
 }
 type Register = X86_64Register;
 
-
 // many add/subtract instructions use these bit values for the upper five bits and the target
 // register for the lower 3 bits to encode instructions.
 enum ArithOp {
