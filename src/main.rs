@@ -28,7 +28,7 @@ pub enum OutMode {
     Quiet,
 }
 
-fn show_help<T: io::Write>(outfile: &mut T, progname: &str) {
+fn show_help(outfile: &mut dyn io::Write, progname: &str) {
     let help_text = format!(
         "Usage: {progname} [options] <program.bf> [<program2.bf> ...]
 
