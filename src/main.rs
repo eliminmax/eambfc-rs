@@ -115,7 +115,7 @@ fn compile_wrapper(
             ),
         }]
     })?;
-    bf_compile(infile, outfile, optimize, tape_blocks, X86_64_INTER)
+    bf_compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks, X86_64_INTER)
 }
 
 fn main() {

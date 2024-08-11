@@ -19,8 +19,8 @@ const PHTB_SIZE: u64 = (PHDR_SIZE * PHNUM) as u64;
 const TAPE_ADDR: u64 = 0x10000;
 const PHNUM: u16 = 2;
 
-fn write_headers<W: Write, T: Copy, I: ArchInter>(
-    output: &mut W,
+fn write_headers<T: Copy, I: ArchInter>(
+    output: &mut dyn Write,
     codesize: usize,
     tape_blocks: u64,
     arch_info: &ArchInfo<T, I>,
@@ -259,9 +259,9 @@ fn compile_instr<T: Copy, I: ArchInter<RegType = T>>(
     }
 }
 
-pub fn bf_compile<W: Write, R: Read, T: Copy, I: ArchInter<RegType = T>>(
-    in_f: R,
-    mut out_f: W,
+pub fn bf_compile<T: Copy, I: ArchInter<RegType = T>>(
+    in_f: Box<dyn Read>,
+    mut out_f: Box<dyn Write>,
     optimize: bool,
     tape_blocks: u64,
     arch_info: ArchInfo<T, I>,
@@ -274,7 +274,7 @@ pub fn bf_compile<W: Write, R: Read, T: Copy, I: ArchInter<RegType = T>>(
     let reader = BufReader::new(in_f);
 
     if optimize {
-        errs.append(&mut match to_condensed(reader) {
+        errs.append(&mut match to_condensed(Box::new(reader)) {
             Ok(condensed) => condensed
                 .into_iter()
                 .filter_map(|i| {
@@ -356,8 +356,8 @@ mod tests {
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
         bf_compile(
-            b"+[>]<-,.".as_slice(),
-            Vec::<u8>::new(),
+            Box::new(b"+[>]<-,.".as_slice()),
+            Box::new(Vec::<u8>::new()),
             false,
             8,
             X86_64_INTER,
@@ -370,8 +370,8 @@ mod tests {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
         bf_compile(
-            b">+[-->---[-<]>]>+".as_slice(),
-            Vec::<u8>::new(),
+            Box::new(b">+[-->---[-<]>]>+".as_slice()),
+            Box::new(Vec::<u8>::new()),
             false,
             8,
             X86_64_INTER,
@@ -381,31 +381,41 @@ mod tests {
 
     #[test]
     fn unmatched_open() -> Result<(), String> {
-        assert!(
-            bf_compile(b"[".as_slice(), Vec::<u8>::new(), false, 8, X86_64_INTER).is_err_and(|e| {
-                match e.into_iter().next().unwrap() {
-                    BFCompileError::Basic { id, .. }
-                    | BFCompileError::Instruction { id, .. }
-                    | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_OPEN"),
-                    BFCompileError::UnknownFlag(_) => false,
-                }
-            })
-        );
+        assert!(bf_compile(
+            Box::new(b"[".as_slice()),
+            Box::new(Vec::<u8>::new()),
+            false,
+            8,
+            X86_64_INTER
+        )
+        .is_err_and(|e| {
+            match e.into_iter().next().unwrap() {
+                BFCompileError::Basic { id, .. }
+                | BFCompileError::Instruction { id, .. }
+                | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_OPEN"),
+                BFCompileError::UnknownFlag(_) => false,
+            }
+        }));
         Ok(())
     }
 
     #[test]
     fn unmatched_close() -> Result<(), String> {
-        assert!(
-            bf_compile(b"]".as_slice(), Vec::<u8>::new(), false, 8, X86_64_INTER).is_err_and(|e| {
-                match e.into_iter().next().unwrap() {
-                    BFCompileError::Basic { id, .. }
-                    | BFCompileError::Instruction { id, .. }
-                    | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_CLOSE"),
-                    BFCompileError::UnknownFlag(_) => false,
-                }
-            })
-        );
+        assert!(bf_compile(
+            Box::new(b"]".as_slice()),
+            Box::new(Vec::<u8>::new()),
+            false,
+            8,
+            X86_64_INTER
+        )
+        .is_err_and(|e| {
+            match e.into_iter().next().unwrap() {
+                BFCompileError::Basic { id, .. }
+                | BFCompileError::Instruction { id, .. }
+                | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_CLOSE"),
+                BFCompileError::UnknownFlag(_) => false,
+            }
+        }));
         Ok(())
     }
 }

@@ -15,7 +15,7 @@ pub enum CondensedInstruction {
     SetZero,
 }
 
-pub fn to_condensed<R: Read>(mut file: R) -> Result<Vec<CondensedInstruction>, BFCompileError> {
+pub fn to_condensed(mut file: Box<dyn Read>) -> Result<Vec<CondensedInstruction>, BFCompileError> {
     let mut source_file_bytes = Vec::<u8>::new();
     let _ = file
         .read_to_end(&mut source_file_bytes)
@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn to_condensed_test() -> Result<(), String> {
         assert_eq!(
-            to_condensed(b"e+[+]++[-],.....".as_slice()).unwrap(),
+            to_condensed(Box::new(b"e+[+]++[-],.....".as_slice())).unwrap(),
             vec![
                 CondensedInstruction::BFInstruction(b'+'),
                 CondensedInstruction::SetZero,
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn read_failure_handled() -> Result<(), String> {
-        let unreadable = Unreadable {};
+        let unreadable = Box::new(Unreadable {});
         match to_condensed(unreadable) {
             Ok(_) => {
                 return Err(String::from(
