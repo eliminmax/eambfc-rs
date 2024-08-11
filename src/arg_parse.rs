@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use super::elf_tools::ELFArch;
 use super::err::BFCompileError;
 use super::OutMode;
-use std::ffi::OsString;
-use std::os::unix::ffi::OsStringExt;
+use std::ffi::{OsString,OsStr};
+use std::os::unix::ffi::{OsStringExt, OsStrExt};
 
 #[derive(PartialEq, Debug)]
 pub struct StandardRunConfig {
@@ -17,6 +18,7 @@ pub struct StandardRunConfig {
     pub tape_blocks: u64,
     pub extension: OsString,
     pub source_files: Vec<OsString>,
+    pub arch: ELFArch,
 }
 
 #[derive(PartialEq, Debug)]
@@ -37,6 +39,7 @@ impl Default for StandardRunConfig {
             tape_blocks: 8,
             extension: OsString::from(".bf"),
             source_files: Vec::<OsString>::new(),
+            arch: ELFArch::X86_64,
         }
     }
 }
@@ -54,8 +57,9 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
     let mut out_mode = OutMode::Basic;
     let mut optimize = false;
     let mut keep = false;
-    let mut tape_blocks: Option<u64> = None;
     let mut cont = false;
+    let mut tape_blocks: Option<u64> = None;
+    let mut arch: Option<ELFArch> = None;
     while let Some(arg) = args.next() {
         // some logic to treat anything after `--` as literal values
         if arg == "--" {
@@ -94,6 +98,38 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                     }};
                 }
                 match b {
+                    b'a' => {
+                        if arch.is_some() {
+                            return Err((
+                                BFCompileError::Basic {
+                                    id: String::from("MULTIPLE_ARCHES"),
+                                    msg: String::from("passed -a multiple times"),
+                                },
+                                progname,
+                                out_mode,
+                            ));
+                        }
+                        match parameter_instr!(b'a').as_bytes() {
+                            b"x86_64"
+                            | b"x64"
+                            | b"amd64"
+                            | b"x86-64" => arch = Some(ELFArch::X86_64),
+                            f => {
+                                return Err((
+                                    BFCompileError::Basic {
+                                        id: String::from("UNKNOWN_ARCH"),
+                                        msg: format!(
+                                            "{} is not a recognized architecture",
+                                            OsStr::from_bytes(f).to_string_lossy()
+                                        ),
+                                    },
+                                    progname,
+                                    out_mode,
+                                ))
+                            }
+                        }
+                        break;
+                    }
                     b'e' => {
                         if !extension.is_empty() {
                             return Err((
@@ -196,6 +232,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
         extension = OsString::from(".bf");
     }
     let tape_blocks = tape_blocks.unwrap_or(8);
+    let arch = arch.unwrap_or(ELFArch::X86_64);
 
     Ok(RunConfig::StandardRun(StandardRunConfig {
         progname,
@@ -206,6 +243,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
         tape_blocks,
         extension,
         source_files,
+        arch,
     }))
 }
 

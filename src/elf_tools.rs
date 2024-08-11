@@ -17,7 +17,7 @@ pub enum EIData {
     ELFDATA2MSB = 2, // 2's complement, big endian
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ELFArch {
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
