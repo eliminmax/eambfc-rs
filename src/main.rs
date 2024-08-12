@@ -11,7 +11,7 @@ pub mod optimize;
 pub mod x86_64_encoders;
 
 use arg_parse::RunConfig;
-use compile::bf_compile;
+use compile::BFCompile;
 use err::{BFCompileError, BfErrDisplay};
 use std::env::args_os;
 use std::ffi::{OsStr, OsString};
@@ -19,7 +19,7 @@ use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
 use std::{io, process};
-use x86_64_encoders::X86_64_INTER;
+use x86_64_encoders::X86_64Inter;
 
 #[derive(PartialEq, Debug)]
 pub enum OutMode {
@@ -76,7 +76,8 @@ fn rm_ext<'a>(filename: &'a OsStr, extension: &OsStr) -> Result<OsString, &'a Os
 }
 
 // wrapper around the compilation of a specific file
-fn compile_wrapper(
+fn compile_wrapper<T: BFCompile>(
+    compiler: T,
     file_name: &OsString,
     extension: &OsStr,
     optimize: bool,
@@ -115,7 +116,7 @@ fn compile_wrapper(
             ),
         }]
     })?;
-    bf_compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks, X86_64_INTER)
+    compiler.compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks)
 }
 
 fn main() {
@@ -127,7 +128,7 @@ fn main() {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
-                match compile_wrapper(f, &rc.extension, rc.optimize, rc.tape_blocks) {
+                match compile_wrapper(X86_64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks) {
                     Ok(_) => {}
                     Err(errs) => {
                         errs.into_iter().for_each(|e| e.report(&rc.out_mode));

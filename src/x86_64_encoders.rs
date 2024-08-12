@@ -35,6 +35,7 @@
 use super::arch_inter::{ArchInfo, ArchInter, Registers, SyscallNums};
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
+use super::compile::BFCompile;
 
 #[derive(Debug, Copy, Clone)]
 pub enum X86_64Register {
@@ -232,24 +233,7 @@ impl ArchInter for X86_64Inter {
     }
 }
 
-pub const X86_64_INTER: ArchInfo<Register, X86_64Inter> = ArchInfo::<Register, X86_64Inter> {
-    registers: Registers::<Register> {
-        sc_num: Register::RAX,
-        arg1: Register::RDI,
-        arg2: Register::RSI,
-        arg3: Register::RDX,
-        bf_ptr: Register::RBX,
-    },
-    sc_nums: SyscallNums {
-        sc_read: 0,
-        sc_write: 1,
-        sc_exit: 60,
-    },
-    jump_size: 9usize,
-    em_arch: ELFArch::X86_64,
-    elfdata_byte_order: EIData::ELFDATA2LSB,
-    inter: X86_64Inter {},
-};
+impl BFCompile for X86_64Inter {}
 
 fn add_reg_imm8(reg: Register, imm8: i8) -> Vec<u8> {
     vec![0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]
