@@ -15,7 +15,7 @@ pub enum BFCompileError {
         msg: String,
         instr: char,
     },
-    Position {
+    Positional {
         id: String,
         msg: String,
         instr: u8,
@@ -58,7 +58,7 @@ impl BfErrDisplay for BFCompileError {
                     );
                 }
             }
-            BFCompileError::Position {
+            BFCompileError::Positional {
                 id,
                 msg,
                 instr,

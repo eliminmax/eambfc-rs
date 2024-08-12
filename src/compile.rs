@@ -163,7 +163,7 @@ where
                 let open_location =
                     jump_stack
                         .pop()
-                        .ok_or::<BFCompileError>(BFCompileError::Position {
+                        .ok_or::<BFCompileError>(BFCompileError::Positional {
                             id: String::from("UNMATCHED_CLOSE"),
                             msg: String::from("Found ']' without matching '['."),
                             instr: b']',
@@ -190,7 +190,7 @@ where
         };
         match dst.write(to_write.as_slice()) {
             Ok(count) if count == to_write.len() => Ok(()),
-            Ok(count) => Err(BFCompileError::Position {
+            Ok(count) => Err(BFCompileError::Positional {
                 id: String::from("FAILED_WRITE"),
                 msg: format!(
                     "Expected to write {} bytes when compiling, wrote {}",
@@ -202,7 +202,7 @@ where
                 col: pos.col,
                 line: pos.line,
             }),
-            Err(_) => Err(BFCompileError::Position {
+            Err(_) => Err(BFCompileError::Positional {
                 id: String::from("FAILED_WRITE"),
                 msg: String::from("Failed to write to buffer."),
                 instr,
@@ -291,7 +291,7 @@ where
                     }
                 }
                 Err(_) => {
-                    errs.push(BFCompileError::Position {
+                    errs.push(BFCompileError::Positional {
                         id: String::from("FAILED_READ"),
                         msg: String::from("Failed to read byte after current position"),
                         line: pos.line,
@@ -304,7 +304,7 @@ where
 
         // quick check to make sure that there are no unterminated loops
         if let Some(jl) = jump_stack.pop() {
-            errs.push(BFCompileError::Position {
+            errs.push(BFCompileError::Positional {
                 id: String::from("UNMATCHED_OPEN"),
                 msg: String::from("Reached the end of the file with an unmatched '['"),
                 line: jl.src_line,
@@ -383,7 +383,7 @@ where
 //             match e.into_iter().next().unwrap() {
 //                 BFCompileError::Basic { id, .. }
 //                 | BFCompileError::Instruction { id, .. }
-//                 | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_OPEN"),
+//                 | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_OPEN"),
 //                 BFCompileError::UnknownFlag(_) => false,
 //             }
 //         }));
@@ -403,7 +403,7 @@ where
 //             match e.into_iter().next().unwrap() {
 //                 BFCompileError::Basic { id, .. }
 //                 | BFCompileError::Instruction { id, .. }
-//                 | BFCompileError::Position { id, .. } => id == String::from("UNMATCHED_CLOSE"),
+//                 | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_CLOSE"),
 //                 BFCompileError::UnknownFlag(_) => false,
 //             }
 //         }));

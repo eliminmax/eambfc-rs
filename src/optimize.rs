@@ -205,7 +205,7 @@ mod tests {
             BFCompileError::UnknownFlag(_) => String::from("UNKNOWN_ARG"),
             BFCompileError::Basic { id, .. }
             | BFCompileError::Instruction { id, .. }
-            | BFCompileError::Position { id, .. } => id,
+            | BFCompileError::Positional { id, .. } => id,
         }
     }
 
