@@ -38,6 +38,7 @@ use super::err::BFCompileError;
 use super::compile::BFCompile;
 
 #[derive(Debug, Copy, Clone)]
+#[repr(u8)]
 pub enum X86_64Register {
     RAX = 0b000,
     RDI = 0b111,
@@ -49,6 +50,8 @@ type Register = X86_64Register;
 
 // many add/subtract instructions use these bit values for the upper five bits and the target
 // register for the lower 3 bits to encode instructions.
+#[derive(Debug)]
+#[repr(u8)]
 enum ArithOp {
     Add = 0b11000000,
     Sub = 0b11101000,
@@ -69,12 +72,14 @@ enum ArithOp {
 // bitwise hackery, the following constants and function can be used.
 
 #[derive(Debug)]
+#[repr(u8)]
 enum OffsetOp {
     Inc = 0,
     Dec = 8,
 }
 
 #[derive(Debug)]
+#[repr(u8)]
 enum OffsetMode {
     BytePtr = 0,
     Reg = 3,
