@@ -44,13 +44,3 @@ pub struct SyscallNums {
     pub sc_write: i64,
     pub sc_exit: i64,
 }
-
-#[derive(Debug)]
-pub struct ArchInfo<R: Copy + Clone, I: ArchInter> {
-    pub registers: Registers<R>,
-    pub sc_nums: SyscallNums,
-    pub jump_size: usize,
-    pub em_arch: ELFArch,
-    pub elfdata_byte_order: EIData,
-    pub inter: I,
-}

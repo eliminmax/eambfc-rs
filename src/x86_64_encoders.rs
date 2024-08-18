@@ -32,7 +32,7 @@
 // * RDX is 010b
 // * RBX is 011b
 
-use super::arch_inter::{ArchInfo, ArchInter, Registers, SyscallNums};
+use super::arch_inter::{ArchInter, Registers, SyscallNums};
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
 use super::compile::BFCompile;
