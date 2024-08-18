@@ -19,10 +19,15 @@ pub enum BFCompileError {
         id: String,
         msg: String,
         instr: u8,
-        line: usize,
-        col: usize,
+        loc: CodePosition,
     },
     UnknownFlag(u8), // flag is a c character
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CodePosition {
+    pub line: usize,
+    pub col: usize,
 }
 
 pub trait BfErrDisplay {
@@ -62,9 +67,9 @@ impl BfErrDisplay for BFCompileError {
                 id,
                 msg,
                 instr,
-                line,
-                col,
+                loc,
             } => {
+                let (line, col) = (loc.line, loc.col);
                 if *out_mode == OutMode::Basic {
                     eprintln!(
                         "Error {} when compiling {} at line {}, colunm {}: {}",

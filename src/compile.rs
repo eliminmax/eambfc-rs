@@ -5,19 +5,13 @@ use super::arch_inter::ArchInter;
 use super::elf_tools::{
     EIClass, EIData, EIdent, ELFType, ELFVersion, Ehdr, ELFArch, PType, Phdr, ELFOSABI,
 };
-use super::err::BFCompileError;
+use super::err::{BFCompileError, CodePosition};
 use super::optimize::{to_condensed, CondensedInstruction as CI};
 use std::io::{BufReader, Read, Write};
 
 pub struct JumpLocation {
-    src_line: usize,
-    src_col: usize,
+    loc: CodePosition,
     index: usize,
-}
-
-pub struct Position {
-    line: usize,
-    col: usize,
 }
 
 // ELF addressing stuff
@@ -130,10 +124,10 @@ where
         &self,
         instr: u8,
         dst: &mut Vec<u8>,
-        pos: &mut Position,
+        loc: &mut CodePosition,
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
-        pos.col += 1;
+        loc.col += 1;
         let to_write: Vec<u8> = match instr {
             // decrement the tape pointer register
             b'<' => Self::dec_reg(Self::REGISTERS.bf_ptr),
@@ -151,8 +145,7 @@ where
             // will replace when reaching the corresponding ']' instruction
             b'[' => {
                 jump_stack.push(JumpLocation {
-                    src_line: pos.line,
-                    src_col: pos.col,
+                    loc: loc.clone(),
                     index: dst.len(),
                 });
                 dst.extend(Self::nop_loop_open());
@@ -167,8 +160,7 @@ where
                             id: String::from("UNMATCHED_CLOSE"),
                             msg: String::from("Found ']' without matching '['."),
                             instr: b']',
-                            col: pos.col,
-                            line: pos.line,
+                            loc: loc.clone()
                         })?;
                 let open_address = open_location.index;
                 let distance = dst.len() - open_address;
@@ -180,8 +172,8 @@ where
                 Self::jump_not_zero(Self::REGISTERS.bf_ptr, -(distance as i64))?
             }
             b'\n' => {
-                pos.col = 1;
-                pos.line += 1;
+                loc.col = 1;
+                loc.line += 1;
                 return Ok(());
             }
             _ => {
@@ -199,15 +191,13 @@ where
                 ),
 
                 instr,
-                col: pos.col,
-                line: pos.line,
+                loc: loc.clone(),
             }),
             Err(_) => Err(BFCompileError::Positional {
                 id: String::from("FAILED_WRITE"),
                 msg: String::from("Failed to write to buffer."),
                 instr,
-                col: pos.col,
-                line: pos.line,
+                loc: loc.clone()
             }),
         }
     }
@@ -229,7 +219,7 @@ where
                     i,
                     dst,
                     // throwaway position value
-                    &mut Position { line: 0, col: 0 },
+                    &mut CodePosition { line: 0, col: 0 },
                     jump_stack,
                 );
             }
@@ -259,7 +249,7 @@ where
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>> {
         let mut jump_stack = Vec::<JumpLocation>::new();
-        let mut pos = Position { line: 1, col: 0 };
+        let mut loc = CodePosition { line: 1, col: 0 };
         let mut code_buf = Self::set_reg(Self::REGISTERS.bf_ptr, TAPE_ADDR as i64);
         let mut errs = Vec::<BFCompileError>::new();
 
@@ -285,7 +275,7 @@ where
             reader.bytes().for_each(|maybe_byte| match maybe_byte {
                 Ok(byte) => {
                     if let Err(e) =
-                        self.compile_instr(byte, &mut code_buf, &mut pos, &mut jump_stack)
+                        self.compile_instr(byte, &mut code_buf, &mut loc, &mut jump_stack)
                     {
                         errs.push(e);
                     }
@@ -294,9 +284,8 @@ where
                     errs.push(BFCompileError::Positional {
                         id: String::from("FAILED_READ"),
                         msg: String::from("Failed to read byte after current position"),
-                        line: pos.line,
-                        col: pos.col,
                         instr: b'\0',
+                        loc: loc.clone(),
                     });
                 }
             });
@@ -307,9 +296,8 @@ where
             errs.push(BFCompileError::Positional {
                 id: String::from("UNMATCHED_OPEN"),
                 msg: String::from("Reached the end of the file with an unmatched '['"),
-                line: jl.src_line,
-                col: jl.src_col,
                 instr: b'[',
+                loc: jl.loc,
             });
         }
         // finally, after that mess, end with an exit(0)
