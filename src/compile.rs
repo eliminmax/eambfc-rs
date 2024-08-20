@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::arch_inter::ArchInter;
 use super::elf_tools::{
-    EIClass, EIData, EIdent, ELFType, ELFVersion, Ehdr, ELFArch, PType, Phdr, ELFOSABI,
+    EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, ELFOSABI,
 };
 use super::err::{BFCompileError, CodePosition};
 use super::optimize::{to_condensed, CondensedInstruction as CI};
@@ -98,7 +98,6 @@ fn write_headers(
     }
 }
 
-
 pub trait BFCompile
 where
     Self: ArchInter,
@@ -160,7 +159,7 @@ where
                             id: String::from("UNMATCHED_CLOSE"),
                             msg: String::from("Found ']' without matching '['."),
                             instr: b']',
-                            loc: loc.clone()
+                            loc: loc.clone(),
                         })?;
                 let open_address = open_location.index;
                 let distance = dst.len() - open_address;
@@ -197,7 +196,7 @@ where
                 id: String::from("FAILED_WRITE"),
                 msg: String::from("Failed to write to buffer."),
                 instr,
-                loc: loc.clone()
+                loc: loc.clone(),
             }),
         }
     }
@@ -260,9 +259,7 @@ where
                 Ok(condensed) => condensed
                     .into_iter()
                     .filter_map(|i| {
-                        if let Err(e) =
-                            self.compile_condensed(i, &mut code_buf, &mut jump_stack)
-                        {
+                        if let Err(e) = self.compile_condensed(i, &mut code_buf, &mut jump_stack) {
                             Some(e)
                         } else {
                             None

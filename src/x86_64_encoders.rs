@@ -33,9 +33,9 @@
 // * RBX is 011b
 
 use super::arch_inter::{ArchInter, Registers, SyscallNums};
+use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
-use super::compile::BFCompile;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]

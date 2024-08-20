@@ -5,7 +5,10 @@
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
 
-pub trait ArchInter where <Self as ArchInter>::RegType: Copy {
+pub trait ArchInter
+where
+    <Self as ArchInter>::RegType: Copy,
+{
     type RegType;
     const JUMP_SIZE: usize;
     const REGISTERS: Registers<Self::RegType>;
