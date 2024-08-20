@@ -36,7 +36,7 @@ fn write_headers(
     let ehdr = Ehdr {
         e_ident: EIdent {
             ei_class: EIClass::ELFClass64,
-            ei_data: ei_data,
+            ei_data,
             ei_osabi: ELFOSABI::SYSV,
         },
         e_type: ELFType::Exec,
