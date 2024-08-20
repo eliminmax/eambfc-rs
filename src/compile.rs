@@ -138,9 +138,9 @@ where
             // increment the current cell value
             b'+' => Self::inc_byte(Self::REGISTERS.bf_ptr),
             // Write 1 byte at [bf_ptr] to STDOUT
-            b'.' => self.bf_io(Self::SC_NUMS.sc_write, 1),
+            b'.' => self.bf_io(Self::SC_NUMS.write, 1),
             // Read 1 byte to [bf_ptr] from STDIN
-            b',' => self.bf_io(Self::SC_NUMS.sc_read, 0),
+            b',' => self.bf_io(Self::SC_NUMS.read, 0),
             // for this, fill jump_size bytes with NOPs, and push the location to jump_stack.
             // will replace when reaching the corresponding ']' instruction
             b'[' => {
@@ -301,7 +301,7 @@ where
             });
         }
         // finally, after that mess, end with an exit(0)
-        code_buf.extend(Self::set_reg(Self::REGISTERS.sc_num, Self::SC_NUMS.sc_exit));
+        code_buf.extend(Self::set_reg(Self::REGISTERS.sc_num, Self::SC_NUMS.exit));
         code_buf.extend(Self::set_reg(Self::REGISTERS.arg1, 0));
         code_buf.extend(Self::syscall());
 

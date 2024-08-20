@@ -40,7 +40,7 @@ pub struct Registers<R: Copy + Clone> {
 
 #[derive(Debug)]
 pub struct SyscallNums {
-    pub sc_read: i64,
-    pub sc_write: i64,
-    pub sc_exit: i64,
+    pub read: i64,
+    pub write: i64,
+    pub exit: i64,
 }

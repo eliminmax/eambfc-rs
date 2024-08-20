@@ -136,9 +136,9 @@ impl ArchInter for X86_64Inter {
         bf_ptr: X86_64Register::RBX,
     };
     const SC_NUMS: SyscallNums = SyscallNums {
-        sc_read: 0,
-        sc_write: 1,
-        sc_exit: 60,
+        read: 0,
+        write: 1,
+        exit: 60,
     };
     const ARCH: ELFArch = ELFArch::X86_64;
     const EI_DATA: EIData = EIData::ELFDATA2LSB;
