@@ -68,7 +68,7 @@ enum ArithOp {
 //
 // Therefore, setting op to 0 for INC and 8 for DEC and adm (Address Mode) to 3
 // when working on registers and 0 when working on memory, then doing some messy
-// bitwise hackery, the following constants and function can be used.
+// bitwise hackery, the following enums and function can be used.
 
 #[derive(Debug)]
 #[repr(u8)]
