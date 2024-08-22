@@ -98,10 +98,7 @@ fn write_headers(
     }
 }
 
-pub trait BFCompile
-where
-    Self: ArchInter,
-{
+pub trait BFCompile: ArchInter {
     // The brainfuck instructions "." and "," are similar from an implementation
     // perspective. Both require making system calls for I/O, and the system calls
     // have 3 nearly identical arguments:
@@ -325,73 +322,77 @@ where
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::super::x86_64_encoders::X86_64_INTER;
-//     use super::*;
-//     #[test]
-//     fn compile_all_bf_instructions() -> Result<(), String> {
-//         bf_compile(
-//             Box::new(b"+[>]<-,.".as_slice()),
-//             Box::new(Vec::<u8>::new()),
-//             false,
-//             8,
-//             X86_64_INTER,
-//         )
-//         .map_err(|e| format!("Failed to compile: {:?}", e))
-//     }
+#[cfg(test)]
+mod tests {
+    use super::super::x86_64_encoders::X86_64Inter;
+    use super::*;
 
-//     #[test]
-//     fn compile_nested_loops() -> Result<(), String> {
-//         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
-//         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
-//         bf_compile(
-//             Box::new(b">+[-->---[-<]>]>+".as_slice()),
-//             Box::new(Vec::<u8>::new()),
-//             false,
-//             8,
-//             X86_64_INTER,
-//         )
-//         .map_err(|e| format!("Failed to compile: {:?}", e))
-//     }
+    const X86_64_INTER: X86_64Inter = X86_64Inter;
+    #[test]
+    fn compile_all_bf_instructions() -> Result<(), String> {
+        X86_64_INTER
+            .compile(
+                Box::new(b"+[>]<-,.".as_slice()),
+                Box::new(Vec::<u8>::new()),
+                false,
+                8,
+            )
+            .map_err(|e| format!("Failed to compile: {:?}", e))
+    }
 
-//     #[test]
-//     fn unmatched_open() -> Result<(), String> {
-//         assert!(bf_compile(
-//             Box::new(b"[".as_slice()),
-//             Box::new(Vec::<u8>::new()),
-//             false,
-//             8,
-//             X86_64_INTER
-//         )
-//         .is_err_and(|e| {
-//             match e.into_iter().next().unwrap() {
-//                 BFCompileError::Basic { id, .. }
-//                 | BFCompileError::Instruction { id, .. }
-//                 | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_OPEN"),
-//                 BFCompileError::UnknownFlag(_) => false,
-//             }
-//         }));
-//         Ok(())
-//     }
+    #[test]
+    fn compile_nested_loops() -> Result<(), String> {
+        // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
+        // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
+        X86_64_INTER
+            .compile(
+                Box::new(b">+[-->---[-<]>]>+".as_slice()),
+                Box::new(Vec::<u8>::new()),
+                false,
+                8,
+            )
+            .map_err(|e| format!("Failed to compile: {:?}", e))
+    }
 
-//     #[test]
-//     fn unmatched_close() -> Result<(), String> {
-//         assert!(bf_compile(
-//             Box::new(b"]".as_slice()),
-//             Box::new(Vec::<u8>::new()),
-//             false,
-//             8,
-//             X86_64_INTER
-//         )
-//         .is_err_and(|e| {
-//             match e.into_iter().next().unwrap() {
-//                 BFCompileError::Basic { id, .. }
-//                 | BFCompileError::Instruction { id, .. }
-//                 | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_CLOSE"),
-//                 BFCompileError::UnknownFlag(_) => false,
-//             }
-//         }));
-//         Ok(())
-//     }
-// }
+    #[test]
+    fn unmatched_open() -> Result<(), String> {
+        assert!(X86_64_INTER
+            .compile(
+                Box::new(b"[".as_slice()),
+                Box::new(Vec::<u8>::new()),
+                false,
+                8,
+            )
+            .is_err_and(|e| {
+                match e.into_iter().next().unwrap() {
+                    BFCompileError::Basic { id, .. }
+                    | BFCompileError::Instruction { id, .. }
+                    | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_OPEN"),
+                    BFCompileError::UnknownFlag(_) => false,
+                }
+            }));
+        Ok(())
+    }
+
+    #[test]
+    fn unmatched_close() -> Result<(), String> {
+        assert!(X86_64_INTER
+            .compile(
+                Box::new(b"]".as_slice()),
+                Box::new(Vec::<u8>::new()),
+                false,
+                8,
+            )
+            .is_err_and(|e| {
+                match e.into_iter().next().unwrap() {
+                    BFCompileError::Basic { id, .. }
+                    | BFCompileError::Instruction { id, .. }
+                    | BFCompileError::Positional { id, .. } => {
+                        id == String::from("UNMATCHED_CLOSE")
+                    }
+                    BFCompileError::UnknownFlag(_) => false,
+                }
+            }));
+        Ok(())
+    }
+}
