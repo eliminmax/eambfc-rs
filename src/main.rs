@@ -128,20 +128,18 @@ fn main() {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
-                match compile_wrapper(X86_64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks) {
-                    Ok(_) => {}
-                    Err(errs) => {
-                        errs.into_iter().for_each(|e| e.report(&rc.out_mode));
-                        if !rc.keep {
-                            // try to delete the file
-                            let _ =
-                                remove_file(rm_ext(f, &rc.extension).unwrap_or(OsString::from("")));
-                        }
-                        if !rc.cont {
-                            process::exit(1);
-                        } else {
-                            exit_code = 1;
-                        }
+                if let Err(errs) =
+                    compile_wrapper(X86_64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks)
+                {
+                    errs.into_iter().for_each(|e| e.report(&rc.out_mode));
+                    if !rc.keep {
+                        // try to delete the file
+                        let _ = remove_file(rm_ext(f, &rc.extension).unwrap_or(OsString::from("")));
+                    }
+                    if !rc.cont {
+                        process::exit(1);
+                    } else {
+                        exit_code = 1;
                     }
                 }
             });
