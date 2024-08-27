@@ -12,6 +12,7 @@ pub mod x86_64_encoders;
 
 use arg_parse::RunConfig;
 use compile::BFCompile;
+use elf_tools::ELFArch;
 use err::{BFCompileError, BfErrDisplay};
 use std::env::args_os;
 use std::ffi::{OsStr, OsString};
@@ -128,9 +129,12 @@ fn main() {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
-                if let Err(errs) =
-                    compile_wrapper(X86_64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks)
-                {
+                let comp_result = match rc.arch {
+                    ELFArch::X86_64 => {
+                        compile_wrapper(X86_64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks)
+                    }
+                };
+                if let Err(errs) = comp_result {
                     errs.into_iter().for_each(|e| e.report(&rc.out_mode));
                     if !rc.keep {
                         // try to delete the file
