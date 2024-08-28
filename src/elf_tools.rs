@@ -19,6 +19,8 @@ pub enum EIData {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ELFArch {
+    #[cfg(feature = "arm64")]
+    Arm64 = 183, // EM_AARCH64
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 

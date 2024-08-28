@@ -9,6 +9,8 @@ pub mod elf_tools;
 pub mod err;
 pub mod optimize;
 pub mod x86_64_encoders;
+#[cfg(feature = "arm64")]
+pub mod arm64_encoders;
 
 use arg_parse::RunConfig;
 use compile::BFCompile;
@@ -20,7 +22,11 @@ use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
 use std::{io, process};
+
+// architecture interfaces
 use x86_64_encoders::X86_64Inter;
+#[cfg(feature = "arm64")]
+use arm64_encoders::Arm64Inter;
 
 #[derive(PartialEq, Debug)]
 pub enum OutMode {
@@ -130,6 +136,10 @@ fn main() {
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
                 let comp_result = match rc.arch {
+                    #[cfg(feature = "arm64")]
+                    ELFArch::Arm64 => {
+                        compile_wrapper(Arm64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks)
+                    }
                     ELFArch::X86_64 => {
                         compile_wrapper(X86_64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks)
                     }

@@ -7,6 +7,10 @@ name = "eambfc-rs"
 version = "1.1.0"
 edition = "2021"
 
+[features]
+default = ["arm64"]
+arm64 = []
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
