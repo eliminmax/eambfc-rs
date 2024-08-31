@@ -153,8 +153,8 @@ impl From<Ehdr> for Vec<u8> {
     }
 }
 
-// as endian-ness is not communicated in Phdr entries, check the ELFDATA_BYTE_ORDER constant
-// provided in the arch_info module
+// as endian-ness is not communicated in Phdr entries, it's added to the Phdr struct used within
+// eambfc-rs for this.
 impl From<Phdr> for Vec<u8> {
     fn from(item: Phdr) -> Self {
         match item.e_data {
