@@ -24,13 +24,13 @@ pub enum Arm64Register {
     X19 = 19,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 enum ShiftLevel {
-    NoShift = 0,
-    Shift16 = 1,
-    Shift32 = 2,
-    Shift48 = 3,
+    NoShift = 0b0000000,
+    Shift16 = 0b0100000,
+    Shift32 = 0b1000000,
+    Shift48 = 0b1100000,
 }
 
 #[derive(Debug, PartialEq)]
@@ -42,23 +42,22 @@ enum MoveType {
 }
 
 fn inject_operands(
-    imm16: i16,
+    imm16: u16,
     shift: ShiftLevel,
     reg: Arm64Register,
     template: [u8; 4],
 ) -> [u8; 4] {
     [
-        template[0] | reg as u8 | (imm16 << 5) as u8,
+        template[0] | reg as u8 | ((imm16 & 0b111) << 5 ) as u8,
         // why doesn't ARM's A64 align immediate bits with byte boundries?
-        template[1] | ((imm16 & 0b0000_0111_1111_1000) >> 3) as u8,
-        // logic relies on unsigned bit-shifts for template[2]
-        // alternatively could mask it to 0b11111 instead, but that's messier in my opinion
-        template[2] | (shift as u8) << 5 | ((imm16 as u16) >> 11) as u8,
+        template[1] | (imm16 >> 3)  as u8,
+        // need to combine the highest 5 bits of imm16 with the shift
+        template[2] | shift as u8 | (imm16 >> 11) as u8,
         template[3],
     ]
 }
 
-fn mov(move_type: MoveType, imm16: i16, shift: ShiftLevel, reg: Arm64Register) -> [u8; 4] {
+fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, reg: Arm64Register) -> [u8; 4] {
     // depending on MoveType, it will be one of MOVK, MOVN, or MOVZ
     // bitwise not to invert imm16 if needed.
     let imm16 = if move_type == MoveType::Invert {
@@ -93,25 +92,25 @@ impl ArchInter for Arm64Inter {
     const EI_DATA: EIData = EIData::ELFDATA2LSB;
     fn set_reg(reg: Arm64Register, imm: i64) -> Vec<u8> {
         // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
-        let parts: [(i16, ShiftLevel); 4] = [
-            (imm as i16, ShiftLevel::NoShift),
-            ((imm >> 16) as i16, ShiftLevel::Shift16),
-            ((imm >> 32) as i16, ShiftLevel::Shift32),
-            ((imm >> 48) as i16, ShiftLevel::Shift48),
+        let parts: [(u16, ShiftLevel); 4] = [
+            (imm as u16, ShiftLevel::NoShift),
+            ((imm >> 16) as u16, ShiftLevel::Shift16),
+            ((imm >> 32) as u16, ShiftLevel::Shift32),
+            ((imm >> 48) as u16, ShiftLevel::Shift48),
         ];
         let mut instr_vec = Vec::<u8>::new();
         if imm < 0 {
-            let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != -1);
-            let (lead_imm, lead_shift) = parts.next().unwrap_or(&(-1i16, ShiftLevel::NoShift));
+            let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != 0xffff);
+            let (lead_imm, lead_shift) = parts.next().unwrap_or(&(0xffff, ShiftLevel::NoShift));
             // MOVN reg, lead_imm << lead_shift
             instr_vec.extend(mov(MoveType::Invert, *lead_imm, *lead_shift, reg));
             parts.for_each(|(imm16, shift)| {
                 // MOVK reg, imm16 << shift
-                instr_vec.extend(mov(MoveType::Keep, !*imm16, *shift, reg));
+                instr_vec.extend(mov(MoveType::Keep, *imm16, *shift, reg));
             });
         } else {
             let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != 0);
-            let (lead_imm, lead_shift) = parts.next().unwrap_or(&(0i16, ShiftLevel::NoShift));
+            let (lead_imm, lead_shift) = parts.next().unwrap_or(&(0, ShiftLevel::NoShift));
             // MOVZ reg, lead_imm << lead_shift
             instr_vec.extend(mov(MoveType::Zero, *lead_imm, *lead_shift, reg));
             parts.for_each(|(imm16, shift)| {
@@ -177,12 +176,12 @@ mod tests {
         // the following can be set with 1 instruction each.
         assert_eq!(
             Arm64Inter::set_reg(Arm64Register::X0, 0),
-            vec![0x00, 0x00, 0x80, 0xd2]
+            vec![0x00, 0x00, 0x80, 0xd2] // MOVN x0, 0
         );
 
         assert_eq!(
             Arm64Inter::set_reg(Arm64Register::X0, -1),
-            vec![0x00, 0x00, 0x80, 0x92]
+            vec![0x00, 0x00, 0x80, 0x92] // MOVN X0, -1
         );
 
         assert_eq!(
@@ -190,6 +189,10 @@ mod tests {
             vec![0x00, 0x02, 0xa0, 0x92]
         );
 
+        assert_eq!(
+            Arm64Inter::set_reg(Arm64Register::X1, 0xbeef),
+            vec![0xe1, 0xdd, 0x97, 0xd2], // MOVZ x1, 0xbeef
+        );
         Ok(())
     }
 
@@ -222,8 +225,8 @@ mod tests {
         assert_eq!(
             Arm64Inter::set_reg(Arm64Register::X19, -0xdeadbeef),
             vec![
-                0xf3, 0xdd, 0x97, 0x92, // MOVN x19, -0xbeef
-                0xb3, 0xd5, 0xbb, 0xf2, // MOVK x19, 0xdead, lsl #16
+                0xd3, 0xdd, 0x97, 0x92, // MOVN x19, 0xbeee
+                0x53, 0x2a, 0xa4, 0xf2, // MOVK x19, ~0xdead, lsl #16
             ],
         );
         Ok(())
