@@ -113,7 +113,7 @@ impl ArchInter for Arm64Inter {
         } else {
             let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != 0);
             let (lead_imm, lead_shift) = parts.next().unwrap_or(&(0i16, ShiftLevel::NoShift));
-            // MOVZ 121, 31
+            // MOVZ reg, lead_imm << lead_shift
             instr_vec.extend(mov(MoveType::Zero, *lead_imm, *lead_shift, reg));
             parts.for_each(|(imm16, shift)| {
                 // MOVK reg, imm16 << shift
