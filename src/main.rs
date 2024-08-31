@@ -4,13 +4,13 @@
 
 pub mod arch_inter;
 pub mod arg_parse;
+#[cfg(feature = "arm64")]
+pub mod arm64_encoders;
 pub mod compile;
 pub mod elf_tools;
 pub mod err;
 pub mod optimize;
 pub mod x86_64_encoders;
-#[cfg(feature = "arm64")]
-pub mod arm64_encoders;
 
 use arg_parse::RunConfig;
 use compile::BFCompile;
@@ -24,9 +24,9 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::{io, process};
 
 // architecture interfaces
-use x86_64_encoders::X86_64Inter;
 #[cfg(feature = "arm64")]
 use arm64_encoders::Arm64Inter;
+use x86_64_encoders::X86_64Inter;
 
 #[derive(PartialEq, Debug)]
 pub enum OutMode {
