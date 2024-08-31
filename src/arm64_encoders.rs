@@ -41,7 +41,6 @@ enum MoveType {
     Invert = 0x92,
 }
 
-#[inline]
 fn inject_operands(
     imm16: i16,
     shift: ShiftLevel,
@@ -50,7 +49,7 @@ fn inject_operands(
 ) -> [u8; 4] {
     [
         template[0] | reg as u8 | (imm16 << 5) as u8,
-        // why does ARM's A64 not align immediate bits with byte boundries?
+        // why doesn't ARM's A64 align immediate bits with byte boundries?
         template[1] | ((imm16 & 0b0000_0111_1111_1000) >> 3) as u8,
         // logic relies on unsigned bit-shifts for template[2]
         // alternatively could mask it to 0b11111 instead, but that's messier in my opinion
