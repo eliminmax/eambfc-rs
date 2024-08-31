@@ -122,10 +122,19 @@ impl ArchInter for Arm64Inter {
     }
 
     fn reg_copy(dst: Arm64Register, src: Arm64Register) -> Vec<u8> {
-        todo!("Arm64Inter::reg_copy({dst:?}, {src:?})")
+        // MOV dst, src
+        // technically an alias for ORR dst, XZR, src (XZR is the zero register)
+        let src = src as u8; // needed as it's used more than once
+        vec![
+            0b11100000 | dst as u8,
+            src << 6,
+            src >> 2,
+            0b10101010,
+        ]
     }
     fn syscall() -> Vec<u8> {
-        todo!("Arm64Inter::syscall()")
+        // SVC 0
+        vec![0x01u8, 0x00, 0x00, 0xd4]
     }
     fn jump_not_zero(reg: Arm64Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
         todo!("Arm64Inter::jump_not_zero({reg:?}, {offset})")
