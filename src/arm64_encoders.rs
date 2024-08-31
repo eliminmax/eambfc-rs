@@ -194,8 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reg_complex() -> Result<(), String> {
-        // the classic.
+    fn test_reg_multiple() -> Result<(), String> {
         assert_eq!(
             Arm64Inter::set_reg(Arm64Register::X0, 0xdeadbeef),
             vec![
@@ -203,7 +202,11 @@ mod tests {
                 0xa0, 0xd5, 0xbb, 0xf2, // MOVK x0, 0xdead, lsl #16
             ],
         );
-        // split values
+        Ok(())
+    }
+
+    #[test]
+    fn test_reg_split() -> Result<(), String> {
         assert_eq!(
             Arm64Inter::set_reg(Arm64Register::X19, 0xdead0000beef),
             vec![
@@ -211,12 +214,16 @@ mod tests {
                 0xb3, 0xd5, 0xdb, 0xf2, // MOVK x19, 0xdead, lsl #32
             ],
         );
-        // split values, and negative
+        Ok(())
+    }
+
+    #[test]
+    fn test_reg_neg() -> Result<(), String> {
         assert_eq!(
-            Arm64Inter::set_reg(Arm64Register::X19, -0xdead0000beef),
+            Arm64Inter::set_reg(Arm64Register::X19, -0xdeadbeef),
             vec![
-                0xf3, 0xdd, 0x97, 0x92, // MOVN x19, 0xbeef
-                0xb3, 0xd5, 0xdb, 0xf2, // MOVK x19, 0xdead, lsl #32
+                0xf3, 0xdd, 0x97, 0x92, // MOVN x19, -0xbeef
+                0xb3, 0xd5, 0xbb, 0xf2, // MOVK x19, 0xdead, lsl #16
             ],
         );
         Ok(())
