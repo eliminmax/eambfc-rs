@@ -53,6 +53,7 @@ fn inject_operands(
         // why does ARM's A64 not align immediate bits with byte boundries?
         template[1] | ((imm16 & 0b0000_0111_1111_1000) >> 3) as u8,
         // logic relies on unsigned bit-shifts for template[2]
+        // alternatively could mask it to 0b11111 instead, but that's messier in my opinion
         template[2] | (shift as u8) << 5 | ((imm16 as u16) >> 11) as u8,
         template[3],
     ]
