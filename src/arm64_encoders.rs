@@ -14,14 +14,16 @@ use super::err::BFCompileError;
 // Other registers are not defined because they are not needed for eambfc-rs, but they go up to 31.
 // 32 is a special case not relevant here.
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum Arm64Register {
-    X0 = 0,
-    X1 = 1,
-    X2 = 2,
-    X8 = 8,
-    X19 = 19,
+    X0 = 0,   // arg1 register
+    X1 = 1,   // arg2 register
+    X2 = 2,   // arg3 register
+    X8 = 8,   // syscall register
+    X16 = 16, // scratch register
+    X17 = 17, // scratch register
+    X19 = 19, // bf pointer register
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -41,16 +43,26 @@ enum MoveType {
     Invert = 0x92,
 }
 
-fn inject_operands(
+fn inject_reg_operands(rt: Arm64Register, rn: Arm64Register, template: [u8; 4]) -> [u8; 4] {
+    let rn = rn as u8; // helpful as rn is used more than once
+    [
+        template[0] | (rt as u8) | rn << 5,
+        template[1] | rn >> 3,
+        template[2],
+        template[3],
+    ]
+}
+
+fn inject_imm16_operands(
     imm16: u16,
     shift: ShiftLevel,
     reg: Arm64Register,
     template: [u8; 4],
 ) -> [u8; 4] {
     [
-        template[0] | reg as u8 | ((imm16 & 0b111) << 5 ) as u8,
+        template[0] | reg as u8 | ((imm16 & 0b111) << 5) as u8,
         // why doesn't ARM's A64 align immediate bits with byte boundries?
-        template[1] | (imm16 >> 3)  as u8,
+        template[1] | (imm16 >> 3) as u8,
         // need to combine the highest 5 bits of imm16 with the shift
         template[2] | shift as u8 | (imm16 >> 11) as u8,
         template[3],
@@ -65,13 +77,85 @@ fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, reg: Arm64Register) -
     } else {
         imm16
     };
-    inject_operands(imm16, shift, reg, [0x00u8, 0x00, 0x80, move_type as u8])
+    inject_imm16_operands(imm16, shift, reg, [0x00u8, 0x00, 0x80, move_type as u8])
+}
+
+fn aux_reg(reg: Arm64Register) -> Arm64Register {
+    if reg == Arm64Register::X17 {
+        Arm64Register::X16
+    } else {
+        Arm64Register::X17
+    }
+}
+
+fn load_from_byte(addr: Arm64Register, dst: Arm64Register) -> [u8; 4] {
+    // LDRB dst, addr
+    inject_reg_operands(dst, addr, [0x00, 0x04, 0x40, 0x38])
+}
+
+fn store_to_byte(addr: Arm64Register, src: Arm64Register) -> [u8; 4] {
+    // STRB src, addr
+    inject_reg_operands(src, addr, [0x00, 0x04, 0x00, 0x38])
+}
+
+macro_rules! fn_byte_arith_wrapper {
+    ($name:ident, $inner:ident) => {
+        fn $name(reg: Arm64Register) -> Vec<u8> {
+            let aux = aux_reg(reg);
+            let mut ret = Vec::<u8>::from(load_from_byte(reg, aux));
+            ret.extend(Arm64Inter::$inner(aux));
+            ret.extend(store_to_byte(reg, aux));
+            ret
+        }
+    };
+}
+
+macro_rules! fn_branch_cond {
+    ($fn_name:ident, $cond:literal) => {
+        fn $fn_name(reg: Arm64Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
+            // Ensure only lower 4 bits of cond are used - the const _: () mess forces the check to
+            // run at compile time rather than runtime.
+            const _: () = assert!($cond & 0xf0_u8 == 0);
+            // as A64 uses fixed-size 32-bit instructions, offset must be a multiple of 4.
+            if offset % 4 != 0 {
+                return Err(BFCompileError::Basic {
+                    id: String::from("INVALID_JUMP_ADDRESS"),
+                    msg: format!("{offset} is an invalid address offset (offset % 4 != 0)"),
+                });
+            }
+            // Encoding uses 19 immediate bits, and treats it as having an implicit 0b00 at the
+            // end, as it needs to be a multiple of 4 anyway. The result is that it must be a
+            // 20-bit value. Make sure that it fits within that value.
+            if std::cmp::max(offset.leading_ones(), offset.leading_zeros()) < 44 {
+                return Err(BFCompileError::Basic {
+                    id: String::from("JUMP_TOO_LONG"),
+                    msg: format!("{offset} is outside the range of possible 20-bit signed values"),
+                });
+            }
+            let offset = 1 + ((offset as u32) >> 2) & 0x7ffff;
+            let aux = aux_reg(reg);
+            let mut v = Vec::<u8>::from(load_from_byte(reg, aux));
+            v.extend([
+                // TST reg, 0xff (technically an alias for ANDS xzr, reg, 0xff)
+                0x1f_u8 | (aux as u8) << 5,
+                (aux as u8) >> 3 | 0x1c,
+                0x40,
+                0xf2,
+                // B.$cond {offset}
+                $cond | (offset << 5) as u8,
+                (offset >> 3) as u8,
+                (offset >> 11) as u8,
+                0x54,
+            ]);
+            Ok(v)
+        }
+    };
 }
 
 pub struct Arm64Inter;
 impl ArchInter for Arm64Inter {
     type RegType = Arm64Register;
-    const JUMP_SIZE: usize = 8;
+    const JUMP_SIZE: usize = 12;
 
     const REGISTERS: Registers<Arm64Register> = Registers {
         // Linux uses w8 for system call numbers, but w8 is just the lower 32 bits of x8.
@@ -123,41 +207,30 @@ impl ArchInter for Arm64Inter {
 
     fn reg_copy(dst: Arm64Register, src: Arm64Register) -> Vec<u8> {
         // MOV dst, src
-        // technically an alias for ORR dst, XZR, src (XZR is the zero register)
-        let src = src as u8; // needed as it's used more than once
-        vec![
-            0b11100000 | dst as u8,
-            src << 6,
-            src >> 2,
-            0b10101010,
-        ]
+        // technically an alias for ORR dst, XZR, src (XZR is a read-only zero register)
+        let src = src as u8; // helpful as it's used more than once
+        vec![0xe0 | dst as u8, 0x01, src, 0xaa]
     }
     fn syscall() -> Vec<u8> {
         // SVC 0
         vec![0x01u8, 0x00, 0x00, 0xd4]
     }
-    fn jump_not_zero(reg: Arm64Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
-        todo!("Arm64Inter::jump_not_zero({reg:?}, {offset})")
-    }
-    fn jump_zero(reg: Arm64Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
-        todo!("Arm64Inter::jump_zero({reg:?}, {offset})")
-    }
+    fn_branch_cond!(jump_not_zero, 0x1u8);
+    fn_branch_cond!(jump_zero, 0x00u8);
     fn nop_loop_open() -> Vec<u8> {
-        // 2 NOP instructions.
-        vec![0x1fu8, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5]
+        // 3 NOP instructions.
+        vec![0x1fu8, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5]
     }
     fn inc_reg(reg: Arm64Register) -> Vec<u8> {
-        todo!("inc_reg({reg:?})")
+        let reg = reg as u8; // helpful as it's used more than once
+        vec![reg | (reg << 5), 0x04 | (reg >> 3), 0x00, 0x91]
     }
-    fn inc_byte(reg: Arm64Register) -> Vec<u8> {
-        todo!("inc_byte({reg:?})")
-    }
+    fn_byte_arith_wrapper!(inc_byte, inc_reg);
     fn dec_reg(reg: Arm64Register) -> Vec<u8> {
-        todo!("dec_reg({reg:?})")
+        let reg = reg as u8; // helpful as it's used more than once
+        vec![reg | (reg << 5), 0x04 | (reg >> 3), 0x00, 0xd1]
     }
-    fn dec_byte(reg: Arm64Register) -> Vec<u8> {
-        todo!("dec_byte({reg:?})")
-    }
+    fn_byte_arith_wrapper!(dec_byte, dec_reg);
     fn add_reg(reg: Arm64Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
         todo!("add_reg({reg:?}, {imm})")
     }
@@ -237,6 +310,44 @@ mod tests {
                 0xd3, 0xdd, 0x97, 0x92, // MOVN x19, 0xbeee
                 0x53, 0x2a, 0xa4, 0xf2, // MOVK x19, ~0xdead, lsl #16
             ],
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_inc_dec_reg() -> Result<(), String> {
+        assert_eq!(
+            Arm64Inter::inc_reg(Arm64Register::X0),
+            vec![0x00, 0x04, 0x00, 0x91], // ADD x0, x0, 1
+        );
+
+        assert_eq!(
+            Arm64Inter::inc_reg(Arm64Register::X19),
+            vec![0x73, 0x06, 0x00, 0x91], // ADD x19, x19, 1
+        );
+
+        assert_eq!(
+            Arm64Inter::dec_reg(Arm64Register::X1),
+            vec![0x21, 0x04, 0x00, 0xd1], // SUB x1, x1, 1
+        );
+
+        assert_eq!(
+            Arm64Inter::dec_reg(Arm64Register::X19),
+            vec![0x73, 0x06, 0x00, 0xd1], // SUB x19, x19, 1
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_store() -> Result<(), String> {
+        assert_eq!(
+            load_from_byte(Arm64Register::X16, Arm64Register::X19),
+            [0x70, 0x06, 0x40, 0x38], // LRDB w16, [x19], 0
+        );
+
+        assert_eq!(
+            store_to_byte(Arm64Register::X16, Arm64Register::X19),
+            [0x70, 0x06, 0x00, 0x38], // STDB w16, [x19], 0
         );
         Ok(())
     }
