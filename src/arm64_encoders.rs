@@ -341,12 +341,12 @@ mod tests {
     #[test]
     fn test_load_store() -> Result<(), String> {
         assert_eq!(
-            load_from_byte(Arm64Register::X16, Arm64Register::X19),
+            load_from_byte(Arm64Register::X19, Arm64Register::X16),
             [0x70, 0x06, 0x40, 0x38], // LRDB w16, [x19], 0
         );
 
         assert_eq!(
-            store_to_byte(Arm64Register::X16, Arm64Register::X19),
+            store_to_byte(Arm64Register::X19, Arm64Register::X16),
             [0x70, 0x06, 0x00, 0x38], // STDB w16, [x19], 0
         );
         Ok(())
