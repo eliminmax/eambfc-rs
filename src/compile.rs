@@ -163,8 +163,6 @@ pub trait BFCompile: ArchInter {
                 dst[open_address..open_address + Self::JUMP_SIZE].swap_with_slice(
                     &mut Self::jump_zero(Self::REGISTERS.bf_ptr, distance as i64)?,
                 );
-                // now, we know that distance fits within the 32-bit integer limit, so we can
-                // simply cast without another check needed when compiling the `]` instruction itself
                 Self::jump_not_zero(Self::REGISTERS.bf_ptr, -(distance as i64))?
             }
             b'\n' => {
