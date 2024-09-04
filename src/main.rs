@@ -143,6 +143,7 @@ fn main() {
                     ELFArch::X86_64 => {
                         compile_wrapper(X86_64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks)
                     }
+                    _ => unreachable!(), // if architecture is disabled, it won't be included here
                 };
                 if let Err(errs) = comp_result {
                     errs.into_iter().for_each(|e| e.report(&rc.out_mode));

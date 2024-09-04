@@ -27,7 +27,6 @@ pub enum RunConfig {
     ShowHelp(String),
     ShowVersion(String),
 }
-
 impl Default for StandardRunConfig {
     fn default() -> Self {
         StandardRunConfig {
@@ -39,7 +38,7 @@ impl Default for StandardRunConfig {
             tape_blocks: 8,
             extension: OsString::from(".bf"),
             source_files: Vec::<OsString>::new(),
-            arch: ELFArch::X86_64,
+            arch: ELFArch::default()
         }
     }
 }
@@ -233,7 +232,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
         extension = OsString::from(".bf");
     }
     let tape_blocks = tape_blocks.unwrap_or(8);
-    let arch = arch.unwrap_or(ELFArch::X86_64);
+    let arch = arch.unwrap_or(ELFArch::default());
 
     Ok(RunConfig::StandardRun(StandardRunConfig {
         progname,

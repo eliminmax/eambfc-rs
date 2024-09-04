@@ -19,9 +19,20 @@ pub enum EIData {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ELFArch {
-    #[cfg(feature = "arm64")]
     Arm64 = 183, // EM_AARCH64
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
+}
+
+pub const DEFAULT_ARCH: ELFArch = if cfg!(target_arch = "aarch64") && cfg!(feature = "arm64") {
+    ELFArch::Arm64
+} else {
+    ELFArch::X86_64
+};
+
+impl Default for ELFArch {
+    fn default() -> Self {
+        DEFAULT_ARCH
+    }
 }
 
 #[derive(Debug)]
