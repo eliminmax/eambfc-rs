@@ -99,11 +99,26 @@ fn store_to_byte(addr: Arm64Register, src: Arm64Register) -> [u8; 4] {
 }
 
 macro_rules! fn_byte_arith_wrapper {
-    ($name:ident, $inner:ident) => {
-        fn $name(reg: Arm64Register) -> Vec<u8> {
+    ($fn_name:ident, $inner:ident, internal_fn) => {
+        fn $fn_name(reg: Arm64Register) -> Vec<u8> {
             let aux = aux_reg(reg);
             let mut ret = Vec::<u8>::from(load_from_byte(reg, aux));
             ret.extend(Arm64Inter::$inner(aux));
+            ret.extend(store_to_byte(reg, aux));
+            ret
+        }
+    };
+    ($fn_name:ident, $op:ident, arith_op) => {
+        fn $fn_name(reg: Arm64Register, imm: i8) -> Vec<u8> {
+            let aux = aux_reg(reg);
+            let mut ret = Vec::<u8>::from(load_from_byte(reg, aux));
+            // Either ADD aux, aux, imm or SUB aux, aux, imm depending on op_code
+            ret.extend([
+                aux as u8 | (aux as u8) << 5,
+                (imm as u8) << 2 | (aux as u8) >> 3,
+                (imm as u8) >> 6,
+                ArithOp::$op as u8,
+            ]);
             ret.extend(store_to_byte(reg, aux));
             ret
         }
@@ -215,40 +230,127 @@ impl ArchInter for Arm64Inter {
         // SVC 0
         vec![0x01u8, 0x00, 0x00, 0xd4]
     }
-    fn_branch_cond!(jump_not_zero, 0x1u8);
-    fn_branch_cond!(jump_zero, 0x00u8);
     fn nop_loop_open() -> Vec<u8> {
         // 3 NOP instructions.
-        vec![0x1fu8, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5]
+        vec![
+            0x1fu8, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5,
+        ]
     }
     fn inc_reg(reg: Arm64Register) -> Vec<u8> {
         let reg = reg as u8; // helpful as it's used more than once
-        vec![reg | (reg << 5), 0x04 | (reg >> 3), 0x00, 0x91]
+        vec![
+            reg | (reg << 5),
+            0x04 | (reg >> 3),
+            0x00,
+            ArithOp::Add as u8,
+        ] // ADD reg, reg, 1
     }
-    fn_byte_arith_wrapper!(inc_byte, inc_reg);
     fn dec_reg(reg: Arm64Register) -> Vec<u8> {
         let reg = reg as u8; // helpful as it's used more than once
-        vec![reg | (reg << 5), 0x04 | (reg >> 3), 0x00, 0xd1]
+        vec![
+            reg | (reg << 5),
+            0x04 | (reg >> 3),
+            0x00,
+            ArithOp::Sub as u8,
+        ] // SUB reg, reg, 1
     }
-    fn_byte_arith_wrapper!(dec_byte, dec_reg);
+
     fn add_reg(reg: Arm64Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
-        todo!("add_reg({reg:?}, {imm})")
-    }
-    fn add_byte(reg: Arm64Register, imm: i8) -> Vec<u8> {
-        todo!("add_byte({reg:?}, {imm})")
+        add_sub(reg, imm, ArithOp::Add)
     }
     fn sub_reg(reg: Arm64Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
-        todo!("sub_reg({reg:?}, {imm})")
+        add_sub(reg, imm, ArithOp::Sub)
     }
-    fn sub_byte(reg: Arm64Register, imm: i8) -> Vec<u8> {
-        todo!("sub_byte({reg:?}, {imm})")
-    }
+
     fn zero_byte(reg: Arm64Register) -> Vec<u8> {
-        todo!("zero_byte({reg:?})")
+        let aux = aux_reg(reg);
+        let mut v = Arm64Inter::set_reg(aux, 0);
+        v.extend(store_to_byte(reg, aux));
+        v
     }
+    fn_byte_arith_wrapper!(add_byte, Add, arith_op);
+    fn_byte_arith_wrapper!(sub_byte, Sub, arith_op);
+    fn_byte_arith_wrapper!(inc_byte, inc_reg, internal_fn);
+    fn_byte_arith_wrapper!(dec_byte, dec_reg, internal_fn);
+    fn_branch_cond!(jump_not_zero, 0x1u8);
+    fn_branch_cond!(jump_zero, 0x00u8);
 }
 
 impl BFCompile for Arm64Inter {}
+
+// discriminants used here are often, but not always, the last byte in an ADD or SUB instructions
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u8)]
+enum ArithOp {
+    Add = 0x91,
+    Sub = 0xd1,
+}
+
+fn add_sub_imm(
+    reg: Arm64Register,
+    imm: u64,
+    op: ArithOp,
+    shift: bool,
+) -> Result<Vec<u8>, BFCompileError> {
+    let reg = reg as u8; // helpful as it's used multiple times.
+    if (shift && (imm & !0xfff000) != 0) || (!shift && (imm & !0xfff) != 0) {
+        Err(BFCompileError::Basic {
+            id: String::from("IMMEDIATE_TOO_LARGE"),
+            msg: format!(
+                "0x{imm:x} is invalid for shift level {}",
+                12 * (shift as u8)
+            ),
+        })
+    } else {
+        let imm = if shift { imm >> 12 } else { imm };
+        // either ADD reg, reg, imm or SUB reg, reg, imm, depending on op
+        Ok(vec![
+            reg | (reg << 5),
+            (reg >> 3) | (imm << 2) as u8,
+            (imm >> 6) as u8 | if shift { 0x40 } else { 0 },
+            op as u8,
+        ])
+    }
+}
+
+fn add_sub(reg: Arm64Register, imm: u64, op: ArithOp) -> Result<Vec<u8>, BFCompileError> {
+    match imm {
+        i if i < 0x1000 => add_sub_imm(reg, imm, op, false),
+        i if i < 0x1000000 => {
+            let mut ret = add_sub_imm(reg, imm & 0xfff000, op, true)?;
+            if i & 0xfff != 0 {
+                ret.extend(add_sub_imm(reg, imm & 0xfff, op, false)?);
+            }
+            Ok(ret)
+        }
+        i if i < i64::MAX as u64 => {
+            let op_byte: u8 = match op {
+                ArithOp::Add => 0x8b,
+                ArithOp::Sub => 0xcb,
+            };
+            let aux = aux_reg(reg);
+            let mut ret = Arm64Inter::set_reg(aux, i as i64);
+            // either ADD reg, reg, aux or SUB reg, reg, aux
+            ret.extend([
+                (reg as u8) | (reg as u8) << 5,
+                (reg as u8) >> 3,
+                (aux as u8),
+                op_byte,
+            ]);
+            Ok(ret)
+        }
+        _ => Err(BFCompileError::Basic {
+            id: String::from("TOO_MANY_INSTRUCTIONS"),
+            msg: format!(
+                "Over 8192 PiB of consecitive `{}` instructions!",
+                match op {
+                    ArithOp::Add => '>',
+                    ArithOp::Sub => '<',
+                }
+            ),
+        }),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -348,6 +450,53 @@ mod tests {
         assert_eq!(
             store_to_byte(Arm64Register::X19, Arm64Register::X16),
             [0x70, 0x06, 0x00, 0x38], // STDB w16, [x19], 0
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_add_sub_reg() -> Result<(), String> {
+        // Handling of 24-bit values
+        assert_eq!(
+            add_sub(Arm64Register::X16, 0xabcdef, ArithOp::Add),
+            Ok(vec![
+                0x10, 0xf2, 0x6a, 0x91, // ADD x16, x16, 0xabc, lsl 12
+                0x10, 0xbe, 0x37, 0x91, // ADD x16, x16, 0xdef
+            ]),
+        );
+
+        // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
+        // included
+        assert_eq!(
+            add_sub(Arm64Register::X16, 0xabc000, ArithOp::Sub),
+            Ok(vec![
+                0x10, 0xf2, 0x6a, 0xd1, // SUB x16, x16, 0xabc, lsl 12
+            ]),
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_add_sub_byte() -> Result<(), String> {
+        assert_eq!(
+            Arm64Inter::add_byte(Arm64Register::X19, 0xa5u8 as i8),
+            vec![
+                0x71, 0x06, 0x40, 0x38, // LRDB w17, [x19], 0
+                0x31, 0x96, 0x02, 0x91, // ADD x17, x17, 0xa5
+                0x71, 0x06, 0x00, 0x38, // STDB w17, [x19], 0
+            ],
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_zero_byte() -> Result<(), String> {
+        assert_eq!(
+            Arm64Inter::zero_byte(Arm64Register::X19),
+            vec![
+                0x11, 0x00, 0x80, 0xd2, // MOVZ x17, 0
+                0x71, 0x06, 0x00, 0x38, // STRB w17, [X19], 0
+            ]
         );
         Ok(())
     }
