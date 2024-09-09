@@ -88,6 +88,7 @@ fn compile_wrapper<T: BFCompile>(
     file_name: &OsString,
     extension: &OsStr,
     optimize: bool,
+    keep: bool,
     tape_blocks: u64,
 ) -> Result<(), Vec<BFCompileError>> {
     let outfile_name = rm_ext(file_name, extension).map_err(|e| {
@@ -123,7 +124,15 @@ fn compile_wrapper<T: BFCompile>(
             ),
         }]
     })?;
-    compiler.compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks)
+    if let Err(e) = compiler.compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks) {
+        if !keep {
+            // try to delete the file
+            let _ = remove_file(rm_ext(file_name, extension).unwrap_or(OsString::from("")));
+        }
+        Err(e)
+    } else {
+        Ok(())
+    }
 }
 
 fn main() {
@@ -135,22 +144,29 @@ fn main() {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
+                #[allow(unreachable_patterns)]
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]
-                    ELFArch::Arm64 => {
-                        compile_wrapper(Arm64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks)
-                    }
-                    ELFArch::X86_64 => {
-                        compile_wrapper(X86_64Inter, f, &rc.extension, rc.optimize, rc.tape_blocks)
-                    }
+                    ELFArch::Arm64 => compile_wrapper(
+                        Arm64Inter,
+                        f,
+                        &rc.extension,
+                        rc.optimize,
+                        rc.keep,
+                        rc.tape_blocks,
+                    ),
+                    ELFArch::X86_64 => compile_wrapper(
+                        X86_64Inter,
+                        f,
+                        &rc.extension,
+                        rc.optimize,
+                        rc.keep,
+                        rc.tape_blocks,
+                    ),
                     _ => unreachable!(), // if architecture is disabled, it won't be included here
                 };
                 if let Err(errs) = comp_result {
                     errs.into_iter().for_each(|e| e.report(&rc.out_mode));
-                    if !rc.keep {
-                        // try to delete the file
-                        let _ = remove_file(rm_ext(f, &rc.extension).unwrap_or(OsString::from("")));
-                    }
                     if !rc.cont {
                         process::exit(1);
                     } else {
