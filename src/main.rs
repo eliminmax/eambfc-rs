@@ -63,7 +63,7 @@ Remaining options are treated as source file names. If they don't
 end with '.bf' (or the extension specified with '-e'), the program
 will raise an error.
 ",
-    ELFArch::default(),
+        ELFArch::default(),
     );
     let _ = outfile.write(help_text.as_bytes());
 }
@@ -150,7 +150,10 @@ fn main() {
             println!("- x86_64 (aliases: x64, amd64, x86-64)");
             #[cfg(feature = "arm64")]
             println!("- arm64 (aliases: aarch64)");
-            println!("\nIf no architecure is specified, it defaults to {}.", ELFArch::default());
+            println!(
+                "\nIf no architecure is specified, it defaults to {}.",
+                ELFArch::default()
+            );
         }
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
