@@ -26,6 +26,7 @@ pub enum RunConfig {
     StandardRun(StandardRunConfig),
     ShowHelp(String),
     ShowVersion(String),
+    ShowArches(String),
 }
 impl Default for StandardRunConfig {
     fn default() -> Self {
@@ -196,6 +197,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                     }
                     b'h' => return Ok(RunConfig::ShowHelp(progname.to_string())),
                     b'V' => return Ok(RunConfig::ShowVersion(progname.to_string())),
+                    b'A' => return Ok(RunConfig::ShowArches(progname.to_string())),
                     b'j' => out_mode = OutMode::JSON,
                     // for consistency with original C version, quiet doesn't override JSON mode
                     b'q' => {

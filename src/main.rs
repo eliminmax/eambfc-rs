@@ -52,14 +52,18 @@ fn show_help(outfile: &mut dyn io::Write, progname: &str) {
  -e ext    - use 'ext' as the extension for source files instead of '.bf'
              (This program will remove this at the end of the input
              file to create the output file name)**
+ -a arch   - compile for specified architecture***
+             (defaults to {} if not specified)**
+ -A        - list supported architectures and exit
 
 * Optimization can make error reporting less precise.
-** -t and -e can only be passed at most once each.
+** -a, -t and -e can only be passed at most once each.
 
 Remaining options are treated as source file names. If they don't
 end with '.bf' (or the extension specified with '-e'), the program
 will raise an error.
-"
+",
+    ELFArch::default(),
     );
     let _ = outfile.write(help_text.as_bytes());
 }
@@ -141,6 +145,12 @@ fn main() {
 
     let mut exit_code = 0;
     match arg_parse::parse_args(args_os()) {
+        Ok(RunConfig::ShowArches(progname)) => {
+            println!("This build of {progname} supports the following architectures:\n");
+            println!("- x86_64 (aliases: x64, amd64, x86-64)");
+            #[cfg(feature = "arm64")]
+            println!("- arm64 (aliases: aarch64)");
+        }
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
