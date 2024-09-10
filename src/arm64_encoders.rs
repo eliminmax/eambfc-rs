@@ -198,25 +198,20 @@ impl ArchInter for Arm64Inter {
             ((imm >> 48) as u16, ShiftLevel::Shift48),
         ];
         let mut instr_vec = Vec::<u8>::new();
-        if imm < 0 {
-            let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != 0xffff);
-            let (lead_imm, lead_shift) = parts.next().unwrap_or(&(0xffff, ShiftLevel::NoShift));
-            // MOVN reg, lead_imm << lead_shift
-            instr_vec.extend(mov(MoveType::Invert, *lead_imm, *lead_shift, reg));
-            parts.for_each(|(imm16, shift)| {
-                // MOVK reg, imm16 << shift
-                instr_vec.extend(mov(MoveType::Keep, *imm16, *shift, reg));
-            });
+        let (test_val, first_mov_type): (u16, MoveType) = if imm < 0 {
+            (0xffff, MoveType::Invert)
         } else {
-            let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != 0);
-            let (lead_imm, lead_shift) = parts.next().unwrap_or(&(0, ShiftLevel::NoShift));
-            // MOVZ reg, lead_imm << lead_shift
-            instr_vec.extend(mov(MoveType::Zero, *lead_imm, *lead_shift, reg));
-            parts.for_each(|(imm16, shift)| {
-                // MOVK reg, imm16 << shift
-                instr_vec.extend(mov(MoveType::Keep, *imm16, *shift, reg));
-            });
-        }
+            (0, MoveType::Zero)
+        };
+        let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != test_val);
+        let fallback = (test_val, ShiftLevel::NoShift);
+        let (lead_imm, lead_shift) = parts.next().unwrap_or(&fallback);
+        // (MOVZ or MOVN) reg, lead_imm << lead_shift
+        instr_vec.extend(mov(first_mov_type, *lead_imm, *lead_shift, reg));
+        parts.for_each(|(imm16, shift)| {
+            // MOVK reg, imm16 << shift
+            instr_vec.extend(mov(MoveType::Keep, *imm16, *shift, reg));
+        });
         instr_vec
     }
 
