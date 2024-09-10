@@ -23,6 +23,16 @@ pub enum ELFArch {
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 
+impl std::fmt::Display for ELFArch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", match self {
+            &ELFArch::Arm64 => "arm64",
+            &ELFArch::X86_64 => "x86_64",
+        })
+    }
+}
+
+
 pub const DEFAULT_ARCH: ELFArch = if cfg!(target_arch = "aarch64") && cfg!(feature = "arm64") {
     ELFArch::Arm64
 } else {
