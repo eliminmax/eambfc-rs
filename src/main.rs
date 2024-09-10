@@ -150,6 +150,7 @@ fn main() {
             println!("- x86_64 (aliases: x64, amd64, x86-64)");
             #[cfg(feature = "arm64")]
             println!("- arm64 (aliases: aarch64)");
+            println!("\nIf no architecure is specified, it defaults to {}.", ELFArch::default());
         }
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
