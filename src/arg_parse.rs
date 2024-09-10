@@ -39,7 +39,7 @@ impl Default for StandardRunConfig {
             tape_blocks: 8,
             extension: OsString::from(".bf"),
             source_files: Vec::<OsString>::new(),
-            arch: ELFArch::default()
+            arch: ELFArch::default(),
         }
     }
 }
@@ -234,7 +234,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
         extension = OsString::from(".bf");
     }
     let tape_blocks = tape_blocks.unwrap_or(8);
-    let arch = arch.unwrap_or(ELFArch::default());
+    let arch = arch.unwrap_or_default();
 
     Ok(RunConfig::StandardRun(StandardRunConfig {
         progname,
