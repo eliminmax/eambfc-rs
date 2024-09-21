@@ -218,8 +218,7 @@ impl ArchInter for Arm64Inter {
     fn reg_copy(dst: Arm64Register, src: Arm64Register) -> Vec<u8> {
         // MOV dst, src
         // technically an alias for ORR dst, XZR, src (XZR is a read-only zero register)
-        let src = src as u8; // helpful as it's used more than once
-        vec![0xe0 | dst as u8, 0x01, src, 0xaa]
+        vec![0xe0 | dst as u8, 0x01, src as u8, 0xaa]
     }
     fn syscall() -> Vec<u8> {
         // SVC 0
@@ -326,12 +325,7 @@ fn add_sub(reg: Arm64Register, imm: u64, op: ArithOp) -> Result<Vec<u8>, BFCompi
             let aux = aux_reg(reg);
             let mut ret = Arm64Inter::set_reg(aux, i as i64);
             // either ADD reg, reg, aux or SUB reg, reg, aux
-            ret.extend([
-                (reg as u8) | (reg as u8) << 5,
-                (reg as u8) >> 3,
-                (aux as u8),
-                op_byte,
-            ]);
+            ret.extend(inject_reg_operands(reg, reg, [0u8, 0u8, aux as u8, op_byte]));
             Ok(ret)
         }
         _ => Err(BFCompileError::Basic {
