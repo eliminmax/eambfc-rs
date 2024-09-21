@@ -52,7 +52,7 @@ fn show_help(outfile: &mut dyn io::Write, progname: &str) {
  -e ext    - use 'ext' as the extension for source files instead of '.bf'
              (This program will remove this at the end of the input
              file to create the output file name)**
- -a arch   - compile for specified architecture***
+ -a arch   - compile for specified architecture
              (defaults to {} if not specified)**
  -A        - list supported architectures and exit
 
