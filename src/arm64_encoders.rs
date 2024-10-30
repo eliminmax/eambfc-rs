@@ -140,11 +140,11 @@ macro_rules! fn_branch_cond {
             }
             // Encoding uses 19 immediate bits, and treats it as having an implicit 0b00 at the
             // end, as it needs to be a multiple of 4 anyway. The result is that it must be a
-            // 20-bit value. Make sure that it fits within that value.
+            // 21-bit value. Make sure that it fits within that value.
             if std::cmp::max(offset.leading_ones(), offset.leading_zeros()) < 44 {
                 return Err(BFCompileError::Basic {
                     id: String::from("JUMP_TOO_LONG"),
-                    msg: format!("{offset} is outside the range of possible 20-bit signed values"),
+                    msg: format!("{offset} is outside the range of possible 21-bit signed values"),
                 });
             }
             let offset = 1 + ((offset as u32) >> 2) & 0x7ffff;
