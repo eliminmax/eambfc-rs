@@ -20,6 +20,7 @@ pub enum EIData {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ELFArch {
     Arm64 = 183, // EM_AARCH64
+    S390x = 22, // EM_S390
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 
@@ -30,6 +31,7 @@ impl std::fmt::Display for ELFArch {
             "{}",
             match *self {
                 ELFArch::Arm64 => "arm64",
+                ELFArch::S390x => "s390x",
                 ELFArch::X86_64 => "x86_64",
             }
         )

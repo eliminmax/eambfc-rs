@@ -115,6 +115,8 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                             }
                             #[cfg(feature = "arm64")]
                             b"arm64" | b"aarch64" => arch = Some(ELFArch::Arm64),
+                            #[cfg(feature = "s390x")]
+                            b"s390x" | b"s390" | b"z/architecture" => arch = Some(ELFArch::S390x),
                             f => {
                                 return Err((
                                     BFCompileError::Basic {

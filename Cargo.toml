@@ -10,6 +10,7 @@ edition = "2021"
 [features]
 default = ["arm64"]
 arm64 = []
+s390x = []
 
 [profile.release]
 lto = "thin"

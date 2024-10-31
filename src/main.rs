@@ -6,6 +6,8 @@ pub mod arch_inter;
 pub mod arg_parse;
 #[cfg(feature = "arm64")]
 pub mod backend_arm64;
+#[cfg(feature = "s390x")]
+pub mod backend_s390x;
 pub mod compile;
 pub mod elf_tools;
 pub mod err;
@@ -26,6 +28,8 @@ use std::{io, process};
 // architecture interfaces
 #[cfg(feature = "arm64")]
 use backend_arm64::Arm64Inter;
+#[cfg(feature = "s390x")]
+use backend_s390x::S390xInter;
 use backend_x86_64::X86_64Inter;
 
 #[derive(PartialEq, Debug)]
@@ -150,6 +154,8 @@ fn main() {
             println!("- x86_64 (aliases: x64, amd64, x86-64)");
             #[cfg(feature = "arm64")]
             println!("- arm64 (aliases: aarch64)");
+            #[cfg(feature = "s390x")]
+            println!("- s390x (aliases: s390, z/architecure)");
             println!(
                 "\nIf no architecure is specified, it defaults to {}.",
                 ELFArch::default()
@@ -163,6 +169,15 @@ fn main() {
                     #[cfg(feature = "arm64")]
                     ELFArch::Arm64 => compile_wrapper(
                         Arm64Inter,
+                        f,
+                        &rc.extension,
+                        rc.optimize,
+                        rc.keep,
+                        rc.tape_blocks,
+                    ),
+                    #[cfg(feature = "s390x")]
+                    ELFArch::S390x => compile_wrapper(
+                        S390xInter,
                         f,
                         &rc.extension,
                         rc.optimize,
