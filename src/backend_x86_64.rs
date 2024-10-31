@@ -201,30 +201,30 @@ impl ArchInter for X86_64Inter {
         // DEC byte [reg]
         x86_offset(OffsetOp::Dec, OffsetMode::BytePtr, reg)
     }
-    fn add_reg(reg: X86_64Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
+    fn add_reg(reg: X86_64Register, imm: i64) -> Result<Vec<u8>, BFCompileError> {
         match imm {
-            i if i <= i8::MAX as u64 => Ok(add_reg_imm8(reg, imm as i8)),
-            i if i <= i32::MAX as u64 => Ok(add_reg_imm32(reg, imm as i32)),
-            i if i <= i64::MAX as u64 => Ok(add_reg_imm64(reg, imm as i64)),
-            _ => Err(BFCompileError::Basic {
-                id: String::from("TOO_MANY_INSTRUCTIONS"),
-                msg: String::from("Over 8192 PiB of consecitive `>` instructions!"),
-            }),
+            i if ((i8::MIN as i64)..=(i8::MAX as i64)).contains(&i) => {
+                Ok(add_reg_imm8(reg, imm as i8))
+            }
+            i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
+                Ok(add_reg_imm32(reg, imm as i32))
+            }
+            _ => Ok(add_reg_imm64(reg, imm)),
         }
     }
     fn add_byte(reg: X86_64Register, imm: i8) -> Vec<u8> {
         // ADD byte [reg], imm8
         vec![0x80_u8, reg as u8, imm as u8]
     }
-    fn sub_reg(reg: X86_64Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
+    fn sub_reg(reg: X86_64Register, imm: i64) -> Result<Vec<u8>, BFCompileError> {
         match imm {
-            i if i <= i8::MAX as u64 => Ok(sub_reg_imm8(reg, imm as i8)),
-            i if i <= i32::MAX as u64 => Ok(sub_reg_imm32(reg, imm as i32)),
-            i if i <= i64::MAX as u64 => Ok(sub_reg_imm64(reg, imm as i64)),
-            _ => Err(BFCompileError::Basic {
-                id: String::from("TOO_MANY_INSTRUCTIONS"),
-                msg: String::from("Over 8192 PiB of consecitive `<` instructions!"),
-            }),
+            i if ((i8::MIN as i64)..=(i8::MAX as i64)).contains(&i) => {
+                Ok(sub_reg_imm8(reg, imm as i8))
+            }
+            i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
+                Ok(sub_reg_imm32(reg, imm as i32))
+            }
+            _ => Ok(sub_reg_imm64(reg, imm)),
         }
     }
     fn sub_byte(reg: X86_64Register, imm: i8) -> Vec<u8> {

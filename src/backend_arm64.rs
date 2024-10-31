@@ -249,10 +249,10 @@ impl ArchInter for Arm64Inter {
         ] // SUB reg, reg, 1
     }
 
-    fn add_reg(reg: Arm64Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
+    fn add_reg(reg: Arm64Register, imm: i64) -> Result<Vec<u8>, BFCompileError> {
         add_sub(reg, imm, ArithOp::Add)
     }
-    fn sub_reg(reg: Arm64Register, imm: u64) -> Result<Vec<u8>, BFCompileError> {
+    fn sub_reg(reg: Arm64Register, imm: i64) -> Result<Vec<u8>, BFCompileError> {
         add_sub(reg, imm, ArithOp::Sub)
     }
 
@@ -282,7 +282,7 @@ enum ArithOp {
 
 fn add_sub_imm(
     reg: Arm64Register,
-    imm: u64,
+    imm: i64,
     op: ArithOp,
     shift: bool,
 ) -> Result<Vec<u8>, BFCompileError> {
@@ -307,7 +307,7 @@ fn add_sub_imm(
     }
 }
 
-fn add_sub(reg: Arm64Register, imm: u64, op: ArithOp) -> Result<Vec<u8>, BFCompileError> {
+fn add_sub(reg: Arm64Register, imm: i64, op: ArithOp) -> Result<Vec<u8>, BFCompileError> {
     match imm {
         i if i < 0x1000 => add_sub_imm(reg, imm, op, false),
         i if i < 0x1000000 => {
@@ -317,27 +317,17 @@ fn add_sub(reg: Arm64Register, imm: u64, op: ArithOp) -> Result<Vec<u8>, BFCompi
             }
             Ok(ret)
         }
-        i if i < i64::MAX as u64 => {
+        i => {
             let op_byte: u8 = match op {
                 ArithOp::Add => 0x8b,
                 ArithOp::Sub => 0xcb,
             };
             let aux = aux_reg(reg);
-            let mut ret = Arm64Inter::set_reg(aux, i as i64);
+            let mut ret = Arm64Inter::set_reg(aux, i);
             // either ADD reg, reg, aux or SUB reg, reg, aux
             ret.extend(inject_reg_operands(reg, reg, [0u8, 0u8, aux as u8, op_byte]));
             Ok(ret)
         }
-        _ => Err(BFCompileError::Basic {
-            id: String::from("TOO_MANY_INSTRUCTIONS"),
-            msg: format!(
-                "Over 8192 PiB of consecitive `{}` instructions!",
-                match op {
-                    ArithOp::Add => '>',
-                    ArithOp::Sub => '<',
-                }
-            ),
-        }),
     }
 }
 

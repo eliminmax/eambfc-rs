@@ -206,8 +206,8 @@ pub trait BFCompile: ArchInter {
             CI::SetZero => Self::zero_byte(Self::REGISTERS.bf_ptr),
             CI::RepeatAdd(count) => Self::add_byte(Self::REGISTERS.bf_ptr, count as i8),
             CI::RepeatSub(count) => Self::sub_byte(Self::REGISTERS.bf_ptr, count as i8),
-            CI::RepeatMoveR(count) => Self::add_reg(Self::REGISTERS.bf_ptr, count as u64)?,
-            CI::RepeatMoveL(count) => Self::sub_reg(Self::REGISTERS.bf_ptr, count as u64)?,
+            CI::RepeatMoveR(count) => Self::add_reg(Self::REGISTERS.bf_ptr, count as i64)?,
+            CI::RepeatMoveL(count) => Self::sub_reg(Self::REGISTERS.bf_ptr, count as i64)?,
             CI::BFInstruction(i) => {
                 return self.compile_instr(
                     i,
