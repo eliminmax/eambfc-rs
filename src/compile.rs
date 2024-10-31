@@ -322,7 +322,7 @@ pub trait BFCompile: ArchInter {
 
 #[cfg(test)]
 mod tests {
-    use super::super::x86_64_encoders::X86_64Inter;
+    use super::super::backend_x86_64::X86_64Inter;
     use super::*;
 
     const X86_64_INTER: X86_64Inter = X86_64Inter;
