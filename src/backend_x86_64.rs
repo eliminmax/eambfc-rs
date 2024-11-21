@@ -144,7 +144,6 @@ impl ArchInter for X86_64Inter {
     const EI_DATA: EIData = EIData::ELFDATA2LSB;
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
     // XOR reg, reg
-    // PUSH imm8; POP reg
     // MOV reg, imm32
     // MOV reg, imm64
     fn set_reg(reg: X86_64Register, imm: i64) -> Vec<u8> {
@@ -152,8 +151,6 @@ impl ArchInter for X86_64Inter {
         match imm {
             // XOR reg, reg
             0 => vec![0x31_u8, 0xc0_u8 | (reg << 3) | reg],
-            // PUSH imm8; POP reg
-            i if i < i8::MAX.into() => vec![0x6a, imm as u8, 0x58 + reg],
             // MOV reg, imm32
             i if i < i32::MAX.into() => {
                 let mut v = vec![0xb8 + reg];
