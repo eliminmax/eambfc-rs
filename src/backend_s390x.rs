@@ -110,7 +110,7 @@ use super::err::BFCompileError;
 //  - bits 32-39: memory displacement (higher 8 bits)
 //  - bits 40-47: lower 8 bits of opcode
 //
-// * RR (2 halfwords, 8-bit opcode, [register or mask, register])
+// * RR (1 halfword, 8-bit opcode, [register or mask, register])
 //  - bits 0-7: opcode
 //  - bits 8-11: first register or mask
 //  - bits 12-15: second register
