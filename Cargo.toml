@@ -8,7 +8,7 @@ version = "3.0.0"
 edition = "2021"
 
 [features]
-default = ["arm64"]
+default = ["arm64", "s390x"]
 arm64 = []
 s390x = []
 
