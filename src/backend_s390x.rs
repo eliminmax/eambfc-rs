@@ -465,11 +465,10 @@ impl ArchInter for S390xInter {
     fn sub_reg(reg: S390xRegister, imm: i64) -> Result<Vec<u8>, BFCompileError> {
         // there are not equivalent sub instructions to any of the add instructions used, so just
         // check that "-imm" won't cause problems, then call add_reg with negative imm.
-        if imm == i64::MAX {
-            Err(BFCompileError::Basic {
-                id: String::from("TOO_MANY_INSTRUCTIONS"),
-                msg: String::from("Number of consecutive '<' surpasses 64-bit integer limit!"),
-            })
+        if imm == i64::MIN {
+            let mut v = S390xInter::add_reg(reg, -i64::MAX)?;
+            v.extend(S390xInter::add_reg(reg, -1)?);
+            Ok(v)
         } else {
             S390xInter::add_reg(reg, -imm)
         }
