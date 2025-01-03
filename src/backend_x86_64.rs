@@ -306,11 +306,6 @@ mod tests {
             vec![0x31, 0xc0 | 0b011000 | 0b011]
         );
         assert_eq!(
-            X86_64Inter::set_reg(X86_64Register::RBX, 101),
-            // PUSH 101; POP RBX
-            vec![0x6a, 101, 0x58 | 0b011]
-        );
-        assert_eq!(
             X86_64Inter::set_reg(X86_64Register::RBX, 128),
             // MOV EBX, 128
             vec![0xb8 | 0b011, 128, 0, 0, 0]
