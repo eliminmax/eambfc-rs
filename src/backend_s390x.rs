@@ -377,7 +377,7 @@ impl ArchInter for S390xInter {
 
     fn reg_copy(dst: S390xRegister, src: S390xRegister) -> Vec<u8> {
         // LGR dst, src {RRE}
-        vec![0xb9, 0x04, 0x00, (dst as u8) << 4 | (src as u8)]
+        vec![0xb9, 0x04, 0x00, ((dst as u8) << 4) | (src as u8)]
     }
 
     fn syscall() -> Vec<u8> {

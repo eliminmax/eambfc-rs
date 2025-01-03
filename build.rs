@@ -23,7 +23,7 @@ fn main() {
         match git_invocation {
             Ok(Output { stdout, status, .. }) if status.success() => {
                 let mut s =
-                    String::from_utf8(stdout).expect("Failed to parse bytes {stdout:?} as UTF-8");
+                    String::from_utf8(stdout).expect("Failed to parse bytes  as UTF-8");
                 let git_status = Command::new("git")
                     .args(["status", "--short"])
                     .output()

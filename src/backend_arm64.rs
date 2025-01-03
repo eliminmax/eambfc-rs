@@ -46,8 +46,8 @@ enum MoveType {
 fn inject_reg_operands(rt: Arm64Register, rn: Arm64Register, template: [u8; 4]) -> [u8; 4] {
     let rn = rn as u8; // helpful as rn is used more than once
     [
-        template[0] | (rt as u8) | rn << 5,
-        template[1] | rn >> 3,
+        template[0] | (rt as u8) | (rn << 5),
+        template[1] | (rn >> 3),
         template[2],
         template[3],
     ]
