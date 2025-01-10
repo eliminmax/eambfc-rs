@@ -8,11 +8,12 @@ pub mod arg_parse;
 pub mod backend_arm64;
 #[cfg(feature = "s390x")]
 pub mod backend_s390x;
+#[cfg(feature = "x86_64")]
+pub mod backend_x86_64;
 pub mod compile;
 pub mod elf_tools;
 pub mod err;
 pub mod optimize;
-pub mod backend_x86_64;
 
 use arg_parse::RunConfig;
 use compile::BFCompile;
@@ -30,6 +31,7 @@ use std::{io, process};
 use backend_arm64::Arm64Inter;
 #[cfg(feature = "s390x")]
 use backend_s390x::S390xInter;
+#[cfg(feature = "x86_64")]
 use backend_x86_64::X86_64Inter;
 
 #[derive(PartialEq, Debug)]
@@ -151,6 +153,7 @@ fn main() {
     match arg_parse::parse_args(args_os()) {
         Ok(RunConfig::ShowArches(progname)) => {
             println!("This build of {progname} supports the following architectures:\n");
+            #[cfg(feature = "x86_64")]
             println!("- x86_64 (aliases: x64, amd64, x86-64)");
             #[cfg(feature = "arm64")]
             println!("- arm64 (aliases: aarch64)");
@@ -184,6 +187,7 @@ fn main() {
                         rc.keep,
                         rc.tape_blocks,
                     ),
+                    #[cfg(feature = "x86_64")]
                     ELFArch::X86_64 => compile_wrapper(
                         X86_64Inter,
                         f,

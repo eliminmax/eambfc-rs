@@ -8,9 +8,10 @@ version = "3.0.0"
 edition = "2021"
 
 [features]
-default = ["arm64", "s390x"]
+default = ["arm64", "s390x", "x86_64"]
 arm64 = []
 s390x = []
+x86_64 = []
 
 [profile.release]
 lto = "thin"

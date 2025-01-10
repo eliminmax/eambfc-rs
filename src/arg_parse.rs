@@ -110,6 +110,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                             ));
                         }
                         match parameter_instr!(b'a').as_bytes() {
+                            #[cfg(feature = "x86_64")]
                             b"x86_64" | b"x64" | b"amd64" | b"x86-64" => {
                                 arch = Some(ELFArch::X86_64)
                             }

@@ -20,7 +20,7 @@ pub enum EIData {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ELFArch {
     Arm64 = 183, // EM_AARCH64
-    S390x = 22, // EM_S390
+    S390x = 22,  // EM_S390
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 
@@ -38,11 +38,14 @@ impl std::fmt::Display for ELFArch {
     }
 }
 
-pub const DEFAULT_ARCH: ELFArch = if cfg!(target_arch = "aarch64") && cfg!(feature = "arm64") {
-    ELFArch::Arm64
-} else {
-    ELFArch::X86_64
-};
+pub const DEFAULT_ARCH: ELFArch =
+    if cfg!(feature = "arm64") && (cfg!(target_arch = "aarch64") || !cfg!(feature = "x86_64")) {
+        ELFArch::Arm64
+    } else if cfg!(feature = "x86_64") {
+        ELFArch::X86_64
+    } else {
+        ELFArch::S390x
+    };
 
 impl Default for ELFArch {
     fn default() -> Self {

@@ -13,6 +13,8 @@ fn git_found() -> bool {
     }
 }
 
+#[cfg(not(any(feature = "x86_64", feature = "arm64", feature = "s390x")))]
+compile_error!("Must have at least one architecture enabled");
 fn main() {
     println!("cargo::rerun-if-changed=.git/index");
     let git_invocation = Command::new("git")
