@@ -16,58 +16,27 @@ pub enum CondensedInstruction {
 }
 
 pub fn to_condensed(mut file: Box<dyn Read>) -> Result<Vec<CondensedInstruction>, BFCompileError> {
-    let mut source_file_bytes = Vec::<u8>::new();
+    let mut code_buf = Vec::<u8>::new();
     let _ = file
-        .read_to_end(&mut source_file_bytes)
+        .read_to_end(&mut code_buf)
         .map_err(|_| BFCompileError::Basic {
             id: String::from("FAILED_READ"),
             msg: String::from("Failed to read file into buffer"),
         })?;
-    let filtered_bytes = filter_non_bf(source_file_bytes)?;
-    let stripped_bytes = strip_dead_code(filtered_bytes);
+    code_buf.retain(|b| b"+-<>,.[]".contains(b));
+    loops_match(code_buf.as_slice())?;
+    let stripped_bytes = strip_dead_code(code_buf);
     Ok(condense(stripped_bytes))
 }
 
-#[derive(Debug, PartialEq)]
-enum LoopsMatched {
-    Balanced,
-    UnmatchedOpen,
-    UnmatchedClose,
-}
-
-fn filter_non_bf(source_file_bytes: Vec<u8>) -> Result<Vec<u8>, BFCompileError> {
-    // first, filter out non-bf characters
-    let filtered_bytes = source_file_bytes
-        .into_iter()
-        .filter(|b| b"+-<>,.[]".contains(b))
-        .collect::<Vec<u8>>();
-    match loops_match(filtered_bytes.as_slice()) {
-        LoopsMatched::Balanced => Ok(filtered_bytes),
-        LoopsMatched::UnmatchedOpen => Err(BFCompileError::Basic {
-            id: String::from("UNMATCHED_OPEN"),
-            msg: String::from(
-                "Found an unmatched '[' while preparing for optimization. \
-                    Compile without -O for more information.",
-            ),
-        }),
-        LoopsMatched::UnmatchedClose => Err(BFCompileError::Basic {
-            id: String::from("UNMATCHED_CLOSE"),
-            msg: String::from(
-                "Found an unmatched ']' while preparing for optimization. \
-                    Compile without -O for more information.",
-            ),
-        }),
-    }
-}
-
-fn loops_match(code_bytes: &[u8]) -> LoopsMatched {
-    let mut ret: LoopsMatched = LoopsMatched::Balanced;
+fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
+    let mut ret: Result<(), ()> = Ok(());
     let mut nest_level: usize = 0;
     code_bytes.iter().for_each(|b| match b {
         b'[' => nest_level += 1,
         b']' => {
             if nest_level == 0 {
-                ret = LoopsMatched::UnmatchedClose;
+                ret = Err(());
             } else {
                 nest_level -= 1
             }
@@ -75,9 +44,21 @@ fn loops_match(code_bytes: &[u8]) -> LoopsMatched {
         _ => {}
     });
     if nest_level > 0 {
-        LoopsMatched::UnmatchedOpen
+        Err(BFCompileError::Basic {
+            id: String::from("UNMATCHED_OPEN"),
+            msg: String::from(
+                "Found an unmatched '[' while preparing for optimization. \
+                    Compile without -O for more information.",
+            ),
+        })
     } else {
-        ret
+        ret.map_err(|_| BFCompileError::Basic {
+            id: String::from("UNMATCHED_CLOSE"),
+            msg: String::from(
+                "Found an unmatched ']' while preparing for optimization. \
+                    Compile without -O for more information.",
+            ),
+        })
     }
 }
 
@@ -211,21 +192,11 @@ mod tests {
 
     #[test]
     fn strip_dead_code_test() -> Result<(), String> {
-        let code = filter_non_bf(
-            b"[+++++]><+---+++-[-][,[-][+>-<]]-+[-+]-+[]+-[]\
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\
-[+-]>\
-----------------------------------------------------------------\
-----------------------------------------------------------------\
-----------------------------------------------------------------\
-----------------------------------------------------------------\
-[->+<][,.]"
-                .to_vec(),
-        )
-        .unwrap();
+        let mut code = Vec::from(b"[+++++]><+---+++-[-][,[-][+>-<]]-+[-+]-+[]+-[]");
+        code.extend(b"+".repeat(256));
+        code.extend_from_slice(b"[+-]>");
+        code.extend(b"-".repeat(256));
+        code.extend_from_slice(b"[->+<][,.]");
         assert_eq!(strip_dead_code(code), Vec::from(b">[->+<]"));
         Ok(())
     }
@@ -274,8 +245,14 @@ mod tests {
 
     #[test]
     fn unmatched_loops_detected() -> Result<(), String> {
-        assert_eq!(loops_match(b"["), LoopsMatched::UnmatchedOpen);
-        assert_eq!(loops_match(b"]"), LoopsMatched::UnmatchedClose);
+        assert_eq!(
+            error_thrown(loops_match(b"[").unwrap_err()),
+            "UNMATCHED_OPEN"
+        );
+        assert_eq!(
+            error_thrown(loops_match(b"]").unwrap_err()),
+            "UNMATCHED_CLOSE"
+        );
         Ok(())
     }
 }
