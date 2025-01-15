@@ -30,12 +30,8 @@ pub struct CodePosition {
     pub col: usize,
 }
 
-pub trait BfErrDisplay {
-    fn report(&self, out_mode: &OutMode);
-}
-
-impl BfErrDisplay for BFCompileError {
-    fn report(&self, out_mode: &OutMode) {
+impl BFCompileError {
+    pub fn report(&self, out_mode: &OutMode) {
         if *out_mode == OutMode::Quiet {
             return;
         }

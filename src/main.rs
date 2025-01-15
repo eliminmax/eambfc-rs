@@ -18,7 +18,7 @@ pub mod optimize;
 use arg_parse::RunConfig;
 use compile::BFCompile;
 use elf_tools::ELFArch;
-use err::{BFCompileError, BfErrDisplay};
+use err::BFCompileError;
 use std::env::args_os;
 use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
