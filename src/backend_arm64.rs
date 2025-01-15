@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024-2025 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::arch_inter::{ArchInter, Registers, SyscallNums};
+use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
@@ -100,34 +100,36 @@ fn store_to_byte(addr: Arm64Register, src: Arm64Register) -> [u8; 4] {
 
 macro_rules! fn_byte_arith_wrapper {
     ($fn_name:ident, $inner:ident, internal_fn) => {
-        fn $fn_name(reg: Arm64Register) -> Vec<u8> {
+        fn $fn_name(code_buf: &mut Vec<u8>, reg: Arm64Register) {
             let aux = aux_reg(reg);
-            let mut ret = Vec::<u8>::from(load_from_byte(reg, aux));
-            ret.extend(Arm64Inter::$inner(aux));
-            ret.extend(store_to_byte(reg, aux));
-            ret
+            code_buf.extend(load_from_byte(reg, aux));
+            Self::$inner(code_buf, aux);
+            code_buf.extend(store_to_byte(reg, aux));
         }
     };
     ($fn_name:ident, $op:ident, arith_op) => {
-        fn $fn_name(reg: Arm64Register, imm: i8) -> Vec<u8> {
+        fn $fn_name(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i8) {
             let aux = aux_reg(reg);
-            let mut ret = Vec::<u8>::from(load_from_byte(reg, aux));
+            code_buf.extend(load_from_byte(reg, aux));
             // Either ADD aux, aux, imm or SUB aux, aux, imm depending on op_code
-            ret.extend([
+            code_buf.extend([
                 aux as u8 | (aux as u8) << 5,
                 (imm as u8) << 2 | (aux as u8) >> 3,
                 (imm as u8) >> 6,
                 ArithOp::$op as u8,
             ]);
-            ret.extend(store_to_byte(reg, aux));
-            ret
+            code_buf.extend(store_to_byte(reg, aux));
         }
     };
 }
 
 macro_rules! fn_branch_cond {
     ($fn_name:ident, $cond:literal) => {
-        fn $fn_name(reg: Arm64Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
+        fn $fn_name(
+            code_buf: &mut Vec<u8>,
+            reg: Arm64Register,
+            offset: i64,
+        ) -> FailableInstrEncoding {
             // Ensure only lower 4 bits of cond are used - the const _: () mess forces the check to
             // run at compile time rather than runtime.
             const _: () = assert!($cond & 0xf0_u8 == 0);
@@ -149,8 +151,8 @@ macro_rules! fn_branch_cond {
             }
             let offset = 1 + ((offset as u32) >> 2) & 0x7ffff;
             let aux = aux_reg(reg);
-            let mut v = Vec::<u8>::from(load_from_byte(reg, aux));
-            v.extend([
+            code_buf.extend(load_from_byte(reg, aux));
+            code_buf.extend([
                 // TST reg, 0xff (technically an alias for ANDS xzr, reg, 0xff)
                 0x1f_u8 | (aux as u8) << 5,
                 (aux as u8) >> 3 | 0x1c,
@@ -162,7 +164,7 @@ macro_rules! fn_branch_cond {
                 (offset >> 11) as u8,
                 0x54,
             ]);
-            Ok(v)
+            Ok(())
         }
     };
 }
@@ -189,7 +191,7 @@ impl ArchInter for Arm64Inter {
 
     const ARCH: ELFArch = ELFArch::Arm64;
     const EI_DATA: EIData = EIData::ELFDATA2LSB;
-    fn set_reg(reg: Arm64Register, imm: i64) -> Vec<u8> {
+    fn set_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
         // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
         let parts: [(u16, ShiftLevel); 4] = [
             (imm as u16, ShiftLevel::NoShift),
@@ -197,7 +199,6 @@ impl ArchInter for Arm64Inter {
             ((imm >> 32) as u16, ShiftLevel::Shift32),
             ((imm >> 48) as u16, ShiftLevel::Shift48),
         ];
-        let mut instr_vec = Vec::<u8>::new();
         let (test_val, first_mov_type): (u16, MoveType) = if imm < 0 {
             (0xffff, MoveType::Invert)
         } else {
@@ -207,60 +208,58 @@ impl ArchInter for Arm64Inter {
         let fallback = (test_val, ShiftLevel::NoShift);
         let (lead_imm, lead_shift) = parts.next().unwrap_or(&fallback);
         // (MOVZ or MOVN) reg, lead_imm << lead_shift
-        instr_vec.extend(mov(first_mov_type, *lead_imm, *lead_shift, reg));
+        code_buf.extend(mov(first_mov_type, *lead_imm, *lead_shift, reg));
         parts.for_each(|(imm16, shift)| {
             // MOVK reg, imm16 << shift
-            instr_vec.extend(mov(MoveType::Keep, *imm16, *shift, reg));
+            code_buf.extend(mov(MoveType::Keep, *imm16, *shift, reg));
         });
-        instr_vec
     }
 
-    fn reg_copy(dst: Arm64Register, src: Arm64Register) -> Vec<u8> {
+    fn reg_copy(code_buf: &mut Vec<u8>, dst: Arm64Register, src: Arm64Register) {
         // MOV dst, src
         // technically an alias for ORR dst, XZR, src (XZR is a read-only zero register)
-        vec![0xe0 | dst as u8, 0x01, src as u8, 0xaa]
+        code_buf.extend([0xe0 | dst as u8, 0x01, src as u8, 0xaa]);
     }
-    fn syscall() -> Vec<u8> {
+    fn syscall(code_buf: &mut Vec<u8>) {
         // SVC 0
-        vec![0x01u8, 0x00, 0x00, 0xd4]
+        code_buf.extend([0x01u8, 0x00, 0x00, 0xd4]);
     }
-    fn nop_loop_open() -> Vec<u8> {
+    fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // 3 NOP instructions.
-        vec![
-            0x1fu8, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5,
-        ]
+        const NOP: [u8; 4] = [0x1f, 0x20, 0x30, 0xd5];
+        code_buf.extend(NOP.repeat(3));
     }
-    fn inc_reg(reg: Arm64Register) -> Vec<u8> {
+
+    fn inc_reg(code_buf: &mut Vec<u8>, reg: Arm64Register) {
         let reg = reg as u8; // helpful as it's used more than once
-        vec![
+        code_buf.extend([
             reg | (reg << 5),
             0x04 | (reg >> 3),
             0x00,
             ArithOp::Add as u8,
-        ] // ADD reg, reg, 1
+        ]); // ADD reg, reg, 1
     }
-    fn dec_reg(reg: Arm64Register) -> Vec<u8> {
+    fn dec_reg(code_buf: &mut Vec<u8>, reg: Arm64Register) {
         let reg = reg as u8; // helpful as it's used more than once
-        vec![
+        code_buf.extend([
             reg | (reg << 5),
             0x04 | (reg >> 3),
             0x00,
             ArithOp::Sub as u8,
-        ] // SUB reg, reg, 1
+        ]); // SUB reg, reg, 1
     }
 
-    fn add_reg(reg: Arm64Register, imm: i64) -> Result<Vec<u8>, BFCompileError> {
-        add_sub(reg, imm, ArithOp::Add)
+    fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) -> FailableInstrEncoding {
+        add_sub(code_buf, reg, imm, ArithOp::Add)
     }
-    fn sub_reg(reg: Arm64Register, imm: i64) -> Result<Vec<u8>, BFCompileError> {
-        add_sub(reg, imm, ArithOp::Sub)
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) -> FailableInstrEncoding {
+        add_sub(code_buf, reg, imm, ArithOp::Sub)
     }
 
-    fn zero_byte(reg: Arm64Register) -> Vec<u8> {
+    fn zero_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
         let aux = aux_reg(reg);
-        let mut v = Arm64Inter::set_reg(aux, 0);
-        v.extend(store_to_byte(reg, aux));
-        v
+        Arm64Inter::set_reg(code_buf, aux, 0);
+        code_buf.extend(store_to_byte(reg, aux));
     }
     fn_byte_arith_wrapper!(add_byte, Add, arith_op);
     fn_byte_arith_wrapper!(sub_byte, Sub, arith_op);
@@ -281,41 +280,46 @@ enum ArithOp {
 }
 
 fn add_sub_imm(
+    code_buf: &mut Vec<u8>,
     reg: Arm64Register,
     imm: i64,
     op: ArithOp,
     shift: bool,
-) -> Result<Vec<u8>, BFCompileError> {
-    let reg = reg as u8; // helpful as it's used multiple times.
+) -> FailableInstrEncoding {
     if (shift && (imm & !0xfff000) != 0) || (!shift && (imm & !0xfff) != 0) {
-        Err(BFCompileError::Basic {
+        return Err(BFCompileError::Basic {
             id: String::from("IMMEDIATE_TOO_LARGE"),
             msg: format!(
                 "0x{imm:x} is invalid for shift level {}",
                 12 * (shift as u8)
             ),
-        })
-    } else {
-        let imm = if shift { imm >> 12 } else { imm };
-        // either ADD reg, reg, imm or SUB reg, reg, imm, depending on op
-        Ok(vec![
-            reg | (reg << 5),
-            (reg >> 3) | (imm << 2) as u8,
-            (imm >> 6) as u8 | if shift { 0x40 } else { 0 },
-            op as u8,
-        ])
+        });
     }
+    let reg = reg as u8; // helpful as it's used multiple times.
+    let imm = if shift { imm >> 12 } else { imm };
+    // either ADD reg, reg, imm or SUB reg, reg, imm, depending on op
+    code_buf.extend([
+        reg | (reg << 5),
+        (reg >> 3) | (imm << 2) as u8,
+        (imm >> 6) as u8 | if shift { 0x40 } else { 0 },
+        op as u8,
+    ]);
+    Ok(())
 }
 
-fn add_sub(reg: Arm64Register, imm: i64, op: ArithOp) -> Result<Vec<u8>, BFCompileError> {
+fn add_sub(
+    code_buf: &mut Vec<u8>,
+    reg: Arm64Register,
+    imm: i64,
+    op: ArithOp,
+) -> FailableInstrEncoding {
     match imm {
-        i if i < 0x1000 => add_sub_imm(reg, imm, op, false),
+        i if i < 0x1000 => add_sub_imm(code_buf, reg, imm, op, false)?,
         i if i < 0x1000000 => {
-            let mut ret = add_sub_imm(reg, imm & 0xfff000, op, true)?;
+            add_sub_imm(code_buf, reg, imm & 0xfff000, op, true)?;
             if i & 0xfff != 0 {
-                ret.extend(add_sub_imm(reg, imm & 0xfff, op, false)?);
+                add_sub_imm(code_buf, reg, imm & 0xfff, op, false)?;
             }
-            Ok(ret)
         }
         i => {
             let op_byte: u8 = match op {
@@ -323,12 +327,16 @@ fn add_sub(reg: Arm64Register, imm: i64, op: ArithOp) -> Result<Vec<u8>, BFCompi
                 ArithOp::Sub => 0xcb,
             };
             let aux = aux_reg(reg);
-            let mut ret = Arm64Inter::set_reg(aux, i);
+            Arm64Inter::set_reg(code_buf, aux, i);
             // either ADD reg, reg, aux or SUB reg, reg, aux
-            ret.extend(inject_reg_operands(reg, reg, [0u8, 0u8, aux as u8, op_byte]));
-            Ok(ret)
+            code_buf.extend(inject_reg_operands(
+                reg,
+                reg,
+                [0u8, 0u8, aux as u8, op_byte],
+            ));
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -337,23 +345,29 @@ mod tests {
     #[test]
     fn test_set_reg_simple() -> Result<(), String> {
         // the following can be set with 1 instruction each.
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
         assert_eq!(
-            Arm64Inter::set_reg(Arm64Register::X0, 0),
+            v,
             vec![0x00, 0x00, 0x80, 0xd2] // MOVN x0, 0
         );
 
+        v.clear();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -1);
         assert_eq!(
-            Arm64Inter::set_reg(Arm64Register::X0, -1),
+            v,
             vec![0x00, 0x00, 0x80, 0x92] // MOVN X0, -1
         );
 
-        assert_eq!(
-            Arm64Inter::set_reg(Arm64Register::X0, -0x100001),
-            vec![0x00, 0x02, 0xa0, 0x92]
-        );
+        v.clear();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100001);
+        assert_eq!(v, vec![0x00, 0x02, 0xa0, 0x92]);
 
+        v.clear();
+
+        Arm64Inter::set_reg(&mut v, Arm64Register::X1, 0xbeef);
         assert_eq!(
-            Arm64Inter::set_reg(Arm64Register::X1, 0xbeef),
+            v,
             vec![0xe1, 0xdd, 0x97, 0xd2], // MOVZ x1, 0xbeef
         );
         Ok(())
@@ -361,8 +375,10 @@ mod tests {
 
     #[test]
     fn test_reg_multiple() -> Result<(), String> {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
         assert_eq!(
-            Arm64Inter::set_reg(Arm64Register::X0, 0xdeadbeef),
+            v,
             vec![
                 0xe0, 0xdd, 0x97, 0xd2, // MOVZ x0, 0xbeef
                 0xa0, 0xd5, 0xbb, 0xf2, // MOVK x0, 0xdead, lsl #16
@@ -373,8 +389,10 @@ mod tests {
 
     #[test]
     fn test_reg_split() -> Result<(), String> {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead0000beef);
         assert_eq!(
-            Arm64Inter::set_reg(Arm64Register::X19, 0xdead0000beef),
+            v,
             vec![
                 0xf3, 0xdd, 0x97, 0xd2, // MOVZ x19, 0xbeef
                 0xb3, 0xd5, 0xdb, 0xf2, // MOVK x19, 0xdead, lsl #32
@@ -385,8 +403,10 @@ mod tests {
 
     #[test]
     fn test_reg_neg() -> Result<(), String> {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
         assert_eq!(
-            Arm64Inter::set_reg(Arm64Register::X19, -0xdeadbeef),
+            v,
             vec![
                 0xd3, 0xdd, 0x97, 0x92, // MOVN x19, 0xbeee
                 0x53, 0x2a, 0xa4, 0xf2, // MOVK x19, ~0xdead, lsl #16
@@ -397,23 +417,31 @@ mod tests {
 
     #[test]
     fn test_inc_dec_reg() -> Result<(), String> {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::inc_reg(&mut v, Arm64Register::X0);
         assert_eq!(
-            Arm64Inter::inc_reg(Arm64Register::X0),
+            v,
             vec![0x00, 0x04, 0x00, 0x91], // ADD x0, x0, 1
         );
 
+        v.clear();
+        Arm64Inter::inc_reg(&mut v, Arm64Register::X19);
         assert_eq!(
-            Arm64Inter::inc_reg(Arm64Register::X19),
+            v,
             vec![0x73, 0x06, 0x00, 0x91], // ADD x19, x19, 1
         );
 
+        v.clear();
+        Arm64Inter::dec_reg(&mut v, Arm64Register::X1);
         assert_eq!(
-            Arm64Inter::dec_reg(Arm64Register::X1),
+            v,
             vec![0x21, 0x04, 0x00, 0xd1], // SUB x1, x1, 1
         );
 
+        v.clear();
+        Arm64Inter::dec_reg(&mut v, Arm64Register::X19);
         assert_eq!(
-            Arm64Inter::dec_reg(Arm64Register::X19),
+            v,
             vec![0x73, 0x06, 0x00, 0xd1], // SUB x19, x19, 1
         );
         Ok(())
@@ -435,30 +463,36 @@ mod tests {
 
     #[test]
     fn test_add_sub_reg() -> Result<(), String> {
+        let mut v: Vec<u8> = Vec::new();
         // Handling of 24-bit values
+        assert!(add_sub(&mut v, Arm64Register::X16, 0xabcdef, ArithOp::Add).is_ok());
         assert_eq!(
-            add_sub(Arm64Register::X16, 0xabcdef, ArithOp::Add),
-            Ok(vec![
+            v,
+            vec![
                 0x10, 0xf2, 0x6a, 0x91, // ADD x16, x16, 0xabc, lsl 12
                 0x10, 0xbe, 0x37, 0x91, // ADD x16, x16, 0xdef
-            ]),
+            ],
         );
 
         // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
         // included
+        v.clear();
+        assert!(add_sub(&mut v, Arm64Register::X16, 0xabc000, ArithOp::Sub).is_ok());
         assert_eq!(
-            add_sub(Arm64Register::X16, 0xabc000, ArithOp::Sub),
-            Ok(vec![
+            v,
+            vec![
                 0x10, 0xf2, 0x6a, 0xd1, // SUB x16, x16, 0xabc, lsl 12
-            ]),
+            ],
         );
         Ok(())
     }
 
     #[test]
     fn test_add_sub_byte() -> Result<(), String> {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::add_byte(&mut v, Arm64Register::X19, 0xa5u8 as i8);
         assert_eq!(
-            Arm64Inter::add_byte(Arm64Register::X19, 0xa5u8 as i8),
+            v,
             vec![
                 0x71, 0x06, 0x40, 0x38, // LRDB w17, [x19], 0
                 0x31, 0x96, 0x02, 0x91, // ADD x17, x17, 0xa5
@@ -470,8 +504,10 @@ mod tests {
 
     #[test]
     fn test_zero_byte() -> Result<(), String> {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
         assert_eq!(
-            Arm64Inter::zero_byte(Arm64Register::X19),
+            v,
             vec![
                 0x11, 0x00, 0x80, 0xd2, // MOVZ x17, 0
                 0x71, 0x06, 0x00, 0x38, // STRB w17, [X19], 0

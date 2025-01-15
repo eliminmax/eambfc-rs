@@ -1,10 +1,11 @@
-// SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024-2025 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
 
+pub type FailableInstrEncoding = Result<(), BFCompileError>;
 pub trait ArchInter
 where
     <Self as ArchInter>::RegType: Copy,
@@ -15,21 +16,25 @@ where
     const SC_NUMS: SyscallNums;
     const ARCH: ELFArch;
     const EI_DATA: EIData;
-    fn set_reg(reg: Self::RegType, imm: i64) -> Vec<u8>;
-    fn reg_copy(dst: Self::RegType, src: Self::RegType) -> Vec<u8>;
-    fn syscall() -> Vec<u8>;
-    fn jump_zero(reg: Self::RegType, offset: i64) -> Result<Vec<u8>, BFCompileError>;
-    fn jump_not_zero(reg: Self::RegType, offset: i64) -> Result<Vec<u8>, BFCompileError>;
-    fn nop_loop_open() -> Vec<u8>;
-    fn inc_reg(reg: Self::RegType) -> Vec<u8>;
-    fn inc_byte(reg: Self::RegType) -> Vec<u8>;
-    fn dec_reg(reg: Self::RegType) -> Vec<u8>;
-    fn dec_byte(reg: Self::RegType) -> Vec<u8>;
-    fn add_reg(reg: Self::RegType, imm: i64) -> Result<Vec<u8>, BFCompileError>;
-    fn add_byte(reg: Self::RegType, imm: i8) -> Vec<u8>;
-    fn sub_reg(reg: Self::RegType, imm: i64) -> Result<Vec<u8>, BFCompileError>;
-    fn sub_byte(reg: Self::RegType, imm: i8) -> Vec<u8>;
-    fn zero_byte(reg: Self::RegType) -> Vec<u8>;
+    fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
+    fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType);
+    fn syscall(code_buf: &mut Vec<u8>);
+    fn jump_zero(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64) -> FailableInstrEncoding;
+    fn jump_not_zero(
+        code_buf: &mut Vec<u8>,
+        reg: Self::RegType,
+        offset: i64,
+    ) -> FailableInstrEncoding;
+    fn nop_loop_open(code_buf: &mut Vec<u8>);
+    fn inc_reg(code_buf: &mut Vec<u8>, reg: Self::RegType);
+    fn inc_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
+    fn dec_reg(code_buf: &mut Vec<u8>, reg: Self::RegType);
+    fn dec_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
+    fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) -> FailableInstrEncoding;
+    fn add_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i8);
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) -> FailableInstrEncoding;
+    fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i8);
+    fn zero_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
 }
 
 #[derive(Debug)]

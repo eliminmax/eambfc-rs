@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024-2025 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::arch_inter::{ArchInter, Registers, SyscallNums};
+use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
@@ -229,24 +229,22 @@ pub enum S390xRegister {
 }
 
 macro_rules! encode_ri_op {
-    ($opcode:literal, $reg:ident) => {{
+    ($code_buf:ident, $opcode:literal, $reg:ident) => {{
         // Ensure only lower 4 bits of cond are used - the const _: () mess forces the check to
         // run at compile time rather than runtime.
         const _: () = assert!($opcode & (!0xfff) == 0);
-        vec![
+        $code_buf.extend([
             ($opcode >> 4) as u8,
             ($reg as u8) << 4 | (($opcode & 0xf) as u8),
-        ]
+        ]);
     }};
-    ($opcode:literal, $reg:ident, $t:ty, $imm:ident) => {{
-        let mut v: Vec<u8> = encode_ri_op!($opcode, $reg);
-        v.extend(($imm as $t).to_be_bytes());
-        v
+    ($code_buf:ident, $opcode:literal, $reg:ident, $t:ty, $imm:ident) => {{
+        encode_ri_op!($code_buf, $opcode, $reg);
+        $code_buf.extend(($imm as $t).to_be_bytes());
     }};
-    ($opcode:literal, $reg:ident, $t:ty, $imm:literal) => {{
-        let mut v: Vec<u8> = encode_ri_op!($opcode, $reg);
-        v.extend(($imm as $t).to_be_bytes());
-        v
+    ($code_buf:ident, $opcode:literal, $reg:ident, $t:ty, $imm:literal) => {{
+        encode_ri_op!($code_buf, $opcode, $reg);
+        $code_buf.extend(($imm as $t).to_be_bytes());
     }};
 }
 
@@ -282,10 +280,11 @@ fn load_from_byte(reg: S390xRegister, aux: S390xRegister) -> [u8; 6] {
 }
 
 fn branch_cond(
+    code_buf: &mut Vec<u8>,
     reg: S390xRegister,
     offset: i64,
     comp_mask: ComparisonMask,
-) -> Result<Vec<u8>, BFCompileError> {
+) -> FailableInstrEncoding {
     // jumps are done by halfwords, not bytes, so make sure it's a valid offset with that in mind
     match offset {
         i if i % 2 != 0 => Err(BFCompileError::Basic {
@@ -300,14 +299,14 @@ fn branch_cond(
         }
         _ => {
             let aux = aux_reg(reg);
-            let mut v = Vec::<u8>::from(load_from_byte(reg, aux));
+            code_buf.extend(load_from_byte(reg, aux));
             let offset = offset >> 1;
             // CFI aux, 0 {RIL-a}
-            v.extend(encode_ri_op!(0xc2d, aux, i32, 0));
+            encode_ri_op!(code_buf, 0xc2d, aux, i32, 0);
             // BRCL mask, offset
-            v.extend(encode_ri_op!(0xc04, comp_mask, i32, offset));
+            encode_ri_op!(code_buf, 0xc04, comp_mask, i32, offset);
 
-            Ok(v)
+            Ok(())
         }
     }
 }
@@ -332,68 +331,69 @@ impl ArchInter for S390xInter {
     const ARCH: ELFArch = ELFArch::S390x;
     const EI_DATA: EIData = EIData::ELFDATA2MSB;
 
-    fn set_reg(reg: S390xRegister, imm: i64) -> Vec<u8> {
+    fn set_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         match imm {
-            0 => Self::reg_copy(reg, S390xRegister::R0),
+            0 => Self::reg_copy(code_buf, reg, S390xRegister::R0),
             i if ((i16::MIN as i64)..=(i16::MAX as i64)).contains(&i) => {
                 // if it fits in a halfword, use Load Halfword Immediate (64 <- 16)
                 // LGHI r.reg, imm {RI-a}
-                encode_ri_op!(0xa79, reg, i16, imm)
+                encode_ri_op!(code_buf, 0xa79, reg, i16, imm)
             }
             i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
                 // if it fits within a word, use Load Immediate (64 <- 32)
                 // LGFI r.reg, imm {RIL-a}
-                encode_ri_op!(0xc01, reg, i32, imm)
+                encode_ri_op!(code_buf, 0xc01, reg, i32, imm)
             }
             _ => {
                 let (imm_h, imm_l) = ((imm >> 32) as i32, imm as i32);
-                let mut v: Vec<u8> = if imm_l == 0 {
-                    vec![]
-                } else {
-                    Self::set_reg(reg, imm_l as i64)
-                };
-                v.extend(match ((imm_h >> 16) as i16, imm_h as i16) {
+                if imm_l != 0 {
+                    Self::set_reg(code_buf, reg, imm_l as i64);
+                }
+                match ((imm_h >> 16) as i16, imm_h as i16) {
                     (0, 0) => unreachable!(),
                     (0, imm_hl) => {
                         // set bits 16-31 of the register to the immediate, leave other bits as-is
                         // IIHL reg, upper_imm {RI-a}
-                        encode_ri_op!(0xa51, reg, i16, imm_hl)
+                        encode_ri_op!(code_buf, 0xa51, reg, i16, imm_hl)
                     }
                     (imm_hh, 0) => {
                         // set bits 0-15 of the register to the immediate, leave other bits as-is
                         // IIHH reg, upper_imm {RI-a}
-                        encode_ri_op!(0xa50, reg, i16, imm_hh)
+                        encode_ri_op!(code_buf, 0xa50, reg, i16, imm_hh)
                     }
                     _ => {
                         // need to set the full upper word, with Insert Immediate (high)
                         // IIHF reg, imm {RIL-a}
-                        encode_ri_op!(0xc09, reg, i32, imm_h)
+                        encode_ri_op!(code_buf, 0xc09, reg, i32, imm_h)
                     }
-                });
-                v
+                }
             }
         }
     }
 
-    fn reg_copy(dst: S390xRegister, src: S390xRegister) -> Vec<u8> {
+    fn reg_copy(code_buf: &mut Vec<u8>, dst: S390xRegister, src: S390xRegister) {
         // LGR dst, src {RRE}
-        vec![0xb9, 0x04, 0x00, ((dst as u8) << 4) | (src as u8)]
+        code_buf.extend([0xb9, 0x04, 0x00, ((dst as u8) << 4) | (src as u8)]);
     }
 
-    fn syscall() -> Vec<u8> {
+    fn syscall(code_buf: &mut Vec<u8>) {
         // SVC 0 {I}
-        vec![0x0a_u8, 0x00]
+        code_buf.extend([0x0a_u8, 0x00]);
     }
 
-    fn jump_zero(reg: S390xRegister, offset: i64) -> Result<Vec<u8>, BFCompileError> {
-        branch_cond(reg, offset, ComparisonMask::MaskEQ)
+    fn jump_zero(code_buf: &mut Vec<u8>, reg: S390xRegister, offset: i64) -> FailableInstrEncoding {
+        branch_cond(code_buf, reg, offset, ComparisonMask::MaskEQ)
     }
 
-    fn jump_not_zero(reg: S390xRegister, offset: i64) -> Result<Vec<u8>, BFCompileError> {
-        branch_cond(reg, offset, ComparisonMask::MaskNE)
+    fn jump_not_zero(
+        code_buf: &mut Vec<u8>,
+        reg: S390xRegister,
+        offset: i64,
+    ) -> FailableInstrEncoding {
+        branch_cond(code_buf, reg, offset, ComparisonMask::MaskNE)
     }
 
-    fn nop_loop_open() -> Vec<u8> {
+    fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // BRANCH ON CONDITION with all operands set to zero is used as a NO-OP.
         // BC and BCR are variants of BRANCH ON CONDITION with different encodings, and extended
         // mnemonics for when used as NOP instructions
@@ -401,92 +401,82 @@ impl ArchInter for S390xInter {
         const NOPR: [u8; 4] = [0x47, 0x00, 0x00, 0x00];
         // BCR 0, 0 {RR}
         const NOP: [u8; 2] = [0x07, 0x00];
-        let mut v = Vec::<u8>::with_capacity(Self::JUMP_SIZE);
-        v.extend(NOPR);
-        v.extend(NOPR);
-        v.extend(NOPR);
-        v.extend(NOPR);
-        v.extend(NOP);
-        v
+        code_buf.extend(NOPR.repeat(4));
+        code_buf.extend(NOP);
     }
 
-    fn inc_reg(reg: S390xRegister) -> Vec<u8> {
-        S390xInter::add_reg(reg, 1).expect("S390xInter::add_reg doesn't return Err variant")
+    fn inc_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
+        S390xInter::add_reg(code_buf, reg, 1)
+            .expect("S390xInter::add_reg doesn't return Err variant");
     }
 
-    fn inc_byte(reg: S390xRegister) -> Vec<u8> {
-        S390xInter::add_byte(reg, 1)
+    fn inc_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
+        S390xInter::add_byte(code_buf, reg, 1);
     }
 
-    fn dec_reg(reg: S390xRegister) -> Vec<u8> {
-        S390xInter::add_reg(reg, -1).expect("S390xInter::add_reg doesn't return Err variant")
+    fn dec_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
+        S390xInter::add_reg(code_buf, reg, -1)
+            .expect("S390xInter::add_reg doesn't return Err variant");
     }
 
-    fn dec_byte(reg: S390xRegister) -> Vec<u8> {
-        S390xInter::add_byte(reg, -1)
+    fn dec_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
+        S390xInter::add_byte(code_buf, reg, -1);
     }
 
-    fn add_reg(reg: S390xRegister, imm: i64) -> Result<Vec<u8>, BFCompileError> {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) -> FailableInstrEncoding {
         match imm {
             i if ((i16::MIN as i64)..=(i16::MAX as i64)).contains(&i) => {
                 // AGHI reg, imm {RI-a}
-                Ok(encode_ri_op!(0xa7b, reg, i16, imm))
+                encode_ri_op!(code_buf, 0xa7b, reg, i16, imm);
             }
             i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
                 // AFGI reg, imm {RIL-a}
-                Ok(encode_ri_op!(0xc28, reg, i32, imm))
+                encode_ri_op!(code_buf, 0xc28, reg, i32, imm);
             }
             _ => {
                 let (imm_h, imm_l) = (imm >> 32, imm as i32);
-                let mut v: Vec<u8> = if imm_l == 0 {
-                    vec![]
-                } else {
-                    S390xInter::add_reg(reg, imm_l as i64)
+                if imm_l != 0 {
+                    S390xInter::add_reg(code_buf, reg, imm_l as i64)
                         .expect("S390xInter::add_reg doesn't return Err variant")
-                };
+                }
                 // AIX reg, imm {RIL-a}
-                v.extend(encode_ri_op!(0xcc8, reg, i32, imm_h));
-                Ok(v)
+                encode_ri_op!(code_buf, 0xcc8, reg, i32, imm_h);
             }
         }
+        Ok(())
     }
 
-    fn add_byte(reg: S390xRegister, imm: i8) -> Vec<u8> {
+    fn add_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
         let aux = aux_reg(reg);
-        let mut v = Vec::from(load_from_byte(reg, aux));
-        v.extend(
-            S390xInter::add_reg(aux, imm as i64)
-                .expect("S390xInter::add_reg doesn't return Err variant"),
-        );
-        v.extend(store_to_byte(reg, aux));
-        v
+
+        code_buf.extend(load_from_byte(reg, aux));
+        S390xInter::add_reg(code_buf, aux, imm as i64)
+            .expect("S390xInter::add_reg doesn't return Err variant");
+        code_buf.extend(store_to_byte(reg, aux));
     }
 
-    fn sub_reg(reg: S390xRegister, imm: i64) -> Result<Vec<u8>, BFCompileError> {
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) -> FailableInstrEncoding {
         // there are not equivalent sub instructions to any of the add instructions used, so just
         // check that "-imm" won't cause problems, then call add_reg with negative imm.
         if imm == i64::MIN {
-            let mut v = S390xInter::add_reg(reg, -i64::MAX)?;
-            v.extend(S390xInter::add_reg(reg, -1)?);
-            Ok(v)
+            S390xInter::add_reg(code_buf, reg, -i64::MAX)?;
+            S390xInter::add_reg(code_buf, reg, -1)?;
         } else {
-            S390xInter::add_reg(reg, -imm)
+            S390xInter::add_reg(code_buf, reg, -imm)?;
         }
+        Ok(())
     }
 
-    fn sub_byte(reg: S390xRegister, imm: i8) -> Vec<u8> {
+    fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
         let aux = aux_reg(reg);
-        let mut v = Vec::from(load_from_byte(reg, aux));
-        v.extend(
-            S390xInter::add_reg(aux, -imm as i64)
-                .expect("S390xInter::add_reg doesn't return Err variant"),
-        );
-        v.extend(store_to_byte(reg, aux));
-        v
+        code_buf.extend(load_from_byte(reg, aux));
+        S390xInter::add_reg(code_buf, aux, -imm as i64)
+            .expect("S390xInter::add_reg doesn't return Err variant");
+        code_buf.extend(store_to_byte(reg, aux));
     }
 
-    fn zero_byte(reg: S390xRegister) -> Vec<u8> {
-        Vec::<u8>::from(store_to_byte(reg, S390xRegister::R0))
+    fn zero_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
+        code_buf.extend(store_to_byte(reg, S390xRegister::R0));
     }
 }
 

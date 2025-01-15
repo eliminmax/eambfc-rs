@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024-2025 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
@@ -32,7 +32,7 @@
 // * RDX is 010b
 // * RBX is 011b
 
-use super::arch_inter::{ArchInter, Registers, SyscallNums};
+use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
@@ -77,18 +77,19 @@ enum OffsetOp {
     Dec = 8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 enum OffsetMode {
     BytePtr = 0,
     Reg = 3,
 }
 
-#[inline]
-fn x86_offset(op: OffsetOp, mode: OffsetMode, reg: X86_64Register) -> Vec<u8> {
+fn x86_offset(code_buf: &mut Vec<u8>, op: OffsetOp, mode: OffsetMode, reg: X86_64Register) {
     // as it's used more than once, cast mode in advance
-    let mode = mode as u8;
-    vec![0xfe_u8 | (mode & 1), (op as u8) | (reg as u8) | (mode << 6)]
+    code_buf.extend([
+        0xfe_u8 | (mode as u8 & 1),
+        (op as u8) | (reg as u8) | ((mode as u8) << 6),
+    ]);
 }
 
 // macro to declare a conditional jump instruction.
@@ -101,7 +102,11 @@ fn x86_offset(op: OffsetOp, mode: OffsetMode, reg: X86_64Register) -> Vec<u8> {
 // jump lenghts could have the same interface as x86_64.
 macro_rules! fn_test_jcc {
     ($fn_name:ident, $tttn:literal) => {
-        fn $fn_name(reg: X86_64Register, offset: i64) -> Result<Vec<u8>, BFCompileError> {
+        fn $fn_name(
+            code_buf: &mut Vec<u8>,
+            reg: X86_64Register,
+            offset: i64,
+        ) -> FailableInstrEncoding {
             // Ensure only lower 4 bits of tttn are used - the const _: () mess forces the check to
             // run at compile time rather than runtime.
             const _: () = assert!($tttn & 0xf0_u8 == 0);
@@ -112,14 +117,14 @@ macro_rules! fn_test_jcc {
                 })?
                 .to_le_bytes();
             #[rustfmt::skip]
-            let mut v = vec![
+            code_buf.extend([
                 // TEST byte [reg], 0xff
                 0xf6_u8, reg as u8, 0xff_u8,
                 // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
                 0x0f_u8, 0x80_u8|$tttn
-            ];
-            v.extend(offset_bytes);
-            Ok(v)
+            ]);
+            code_buf.extend(offset_bytes);
+            Ok(())
         }
     };
 }
@@ -146,114 +151,114 @@ impl ArchInter for X86_64Inter {
     // XOR reg, reg
     // MOV reg, imm32
     // MOV reg, imm64
-    fn set_reg(reg: X86_64Register, imm: i64) -> Vec<u8> {
+    fn set_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) {
         let reg = reg as u8;
         match imm {
             // XOR reg, reg
-            0 => vec![0x31_u8, 0xc0_u8 | (reg << 3) | reg],
+            0 => code_buf.extend([0x31_u8, 0xc0_u8 | (reg << 3) | reg]),
             // MOV reg, imm32
             i if i < i32::MAX.into() => {
-                let mut v = vec![0xb8 + reg];
-                v.extend((i as i32).to_le_bytes());
-                v
+                code_buf.push(0xb8 + reg);
+                code_buf.extend((i as i32).to_le_bytes());
             }
             // MOV reg, imm64
             i => {
-                let mut v = vec![0x48, 0xb8 + reg];
-                v.extend(i.to_le_bytes());
-                v
+                code_buf.extend(&[0x48, 0xb8 + reg]);
+                code_buf.extend(&i.to_le_bytes());
             }
         }
     }
-    fn reg_copy(dst: X86_64Register, src: X86_64Register) -> Vec<u8> {
+    fn reg_copy(code_buf: &mut Vec<u8>, dst: X86_64Register, src: X86_64Register) {
         // MOV dst, src
-        vec![0x89_u8, 0xc0 + ((src as u8) << 3) + dst as u8]
+        code_buf.extend([0x89_u8, 0xc0 + ((src as u8) << 3) + dst as u8]);
     }
-    fn syscall() -> Vec<u8> {
+    fn syscall(code_buf: &mut Vec<u8>) {
         // SYSCALL
-        vec![0x0f_u8, 0x05_u8]
+        code_buf.extend([0x0f, 0x05]);
     }
+
     // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
     fn_test_jcc!(jump_not_zero, 0b0101_u8);
     // according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
     fn_test_jcc!(jump_zero, 0b0100_u8);
 
-    fn nop_loop_open() -> Vec<u8> {
+    fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // times JUMP_SIZE NOP
-        Vec::<u8>::from([0x90; Self::JUMP_SIZE])
+        code_buf.extend([0x90; Self::JUMP_SIZE]);
     }
-    fn inc_reg(reg: X86_64Register) -> Vec<u8> {
+
+    fn inc_reg(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // INC reg
-        x86_offset(OffsetOp::Inc, OffsetMode::Reg, reg)
+        x86_offset(code_buf, OffsetOp::Inc, OffsetMode::Reg, reg);
     }
-    fn inc_byte(reg: X86_64Register) -> Vec<u8> {
+    fn inc_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // INC byte [reg]
-        x86_offset(OffsetOp::Inc, OffsetMode::BytePtr, reg)
+        x86_offset(code_buf, OffsetOp::Inc, OffsetMode::BytePtr, reg);
     }
-    fn dec_reg(reg: X86_64Register) -> Vec<u8> {
+    fn dec_reg(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // DEC reg
-        x86_offset(OffsetOp::Dec, OffsetMode::Reg, reg)
+        x86_offset(code_buf, OffsetOp::Dec, OffsetMode::Reg, reg);
     }
-    fn dec_byte(reg: X86_64Register) -> Vec<u8> {
+    fn dec_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // DEC byte [reg]
-        x86_offset(OffsetOp::Dec, OffsetMode::BytePtr, reg)
+        x86_offset(code_buf, OffsetOp::Dec, OffsetMode::BytePtr, reg);
     }
-    fn add_reg(reg: X86_64Register, imm: i64) -> Result<Vec<u8>, BFCompileError> {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) -> FailableInstrEncoding {
         match imm {
             i if ((i8::MIN as i64)..=(i8::MAX as i64)).contains(&i) => {
-                Ok(add_reg_imm8(reg, imm as i8))
+                add_reg_imm8(code_buf, reg, imm as i8);
             }
             i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
-                Ok(add_reg_imm32(reg, imm as i32))
+                add_reg_imm32(code_buf, reg, imm as i32);
             }
-            _ => Ok(add_reg_imm64(reg, imm)),
+            _ => add_reg_imm64(code_buf, reg, imm),
         }
+        Ok(())
     }
-    fn add_byte(reg: X86_64Register, imm: i8) -> Vec<u8> {
+    fn add_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
         // ADD byte [reg], imm8
-        vec![0x80_u8, reg as u8, imm as u8]
+        code_buf.extend([0x80_u8, reg as u8, imm as u8]);
     }
-    fn sub_reg(reg: X86_64Register, imm: i64) -> Result<Vec<u8>, BFCompileError> {
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) -> FailableInstrEncoding {
         match imm {
             i if ((i8::MIN as i64)..=(i8::MAX as i64)).contains(&i) => {
-                Ok(sub_reg_imm8(reg, imm as i8))
+                sub_reg_imm8(code_buf, reg, imm as i8)
             }
             i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
-                Ok(sub_reg_imm32(reg, imm as i32))
+                sub_reg_imm32(code_buf, reg, imm as i32)
             }
-            _ => Ok(sub_reg_imm64(reg, imm)),
+            _ => sub_reg_imm64(code_buf, reg, imm),
         }
+        Ok(())
     }
-    fn sub_byte(reg: X86_64Register, imm: i8) -> Vec<u8> {
+    fn sub_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
         // SUB byte [reg], imm8
-        vec![0x80_u8, 0b00101000_u8 | (reg as u8), imm as u8]
+        code_buf.extend([0x80_u8, 0b00101000_u8 | (reg as u8), imm as u8]);
     }
-    fn zero_byte(reg: X86_64Register) -> Vec<u8> {
+    fn zero_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // MOV byte [reg], 0
-        vec![0x67_u8, 0xc6_u8, reg as u8, 0x00_u8]
+        code_buf.extend([0x67_u8, 0xc6_u8, reg as u8, 0x00_u8]);
     }
 }
 
 impl BFCompile for X86_64Inter {}
 
-fn add_reg_imm8(reg: X86_64Register, imm8: i8) -> Vec<u8> {
-    vec![0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]
+fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86_64Register, imm8: i8) {
+    code_buf.extend([0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
 }
 
-fn sub_reg_imm8(reg: X86_64Register, imm8: i8) -> Vec<u8> {
-    vec![0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]
+fn sub_reg_imm8(code_buf: &mut Vec<u8>, reg: X86_64Register, imm8: i8) {
+    code_buf.extend([0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
 }
 
-fn add_reg_imm32(reg: X86_64Register, imm32: i32) -> Vec<u8> {
-    let mut v = vec![0x81, ArithOp::Add as u8 | reg as u8];
-    v.extend(imm32.to_le_bytes());
-    v
+fn add_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
+    code_buf.extend([0x81, ArithOp::Add as u8 | reg as u8]);
+    code_buf.extend(imm32.to_le_bytes());
 }
 
-fn sub_reg_imm32(reg: X86_64Register, imm32: i32) -> Vec<u8> {
-    let mut v = vec![0x81, ArithOp::Sub as u8 | reg as u8];
-    v.extend(imm32.to_le_bytes());
-    v
+fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
+    code_buf.extend([0x81, ArithOp::Sub as u8 | reg as u8]);
+    code_buf.extend(imm32.to_le_bytes());
 }
 
 // There are no instructions to add or subtract a 64-bit immediate. Instead,
@@ -261,36 +266,34 @@ fn sub_reg_imm32(reg: X86_64Register, imm32: i32) -> Vec<u8> {
 // the 64-bit immediate to that register, ADD/SUB that register to the
 // target register, then POP that temporary register, to restore its
 // original value.
-#[inline]
-fn add_sub_qw(reg: X86_64Register, imm64: i64, op: ArithOp) -> Vec<u8> {
+fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64, op: ArithOp) {
     // cast reg in advanced as it's used multiple times
     let reg = reg as u8;
     // the temporary register shouldn't be the target register. This guarantees it won't be.
     let tmp_reg = if reg == 0 { 1_u8 } else { 0_u8 };
     #[rustfmt::skip]
-    let mut v = vec![
+    code_buf.extend([
         // PUSH tmp_reg
         0x50_u8|tmp_reg,
         // MOV tmp_reg, (imm64 to be appended)
         0x48_u8, 0xb8_u8|tmp_reg
-    ];
-    v.extend(imm64.to_le_bytes());
+    ]);
+    code_buf.extend(imm64.to_le_bytes());
     #[rustfmt::skip]
-    v.extend([
+    code_buf.extend([
         // (ADD||SUB) reg, tmp_reg
         0x48_u8, 0x01_u8 | op as u8, 0xc0_u8 + (tmp_reg << 3) + reg,
         // POP tmp_reg
         0x58 + tmp_reg,
     ]);
-    v
 }
 
-fn add_reg_imm64(reg: X86_64Register, imm64: i64) -> Vec<u8> {
-    add_sub_qw(reg, imm64, ArithOp::Add)
+fn add_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64) {
+    add_sub_qw(code_buf, reg, imm64, ArithOp::Add);
 }
 
-fn sub_reg_imm64(reg: X86_64Register, imm64: i64) -> Vec<u8> {
-    add_sub_qw(reg, imm64, ArithOp::Sub)
+fn sub_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64) {
+    add_sub_qw(code_buf, reg, imm64, ArithOp::Sub);
 }
 
 #[cfg(test)]
@@ -300,20 +303,27 @@ mod tests {
     #[test]
     fn test_set_reg() -> Result<(), String> {
         // test that appropriate encodings are used for different immediates
+        let mut v: Vec<u8> = Vec::new();
+        X86_64Inter::set_reg(&mut v, X86_64Register::RBX, 0);
         assert_eq!(
-            X86_64Inter::set_reg(X86_64Register::RBX, 0),
+            v,
             // XOR EBX, EBX
             vec![0x31, 0xc0 | 0b011000 | 0b011]
         );
+        v.clear();
+        X86_64Inter::set_reg(&mut v, X86_64Register::RBX, 128);
         assert_eq!(
-            X86_64Inter::set_reg(X86_64Register::RBX, 128),
+            v,
             // MOV EBX, 128
             vec![0xb8 | 0b011, 128, 0, 0, 0]
         );
 
+        v.clear();
+        X86_64Inter::set_reg(&mut v, X86_64Register::RBX, i64::MAX - 0xffff);
+
         #[rustfmt::skip]
         assert_eq!(
-            X86_64Inter::set_reg(X86_64Register::RBX, i64::MAX - 0xffff),
+            v,
             // MOV RBX, 0x7fffffffffff0000
             vec![0x48, 0xb8 | 0b011, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
         );

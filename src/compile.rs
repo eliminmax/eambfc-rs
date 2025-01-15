@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024-2025 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 use super::arch_inter::ArchInter;
@@ -6,7 +6,7 @@ use super::elf_tools::{
     EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, ELFOSABI,
 };
 use super::err::{BFCompileError, CodePosition};
-use super::optimize::{to_condensed, CondensedInstruction as CI};
+use super::optimize::{to_condensed, CondensedInstruction};
 use std::io::{BufReader, Read, Write};
 
 pub struct JumpLocation {
@@ -107,45 +107,43 @@ pub trait BFCompile: ArchInter {
     //  - arg3 is the number of bytes to write/read
     //
     // Due to their similarity, ',' and '.' are both implemented with bf_io.
-    fn bf_io(&self, sc: i64, fd: i64) -> Vec<u8> {
-        let mut instr_bytes = Self::set_reg(Self::REGISTERS.sc_num, sc);
-        instr_bytes.extend(Self::set_reg(Self::REGISTERS.arg1, fd));
-        instr_bytes.extend(Self::reg_copy(Self::REGISTERS.arg2, Self::REGISTERS.bf_ptr));
-        instr_bytes.extend(Self::set_reg(Self::REGISTERS.arg3, 1));
-        instr_bytes.extend(Self::syscall());
-        instr_bytes
+    fn bf_io(&self, code_buf: &mut Vec<u8>, sc: i64, fd: i64) {
+        Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc);
+        Self::set_reg(code_buf, Self::REGISTERS.arg1, fd);
+        Self::reg_copy(code_buf, Self::REGISTERS.arg2, Self::REGISTERS.bf_ptr);
+        Self::set_reg(code_buf, Self::REGISTERS.arg3, 1);
+        Self::syscall(code_buf);
     }
 
     fn compile_instr(
         &self,
         instr: u8,
-        dst: &mut Vec<u8>,
+        code_buf: &mut Vec<u8>,
         loc: &mut CodePosition,
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
         loc.col += 1;
-        let to_write: Vec<u8> = match instr {
+        match instr {
             // decrement the tape pointer register
-            b'<' => Self::dec_reg(Self::REGISTERS.bf_ptr),
+            b'<' => Self::dec_reg(code_buf, Self::REGISTERS.bf_ptr),
             // increment the tape pointer register
-            b'>' => Self::inc_reg(Self::REGISTERS.bf_ptr),
+            b'>' => Self::inc_reg(code_buf, Self::REGISTERS.bf_ptr),
             // decrement the current cell value
-            b'-' => Self::dec_byte(Self::REGISTERS.bf_ptr),
+            b'-' => Self::dec_byte(code_buf, Self::REGISTERS.bf_ptr),
             // increment the current cell value
-            b'+' => Self::inc_byte(Self::REGISTERS.bf_ptr),
+            b'+' => Self::inc_byte(code_buf, Self::REGISTERS.bf_ptr),
             // Write 1 byte at [bf_ptr] to STDOUT
-            b'.' => self.bf_io(Self::SC_NUMS.write, 1),
+            b'.' => self.bf_io(code_buf, Self::SC_NUMS.write, 1),
             // Read 1 byte to [bf_ptr] from STDIN
-            b',' => self.bf_io(Self::SC_NUMS.read, 0),
+            b',' => self.bf_io(code_buf, Self::SC_NUMS.read, 0),
             // for this, fill jump_size bytes with NOPs, and push the location to jump_stack.
             // will replace when reaching the corresponding ']' instruction
             b'[' => {
                 jump_stack.push(JumpLocation {
                     loc: loc.clone(),
-                    index: dst.len(),
+                    index: code_buf.len(),
                 });
-                dst.extend(Self::nop_loop_open());
-                return Ok(());
+                Self::nop_loop_open(code_buf);
             }
             b']' => {
                 // First, compile the skipped '[' instruction
@@ -159,80 +157,46 @@ pub trait BFCompile: ArchInter {
                             loc: loc.clone(),
                         })?;
                 let open_address = open_location.index;
-                let distance = dst.len() - open_address;
-                dst[open_address..open_address + Self::JUMP_SIZE].swap_with_slice(
-                    &mut Self::jump_zero(Self::REGISTERS.bf_ptr, distance as i64)?,
-                );
-                Self::jump_not_zero(Self::REGISTERS.bf_ptr, -(distance as i64))?
+                let distance = code_buf.len() - open_address;
+                let mut jump_code: Vec<u8> = Vec::with_capacity(Self::JUMP_SIZE);
+                Self::jump_zero(&mut jump_code, Self::REGISTERS.bf_ptr, distance as i64)?;
+                code_buf[open_address..open_address + Self::JUMP_SIZE]
+                    .swap_with_slice(&mut jump_code[..]);
+                Self::jump_not_zero(code_buf, Self::REGISTERS.bf_ptr, -(distance as i64))?;
             }
             b'\n' => {
                 loc.col = 1;
                 loc.line += 1;
-                return Ok(());
             }
-            _ => {
-                return Ok(());
-            }
-        };
-        match dst.write(to_write.as_slice()) {
-            Ok(count) if count == to_write.len() => Ok(()),
-            Ok(count) => Err(BFCompileError::Positional {
-                id: String::from("FAILED_WRITE"),
-                msg: format!(
-                    "Expected to write {} bytes when compiling, wrote {}",
-                    to_write.len(),
-                    count
-                ),
-
-                instr,
-                loc: loc.clone(),
-            }),
-            Err(_) => Err(BFCompileError::Positional {
-                id: String::from("FAILED_WRITE"),
-                msg: String::from("Failed to write to buffer."),
-                instr,
-                loc: loc.clone(),
-            }),
+            _ => (),
         }
+        Ok(())
     }
 
     fn compile_condensed(
         &self,
-        condensed_instr: CI,
+        condensed_instr: CondensedInstruction,
         dst: &mut Vec<u8>,
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
-        let to_write: Vec<u8> = match condensed_instr {
-            CI::SetZero => Self::zero_byte(Self::REGISTERS.bf_ptr),
-            CI::RepeatAdd(count) => Self::add_byte(Self::REGISTERS.bf_ptr, count as i8),
-            CI::RepeatSub(count) => Self::sub_byte(Self::REGISTERS.bf_ptr, count as i8),
-            CI::RepeatMoveR(count) => Self::add_reg(Self::REGISTERS.bf_ptr, count as i64)?,
-            CI::RepeatMoveL(count) => Self::sub_reg(Self::REGISTERS.bf_ptr, count as i64)?,
+        use CondensedInstruction as CI;
+        match condensed_instr {
+            CI::SetZero => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
+            CI::RepeatAdd(count) => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as i8),
+            CI::RepeatSub(count) => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as i8),
+            CI::RepeatMoveR(count) => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as i64)?,
+            CI::RepeatMoveL(count) => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as i64)?,
             CI::BFInstruction(i) => {
-                return self.compile_instr(
+                self.compile_instr(
                     i,
                     dst,
                     // throwaway position value
                     &mut CodePosition { line: 0, col: 0 },
                     jump_stack,
-                );
+                )?;
             }
-        };
-        match dst.write(to_write.as_slice()) {
-            Ok(count) if count == to_write.len() => Ok(()),
-            Ok(count) => Err(BFCompileError::Basic {
-                id: String::from("FAILED_WRITE"),
-                msg: format!(
-                    "Expected to write {} bytes when compiling, wrote {}",
-                    to_write.len(),
-                    count
-                ),
-            }),
-            Err(_) => Err(BFCompileError::Basic {
-                id: String::from("FAILED_WRITE"),
-                msg: String::from("Failed to write to buffer."),
-            }),
         }
+        Ok(())
     }
 
     fn compile(
@@ -244,7 +208,8 @@ pub trait BFCompile: ArchInter {
     ) -> Result<(), Vec<BFCompileError>> {
         let mut jump_stack = Vec::<JumpLocation>::new();
         let mut loc = CodePosition { line: 1, col: 0 };
-        let mut code_buf = Self::set_reg(Self::REGISTERS.bf_ptr, TAPE_ADDR as i64);
+        let mut code_buf: Vec<u8> = Vec::new();
+        Self::set_reg(&mut code_buf, Self::REGISTERS.bf_ptr, TAPE_ADDR as i64);
         let mut errs = Vec::<BFCompileError>::new();
 
         let reader = BufReader::new(in_f);
@@ -293,9 +258,9 @@ pub trait BFCompile: ArchInter {
             });
         }
         // finally, after that mess, end with an exit(0)
-        code_buf.extend(Self::set_reg(Self::REGISTERS.sc_num, Self::SC_NUMS.exit));
-        code_buf.extend(Self::set_reg(Self::REGISTERS.arg1, 0));
-        code_buf.extend(Self::syscall());
+        Self::set_reg(&mut code_buf, Self::REGISTERS.sc_num, Self::SC_NUMS.exit);
+        Self::set_reg(&mut code_buf, Self::REGISTERS.arg1, 0);
+        Self::syscall(&mut code_buf);
 
         let code_sz = code_buf.len();
         if let Err(e) = write_headers(&mut out_f, code_sz, tape_blocks, Self::EI_DATA, Self::ARCH) {
