@@ -15,6 +15,7 @@ where
     const REGISTERS: Registers<Self::RegType>;
     const SC_NUMS: SyscallNums;
     const ARCH: ELFArch;
+    const E_FLAGS: u32;
     const EI_DATA: EIData;
     fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType);

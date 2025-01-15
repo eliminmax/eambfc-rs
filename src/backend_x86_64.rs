@@ -133,6 +133,8 @@ pub struct X86_64Inter;
 impl ArchInter for X86_64Inter {
     type RegType = X86_64Register;
     const JUMP_SIZE: usize = 9;
+    const E_FLAGS: u32 = 0;
+
     const REGISTERS: Registers<X86_64Register> = Registers {
         sc_num: X86_64Register::RAX,
         arg1: X86_64Register::RDI,

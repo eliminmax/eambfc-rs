@@ -27,6 +27,7 @@ fn write_headers(
     tape_blocks: u64,
     ei_data: EIData,
     elf_arch: ELFArch,
+    e_flags: u32,
 ) -> Result<(), BFCompileError> {
     // ELF addressing stuff that depends on tape_blocks, so can't be constant
     let tape_size: u64 = tape_blocks * 0x1000;
@@ -51,7 +52,7 @@ fn write_headers(
         e_shentsize: 0, // no section header table, must be 0
         e_shstrndx: 0,  // no section header table, must be 0
         e_entry: start_vaddr,
-        e_flags: 0, // ISA-specific flags. None are defined for x86_64, so set to 0.
+        e_flags
     };
     let tape_segment = Phdr {
         e_data: ei_data,
@@ -76,8 +77,8 @@ fn write_headers(
         p_align: 1,                              // align with this power of 2
     };
     let mut to_write = Vec::<u8>::from(ehdr);
-    to_write.extend(Vec::<u8>::from(tape_segment).as_slice());
-    to_write.extend(Vec::<u8>::from(code_segment).as_slice());
+    to_write.extend(Vec::<u8>::from(tape_segment));
+    to_write.extend(Vec::<u8>::from(code_segment));
 
     // add padding bytes
     to_write.resize(start_paddr as usize, 0u8);
@@ -107,7 +108,7 @@ pub trait BFCompile: ArchInter {
     //  - arg3 is the number of bytes to write/read
     //
     // Due to their similarity, ',' and '.' are both implemented with bf_io.
-    fn bf_io(&self, code_buf: &mut Vec<u8>, sc: i64, fd: i64) {
+    fn bf_io(code_buf: &mut Vec<u8>, sc: i64, fd: i64) {
         Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc);
         Self::set_reg(code_buf, Self::REGISTERS.arg1, fd);
         Self::reg_copy(code_buf, Self::REGISTERS.arg2, Self::REGISTERS.bf_ptr);
@@ -116,7 +117,6 @@ pub trait BFCompile: ArchInter {
     }
 
     fn compile_instr(
-        &self,
         instr: u8,
         code_buf: &mut Vec<u8>,
         loc: &mut CodePosition,
@@ -133,9 +133,9 @@ pub trait BFCompile: ArchInter {
             // increment the current cell value
             b'+' => Self::inc_byte(code_buf, Self::REGISTERS.bf_ptr),
             // Write 1 byte at [bf_ptr] to STDOUT
-            b'.' => self.bf_io(code_buf, Self::SC_NUMS.write, 1),
+            b'.' => Self::bf_io(code_buf, Self::SC_NUMS.write, 1),
             // Read 1 byte to [bf_ptr] from STDIN
-            b',' => self.bf_io(code_buf, Self::SC_NUMS.read, 0),
+            b',' => Self::bf_io(code_buf, Self::SC_NUMS.read, 0),
             // for this, fill jump_size bytes with NOPs, and push the location to jump_stack.
             // will replace when reaching the corresponding ']' instruction
             b'[' => {
@@ -174,7 +174,6 @@ pub trait BFCompile: ArchInter {
     }
 
     fn compile_condensed(
-        &self,
         condensed_instr: CondensedInstruction,
         dst: &mut Vec<u8>,
         jump_stack: &mut Vec<JumpLocation>,
@@ -187,7 +186,7 @@ pub trait BFCompile: ArchInter {
             CI::RepeatMoveR(count) => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as i64)?,
             CI::RepeatMoveL(count) => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as i64)?,
             CI::BFInstruction(i) => {
-                self.compile_instr(
+                Self::compile_instr(
                     i,
                     dst,
                     // throwaway position value
@@ -200,7 +199,6 @@ pub trait BFCompile: ArchInter {
     }
 
     fn compile(
-        &self,
         in_f: Box<dyn Read>,
         mut out_f: Box<dyn Write>,
         optimize: bool,
@@ -219,7 +217,7 @@ pub trait BFCompile: ArchInter {
                 Ok(condensed) => condensed
                     .into_iter()
                     .filter_map(|i| {
-                        if let Err(e) = self.compile_condensed(i, &mut code_buf, &mut jump_stack) {
+                        if let Err(e) = Self::compile_condensed(i, &mut code_buf, &mut jump_stack) {
                             Some(e)
                         } else {
                             None
@@ -232,7 +230,7 @@ pub trait BFCompile: ArchInter {
             reader.bytes().for_each(|maybe_byte| match maybe_byte {
                 Ok(byte) => {
                     if let Err(e) =
-                        self.compile_instr(byte, &mut code_buf, &mut loc, &mut jump_stack)
+                        Self::compile_instr(byte, &mut code_buf, &mut loc, &mut jump_stack)
                     {
                         errs.push(e);
                     }
@@ -263,7 +261,14 @@ pub trait BFCompile: ArchInter {
         Self::syscall(&mut code_buf);
 
         let code_sz = code_buf.len();
-        if let Err(e) = write_headers(&mut out_f, code_sz, tape_blocks, Self::EI_DATA, Self::ARCH) {
+        if let Err(e) = write_headers(
+            &mut out_f,
+            code_sz,
+            tape_blocks,
+            Self::EI_DATA,
+            Self::ARCH,
+            Self::E_FLAGS,
+        ) {
             errs.push(e);
         }
         match out_f.write(code_buf.as_slice()) {
@@ -290,72 +295,65 @@ mod tests {
     use super::super::backend_x86_64::X86_64Inter;
     use super::*;
 
-    const X86_64_INTER: X86_64Inter = X86_64Inter;
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
-        X86_64_INTER
-            .compile(
-                Box::new(b"+[>]<-,.".as_slice()),
-                Box::new(Vec::<u8>::new()),
-                false,
-                8,
-            )
-            .map_err(|e| format!("Failed to compile: {:?}", e))
+        X86_64Inter::compile(
+            Box::new(b"+[>]<-,.".as_slice()),
+            Box::new(Vec::<u8>::new()),
+            false,
+            8,
+        )
+        .map_err(|e| format!("Failed to compile: {:?}", e))
     }
 
     #[test]
     fn compile_nested_loops() -> Result<(), String> {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
-        X86_64_INTER
-            .compile(
-                Box::new(b">+[-->---[-<]>]>+".as_slice()),
-                Box::new(Vec::<u8>::new()),
-                false,
-                8,
-            )
-            .map_err(|e| format!("Failed to compile: {:?}", e))
+        X86_64Inter::compile(
+            Box::new(b">+[-->---[-<]>]>+".as_slice()),
+            Box::new(Vec::<u8>::new()),
+            false,
+            8,
+        )
+        .map_err(|e| format!("Failed to compile: {:?}", e))
     }
 
     #[test]
     fn unmatched_open() -> Result<(), String> {
-        assert!(X86_64_INTER
-            .compile(
-                Box::new(b"[".as_slice()),
-                Box::new(Vec::<u8>::new()),
-                false,
-                8,
-            )
-            .is_err_and(|e| {
-                match e.into_iter().next().unwrap() {
-                    BFCompileError::Basic { id, .. }
-                    | BFCompileError::Instruction { id, .. }
-                    | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_OPEN"),
-                    BFCompileError::UnknownFlag(_) => false,
-                }
-            }));
+        assert!(X86_64Inter::compile(
+            Box::new(b"[".as_slice()),
+            Box::new(Vec::<u8>::new()),
+            false,
+            8,
+        )
+        .is_err_and(|e| {
+            match e.into_iter().next().unwrap() {
+                BFCompileError::Basic { id, .. }
+                | BFCompileError::Instruction { id, .. }
+                | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_OPEN"),
+                BFCompileError::UnknownFlag(_) => false,
+            }
+        }));
         Ok(())
     }
 
     #[test]
     fn unmatched_close() -> Result<(), String> {
-        assert!(X86_64_INTER
-            .compile(
-                Box::new(b"]".as_slice()),
-                Box::new(Vec::<u8>::new()),
-                false,
-                8,
-            )
-            .is_err_and(|e| {
-                match e.into_iter().next().unwrap() {
-                    BFCompileError::Basic { id, .. }
-                    | BFCompileError::Instruction { id, .. }
-                    | BFCompileError::Positional { id, .. } => {
-                        id == String::from("UNMATCHED_CLOSE")
-                    }
-                    BFCompileError::UnknownFlag(_) => false,
-                }
-            }));
+        assert!(X86_64Inter::compile(
+            Box::new(b"]".as_slice()),
+            Box::new(Vec::<u8>::new()),
+            false,
+            8,
+        )
+        .is_err_and(|e| {
+            match e.into_iter().next().unwrap() {
+                BFCompileError::Basic { id, .. }
+                | BFCompileError::Instruction { id, .. }
+                | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_CLOSE"),
+                BFCompileError::UnknownFlag(_) => false,
+            }
+        }));
         Ok(())
     }
 }

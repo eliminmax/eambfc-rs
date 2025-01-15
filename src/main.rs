@@ -93,8 +93,8 @@ fn rm_ext<'a>(filename: &'a OsStr, extension: &OsStr) -> Result<OsString, &'a Os
 }
 
 // wrapper around the compilation of a specific file
-fn compile_wrapper<T: BFCompile>(
-    compiler: T,
+fn compile_wrapper<Compiler: BFCompile>(
+    _compiler: Compiler,
     file_name: &OsString,
     extension: &OsStr,
     optimize: bool,
@@ -134,7 +134,7 @@ fn compile_wrapper<T: BFCompile>(
             ),
         }]
     })?;
-    if let Err(e) = compiler.compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks) {
+    if let Err(e) = Compiler::compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks) {
         if !keep {
             // try to delete the file
             let _ = remove_file(rm_ext(file_name, extension).unwrap_or(OsString::from("")));

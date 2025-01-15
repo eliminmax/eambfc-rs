@@ -315,6 +315,8 @@ pub struct S390xInter;
 impl ArchInter for S390xInter {
     type RegType = S390xRegister;
     const JUMP_SIZE: usize = 18;
+    const E_FLAGS: u32 = 0;
+
     const REGISTERS: Registers<S390xRegister> = Registers {
         sc_num: S390xRegister::R1,
         arg1: S390xRegister::R2,

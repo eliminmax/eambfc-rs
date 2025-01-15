@@ -173,6 +173,7 @@ pub struct Arm64Inter;
 impl ArchInter for Arm64Inter {
     type RegType = Arm64Register;
     const JUMP_SIZE: usize = 12;
+    const E_FLAGS: u32 = 0;
 
     const REGISTERS: Registers<Arm64Register> = Registers {
         // Linux uses w8 for system call numbers, but w8 is just the lower 32 bits of x8.
