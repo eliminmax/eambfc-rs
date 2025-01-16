@@ -35,7 +35,7 @@
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
-use super::err::BFCompileError;
+use super::err::{BFCompileError, BFErrorID};
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
@@ -97,9 +97,9 @@ fn x86_offset(code_buf: &mut Vec<u8>, op: OffsetOp, mode: OffsetMode, reg: X86_6
 // Vol. 2D B.1.4.7 Condition Test (tttn) Field table, and generates a function which takes a
 // register and a signed 64-bit offset, and if the offset is within range, returns a vector of
 // bytes representing a TEST instruction that runs on the byte pointed to by the register, and
-// returns a BFCompileError::Basic with the identifier "JUMP_TOO_LONG" if it's out of range. The
-// reason it takes an i64 instead of an i32 is so that other architectures with different maximum
-// jump lenghts could have the same interface as x86_64.
+// returns a BFCompileError::JUMP_TOO_LONG if it's out of range. The reason it takes an i64 instead
+// of an i32 is so that other architectures with different maximum jump lengths could have the same
+// interface as x86_64.
 macro_rules! fn_test_jcc {
     ($fn_name:ident, $tttn:literal) => {
         fn $fn_name(
@@ -111,9 +111,11 @@ macro_rules! fn_test_jcc {
             // run at compile time rather than runtime.
             const _: () = assert!($tttn & 0xf0_u8 == 0);
             let offset_bytes = TryInto::<i32>::try_into(offset)
-                .map_err(|_| BFCompileError::Basic {
-                    id: String::from("JUMP_TOO_LONG"),
-                    msg: format!("{offset} is outside the range of possible 32-bit signed values"),
+                .map_err(|_| {
+                    BFCompileError::basic(
+                        BFErrorID::JUMP_TOO_LONG,
+                        format!("{offset} is outside the range of possible 32-bit signed values"),
+                    )
                 })?
                 .to_le_bytes();
             #[rustfmt::skip]

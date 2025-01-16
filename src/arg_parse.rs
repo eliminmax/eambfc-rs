@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::elf_tools::ELFArch;
-use super::err::BFCompileError;
+use super::err::{BFCompileError, BFErrorID};
 use super::OutMode;
 use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -83,13 +83,13 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                                 next_arg
                             } else {
                                 return Err((
-                                    BFCompileError::Basic {
-                                        id: String::from("MISSING_OPERAND"),
-                                        msg: format!(
-                                            "-{} requires an additional argument",
-                                            $flag as char
+                                    BFCompileError::basic(
+                                        BFErrorID::MISSING_OPERAND,
+                                        format!(
+                                            "-\"{}\" requires an additional argument",
+                                            $flag.escape_ascii(),
                                         ),
-                                    },
+                                    ),
                                     progname,
                                     out_mode,
                                 ));
@@ -101,10 +101,10 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                     b'a' => {
                         if arch.is_some() {
                             return Err((
-                                BFCompileError::Basic {
-                                    id: String::from("MULTIPLE_ARCHES"),
-                                    msg: String::from("passed -a multiple times"),
-                                },
+                                BFCompileError::basic(
+                                    BFErrorID::MULTIPLE_ARCHES,
+                                    String::from("passed -a multiple times"),
+                                ),
                                 progname,
                                 out_mode,
                             ));
@@ -120,13 +120,13 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                             b"s390x" | b"s390" | b"z/architecture" => arch = Some(ELFArch::S390x),
                             f => {
                                 return Err((
-                                    BFCompileError::Basic {
-                                        id: String::from("UNKNOWN_ARCH"),
-                                        msg: format!(
+                                    BFCompileError::basic(
+                                        BFErrorID::UNKNOWN_ARCH,
+                                        format!(
                                             "{} is not a recognized architecture",
                                             OsStr::from_bytes(f).to_string_lossy()
                                         ),
-                                    },
+                                    ),
                                     progname,
                                     out_mode,
                                 ))
@@ -137,10 +137,10 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                     b'e' => {
                         if !extension.is_empty() {
                             return Err((
-                                BFCompileError::Basic {
-                                    id: "MULTIPLE_EXTENSIONS".to_string(),
-                                    msg: "passed -e multiple times".to_string(),
-                                },
+                                BFCompileError::basic(
+                                    BFErrorID::MULTIPLE_EXTENSIONS,
+                                    "passed -e multiple times",
+                                ),
                                 progname,
                                 out_mode,
                             ));
@@ -151,10 +151,10 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                     b't' => {
                         if tape_blocks.is_some() {
                             return Err((
-                                BFCompileError::Basic {
-                                    id: "MULTIPLE_TAPE_BLOCK_COUNTS".to_string(),
-                                    msg: "passed -t multiple times".to_string(),
-                                },
+                                BFCompileError::basic(
+                                    BFErrorID::MULTIPLE_TAPE_BLOCK_COUNTS,
+                                    "passed -t multiple times",
+                                ),
                                 progname,
                                 out_mode,
                             ));
@@ -162,10 +162,10 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                         match parameter_instr!(b't').to_string_lossy().parse::<u64>() {
                             Ok(0) => {
                                 return Err((
-                                    BFCompileError::Basic {
-                                        id: String::from("NO_TAPE"),
-                                        msg: String::from("Tape value for -t must be at least 1."),
-                                    },
+                                    BFCompileError::basic(
+                                        BFErrorID::NO_TAPE,
+                                        "Tape value for -t must be at least 1.",
+                                    ),
                                     progname,
                                     out_mode,
                                 ));
@@ -174,12 +174,10 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                             // integer limit.
                             Ok(i) if i >= u64::MAX >> 12 => {
                                 return Err((
-                                    BFCompileError::Basic {
-                                        id: String::from("TAPE_TOO_LARGE"),
-                                        msg: format!(
-                                            "{i} * 0x1000 exceeds the 64-bit integer limit."
-                                        ),
-                                    },
+                                    BFCompileError::basic(
+                                        BFErrorID::TAPE_TOO_LARGE,
+                                        format!("{i} * 0x1000 exceeds the 64-bit integer limit."),
+                                    ),
                                     progname,
                                     out_mode,
                                 ));
@@ -187,10 +185,10 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                             Ok(i) => tape_blocks = Some(i),
                             Err(s) => {
                                 return Err((
-                                    BFCompileError::Basic {
-                                        id: String::from("NOT_NUMERIC"),
-                                        msg: format!("{s} could not be parsed as a numeric value"),
-                                    },
+                                    BFCompileError::basic(
+                                        BFErrorID::NOT_NUMERIC,
+                                        format!("{s} could not be parsed as a numeric value"),
+                                    ),
                                     progname,
                                     out_mode,
                                 ));
@@ -211,7 +209,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                     b'O' => optimize = true,
                     b'k' => keep = true,
                     b'c' => cont = true,
-                    c => return Err((BFCompileError::UnknownFlag(c), progname, out_mode)),
+                    c => return Err((BFCompileError::unknown_flag(c), progname, out_mode)),
                 };
             }
         } else {
@@ -224,10 +222,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
     }
     if source_files.is_empty() {
         return Err((
-            BFCompileError::Basic {
-                id: "NO_SOURCE_FILES".to_string(),
-                msg: "No source files provided".to_string(),
-            },
+            BFCompileError::basic(BFErrorID::NO_SOURCE_FILES, "No source files provided"),
             progname,
             out_mode,
         ));
@@ -255,15 +250,6 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[inline]
-    fn error_thrown(err: BFCompileError) -> String {
-        match err {
-            BFCompileError::UnknownFlag(_) => String::from("UNKNOWN_ARG"),
-            BFCompileError::Basic { id, .. }
-            | BFCompileError::Instruction { id, .. }
-            | BFCompileError::Positional { id, .. } => id,
-        }
-    }
 
     #[test]
     fn combined_args() -> Result<(), String> {
@@ -370,7 +356,7 @@ mod tests {
         match err {
             (bf_err, name, _) => {
                 assert_eq!(name, String::from("eambfc-rs"));
-                assert_eq!(error_thrown(bf_err), String::from("NO_SOURCE_FILES"));
+                assert_eq!(bf_err.kind, BFErrorID::NO_SOURCE_FILES);
             }
         }
 
@@ -418,7 +404,7 @@ mod tests {
         ]
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(error_thrown(err), String::from("NOT_NUMERIC"));
+        assert_eq!(err.kind, BFErrorID::NOT_NUMERIC);
         Ok(())
     }
 
@@ -431,10 +417,7 @@ mod tests {
         ]
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(
-            error_thrown(err),
-            String::from("MULTIPLE_TAPE_BLOCK_COUNTS")
-        );
+        assert_eq!(err.kind, BFErrorID::MULTIPLE_TAPE_BLOCK_COUNTS);
         Ok(())
     }
 
@@ -446,7 +429,7 @@ mod tests {
         ]
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(error_thrown(err), String::from("NO_TAPE"));
+        assert_eq!(err.kind, BFErrorID::NO_TAPE);
         Ok(())
     }
 
@@ -458,7 +441,7 @@ mod tests {
         ]
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(error_thrown(err), String::from("MISSING_OPERAND"));
+        assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
         Ok(())
     }
 }

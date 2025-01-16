@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::err::BFCompileError;
+use super::err::{BFCompileError, BFErrorID};
 use std::io::Read;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -17,12 +17,9 @@ pub enum CondensedInstruction {
 
 pub fn to_condensed(mut file: Box<dyn Read>) -> Result<Vec<CondensedInstruction>, BFCompileError> {
     let mut code_buf = Vec::<u8>::new();
-    let _ = file
-        .read_to_end(&mut code_buf)
-        .map_err(|_| BFCompileError::Basic {
-            id: String::from("FAILED_READ"),
-            msg: String::from("Failed to read file into buffer"),
-        })?;
+    let _ = file.read_to_end(&mut code_buf).map_err(|_| {
+        BFCompileError::basic(BFErrorID::FAILED_READ, "Failed to read file into buffer")
+    })?;
     code_buf.retain(|b| b"+-<>,.[]".contains(b));
     loops_match(code_buf.as_slice())?;
     let stripped_bytes = strip_dead_code(code_buf);
@@ -44,20 +41,18 @@ fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
         _ => {}
     });
     if nest_level > 0 {
-        Err(BFCompileError::Basic {
-            id: String::from("UNMATCHED_OPEN"),
-            msg: String::from(
-                "Found an unmatched '[' while preparing for optimization. \
+        Err(BFCompileError::basic(
+            BFErrorID::UNMATCHED_OPEN,
+            "Found an unmatched '[' while preparing for optimization. \
                     Compile without -O for more information.",
-            ),
-        })
+        ))
     } else {
-        ret.map_err(|_| BFCompileError::Basic {
-            id: String::from("UNMATCHED_CLOSE"),
-            msg: String::from(
+        ret.map_err(|_| {
+            BFCompileError::basic(
+                BFErrorID::UNMATCHED_CLOSE,
                 "Found an unmatched ']' while preparing for optimization. \
                     Compile without -O for more information.",
-            ),
+            )
         })
     }
 }
@@ -180,16 +175,6 @@ fn condense(stripped_bytes: Vec<u8>) -> Vec<CondensedInstruction> {
 mod tests {
     use super::*;
 
-    #[inline]
-    fn error_thrown(err: BFCompileError) -> String {
-        match err {
-            BFCompileError::UnknownFlag(_) => String::from("UNKNOWN_ARG"),
-            BFCompileError::Basic { id, .. }
-            | BFCompileError::Instruction { id, .. }
-            | BFCompileError::Positional { id, .. } => id,
-        }
-    }
-
     #[test]
     fn strip_dead_code_test() -> Result<(), String> {
         let mut code = Vec::from(b"[+++++]><+---+++-[-][,[-][+>-<]]-+[-+]-+[]+-[]");
@@ -238,7 +223,7 @@ mod tests {
                     "Did not see error when trying to read from unreadable",
                 ))
             }
-            Err(e) => assert_eq!(error_thrown(e), String::from("FAILED_READ")),
+            Err(e) => assert_eq!(e.kind, BFErrorID::FAILED_READ),
         };
         Ok(())
     }
@@ -246,12 +231,12 @@ mod tests {
     #[test]
     fn unmatched_loops_detected() -> Result<(), String> {
         assert_eq!(
-            error_thrown(loops_match(b"[").unwrap_err()),
-            "UNMATCHED_OPEN"
+            loops_match(b"[").unwrap_err().kind,
+            BFErrorID::UNMATCHED_OPEN,
         );
         assert_eq!(
-            error_thrown(loops_match(b"]").unwrap_err()),
-            "UNMATCHED_CLOSE"
+            loops_match(b"]").unwrap_err().kind,
+            BFErrorID::UNMATCHED_CLOSE,
         );
         Ok(())
     }

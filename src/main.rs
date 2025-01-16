@@ -18,7 +18,7 @@ pub mod optimize;
 use arg_parse::RunConfig;
 use compile::BFCompile;
 use elf_tools::ELFArch;
-use err::BFCompileError;
+use err::{BFCompileError, BFErrorID};
 use std::env::args_os;
 use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
@@ -34,7 +34,7 @@ use backend_s390x::S390xInter;
 #[cfg(feature = "x86_64")]
 use backend_x86_64::X86_64Inter;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum OutMode {
     Basic,
     JSON,
@@ -102,13 +102,14 @@ fn compile_wrapper<Compiler: BFCompile>(
     tape_blocks: u64,
 ) -> Result<(), Vec<BFCompileError>> {
     let outfile_name = rm_ext(file_name, extension).map_err(|e| {
-        vec![BFCompileError::Basic {
-            id: String::from("BAD_EXTENSION"),
-            msg: format!(
-                "Filename {} does not end with expected extension.",
-                e.to_string_lossy()
+        vec![BFCompileError::basic(
+            BFErrorID::BAD_EXTENSION,
+            format!(
+                "Filename \"{}\" does not end with expected extension \"{}\"",
+                e.to_string_lossy(),
+                extension.to_string_lossy()
             ),
-        }]
+        )]
     })?;
     let mut open_options = OpenOptions::new();
     open_options
@@ -117,22 +118,22 @@ fn compile_wrapper<Compiler: BFCompile>(
         .truncate(true)
         .mode(0o755);
     let infile = File::open(file_name).map_err(|_| {
-        vec![BFCompileError::Basic {
-            id: String::from("OPEN_R_FAILED"),
-            msg: format!(
+        vec![BFCompileError::basic(
+            BFErrorID::OPEN_R_FAILED,
+            format!(
                 "Failed to open {} for reading.",
                 file_name.to_string_lossy()
             ),
-        }]
+        )]
     })?;
     let outfile = open_options.open(&outfile_name).map_err(|_| {
-        vec![BFCompileError::Basic {
-            id: String::from("OPEN_W_FAILED"),
-            msg: format!(
+        vec![BFCompileError::basic(
+            BFErrorID::OPEN_W_FAILED,
+            format!(
                 "Failed to open {} for writing.",
                 outfile_name.to_string_lossy()
             ),
-        }]
+        )]
     })?;
     if let Err(e) = Compiler::compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks) {
         if !keep {
@@ -199,7 +200,7 @@ fn main() {
                     _ => unreachable!(), // if architecture is disabled, it won't be included here
                 };
                 if let Err(errs) = comp_result {
-                    errs.into_iter().for_each(|e| e.report(&rc.out_mode));
+                    errs.into_iter().for_each(|e| e.report(rc.out_mode));
                     if !rc.cont {
                         process::exit(1);
                     } else {
@@ -224,7 +225,7 @@ There is NO WARRANTY, to the extent permitted by law.
             process::exit(exit_code);
         }
         Err((err, progname, out_mode)) => {
-            err.report(&out_mode);
+            err.report(out_mode);
             if out_mode == OutMode::Basic {
                 show_help(&mut stderr, &progname)
             }

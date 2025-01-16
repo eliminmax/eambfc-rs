@@ -5,7 +5,7 @@
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
-use super::err::BFCompileError;
+use super::err::{BFCompileError, BFErrorID};
 
 // The z/Architecture Principles of Operation comprehensively documents the
 // z/Architecture ISA, and its 14th edition was the main source for information
@@ -287,16 +287,14 @@ fn branch_cond(
 ) -> FailableInstrEncoding {
     // jumps are done by halfwords, not bytes, so make sure it's a valid offset with that in mind
     match offset {
-        i if i % 2 != 0 => Err(BFCompileError::Basic {
-            id: String::from("INVALID_JUMP_ADDRESS"),
-            msg: String::from("offset is not on a halfword boundary"),
-        }),
-        i if (i > 0 && (i >> 17) != 0) || (i < 0 && (i >> 17 != -1)) => {
-            Err(BFCompileError::Basic {
-                id: String::from("JUMP_TOO_LONG"),
-                msg: String::from("offset out of range for this architecture"),
-            })
-        }
+        i if i % 2 != 0 => Err(BFCompileError::basic(
+            BFErrorID::INVALID_JUMP_ADDRESS,
+            "offset is not on a halfword boundary",
+        )),
+        i if (i > 0 && (i >> 17) != 0) || (i < 0 && (i >> 17 != -1)) => Err(BFCompileError::basic(
+            BFErrorID::JUMP_TOO_LONG,
+            "offset out of range for this architecture",
+        )),
         _ => {
             let aux = aux_reg(reg);
             code_buf.extend(load_from_byte(reg, aux));

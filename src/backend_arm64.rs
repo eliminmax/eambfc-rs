@@ -5,7 +5,7 @@
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
-use super::err::BFCompileError;
+use super::err::{BFCompileError, BFErrorID};
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit
 // forms. w8 is the 32-bit form for register #8, and x0 is the 64-bit form for register #0.
@@ -135,19 +135,19 @@ macro_rules! fn_branch_cond {
             const _: () = assert!($cond & 0xf0_u8 == 0);
             // as A64 uses fixed-size 32-bit instructions, offset must be a multiple of 4.
             if offset % 4 != 0 {
-                return Err(BFCompileError::Basic {
-                    id: String::from("INVALID_JUMP_ADDRESS"),
-                    msg: format!("{offset} is an invalid address offset (offset % 4 != 0)"),
-                });
+                return Err(BFCompileError::basic(
+                    BFErrorID::INVALID_JUMP_ADDRESS,
+                    format!("{offset} is an invalid address offset (offset % 4 != 0)"),
+                ));
             }
             // Encoding uses 19 immediate bits, and treats it as having an implicit 0b00 at the
             // end, as it needs to be a multiple of 4 anyway. The result is that it must be a
             // 21-bit value. Make sure that it fits within that value.
             if std::cmp::max(offset.leading_ones(), offset.leading_zeros()) < 44 {
-                return Err(BFCompileError::Basic {
-                    id: String::from("JUMP_TOO_LONG"),
-                    msg: format!("{offset} is outside the range of possible 21-bit signed values"),
-                });
+                return Err(BFCompileError::basic(
+                    BFErrorID::JUMP_TOO_LONG,
+                    format!("{offset} is outside the range of possible 21-bit signed values"),
+                ));
             }
             let offset = 1 + ((offset as u32) >> 2) & 0x7ffff;
             let aux = aux_reg(reg);
@@ -288,13 +288,13 @@ fn add_sub_imm(
     shift: bool,
 ) -> FailableInstrEncoding {
     if (shift && (imm & !0xfff000) != 0) || (!shift && (imm & !0xfff) != 0) {
-        return Err(BFCompileError::Basic {
-            id: String::from("IMMEDIATE_TOO_LARGE"),
-            msg: format!(
+        return Err(BFCompileError::basic(
+            BFErrorID::IMMEDIATE_TOO_LARGE,
+            format!(
                 "0x{imm:x} is invalid for shift level {}",
                 12 * (shift as u8)
             ),
-        });
+        ));
     }
     let reg = reg as u8; // helpful as it's used multiple times.
     let imm = if shift { imm >> 12 } else { imm };

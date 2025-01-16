@@ -5,7 +5,7 @@ use super::arch_inter::ArchInter;
 use super::elf_tools::{
     EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, ELFOSABI,
 };
-use super::err::{BFCompileError, CodePosition};
+use super::err::{BFCompileError, BFErrorID, CodePosition};
 use super::optimize::{to_condensed, CondensedInstruction};
 use std::io::{BufReader, Read, Write};
 
@@ -52,7 +52,7 @@ fn write_headers(
         e_shentsize: 0, // no section header table, must be 0
         e_shstrndx: 0,  // no section header table, must be 0
         e_entry: start_vaddr,
-        e_flags
+        e_flags,
     };
     let tape_segment = Phdr {
         e_data: ei_data,
@@ -84,18 +84,18 @@ fn write_headers(
     to_write.resize(start_paddr as usize, 0u8);
     match output.write(to_write.as_slice()) {
         Ok(count) if count == to_write.len() => Ok(()),
-        Ok(count) => Err(BFCompileError::Basic {
-            id: String::from("FAILED_WRITE"),
-            msg: format!(
+        Ok(count) => Err(BFCompileError::basic(
+            BFErrorID::FAILED_WRITE,
+            format!(
                 "Expected to write {} bytes of ELF header and program header table, wrote {}",
                 to_write.len(),
                 count,
             ),
-        }),
-        Err(_) => Err(BFCompileError::Basic {
-            id: String::from("FAILED_WRITE"),
-            msg: String::from("Failed to write ELF header and program header table"),
-        }),
+        )),
+        Err(_) => Err(BFCompileError::basic(
+            BFErrorID::FAILED_WRITE,
+            "Failed to write ELF header and program header table",
+        )),
     }
 }
 
@@ -150,12 +150,12 @@ pub trait BFCompile: ArchInter {
                 let open_location =
                     jump_stack
                         .pop()
-                        .ok_or::<BFCompileError>(BFCompileError::Positional {
-                            id: String::from("UNMATCHED_CLOSE"),
-                            msg: String::from("Found ']' without matching '['."),
-                            instr: b']',
-                            loc: loc.clone(),
-                        })?;
+                        .ok_or::<BFCompileError>(BFCompileError::positional(
+                            BFErrorID::UNMATCHED_CLOSE,
+                            "Found ']' without matching '['.",
+                            b']',
+                            loc.clone(),
+                        ))?;
                 let open_address = open_location.index;
                 let distance = code_buf.len() - open_address;
                 let mut jump_code: Vec<u8> = Vec::with_capacity(Self::JUMP_SIZE);
@@ -236,24 +236,24 @@ pub trait BFCompile: ArchInter {
                     }
                 }
                 Err(_) => {
-                    errs.push(BFCompileError::Positional {
-                        id: String::from("FAILED_READ"),
-                        msg: String::from("Failed to read byte after current position"),
-                        instr: b'\0',
-                        loc: loc.clone(),
-                    });
+                    errs.push(BFCompileError::positional(
+                        BFErrorID::FAILED_READ,
+                        String::from("Failed to read byte after current position"),
+                        b'\0',
+                        loc.clone(),
+                    ));
                 }
             });
         }
 
         // quick check to make sure that there are no unterminated loops
         if let Some(jl) = jump_stack.pop() {
-            errs.push(BFCompileError::Positional {
-                id: String::from("UNMATCHED_OPEN"),
-                msg: String::from("Reached the end of the file with an unmatched '['"),
-                instr: b'[',
-                loc: jl.loc,
-            });
+            errs.push(BFCompileError::positional(
+                BFErrorID::UNMATCHED_OPEN,
+                String::from("Reached the end of the file with an unmatched '['"),
+                b'[',
+                jl.loc,
+            ));
         }
         // finally, after that mess, end with an exit(0)
         Self::set_reg(&mut code_buf, Self::REGISTERS.sc_num, Self::SC_NUMS.exit);
@@ -273,14 +273,14 @@ pub trait BFCompile: ArchInter {
         }
         match out_f.write(code_buf.as_slice()) {
             Ok(count) if count == code_sz => (),
-            Ok(count) => errs.push(BFCompileError::Basic {
-                id: String::from("FAILED_WRITE"),
-                msg: format!("Only wrote {count} out of expected {code_sz} machine code bytes"),
-            }),
-            Err(_) => errs.push(BFCompileError::Basic {
-                id: String::from("FAILED_WRITE"),
-                msg: String::from("Failed to write internal code buffer to output file"),
-            }),
+            Ok(count) => errs.push(BFCompileError::basic(
+                BFErrorID::FAILED_WRITE,
+                format!("Only wrote {count} out of expected {code_sz} machine code bytes"),
+            )),
+            Err(_) => errs.push(BFCompileError::basic(
+                BFErrorID::FAILED_WRITE,
+                "Failed to write internal code buffer to output file",
+            )),
         };
         if errs.is_empty() {
             Ok(())
@@ -327,14 +327,7 @@ mod tests {
             false,
             8,
         )
-        .is_err_and(|e| {
-            match e.into_iter().next().unwrap() {
-                BFCompileError::Basic { id, .. }
-                | BFCompileError::Instruction { id, .. }
-                | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_OPEN"),
-                BFCompileError::UnknownFlag(_) => false,
-            }
-        }));
+        .is_err_and(|e| e[0].kind == BFErrorID::UNMATCHED_OPEN));
         Ok(())
     }
 
@@ -346,14 +339,7 @@ mod tests {
             false,
             8,
         )
-        .is_err_and(|e| {
-            match e.into_iter().next().unwrap() {
-                BFCompileError::Basic { id, .. }
-                | BFCompileError::Instruction { id, .. }
-                | BFCompileError::Positional { id, .. } => id == String::from("UNMATCHED_CLOSE"),
-                BFCompileError::UnknownFlag(_) => false,
-            }
-        }));
+        .is_err_and(|e| e[0].kind == BFErrorID::UNMATCHED_CLOSE));
         Ok(())
     }
 }

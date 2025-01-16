@@ -3,143 +3,127 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::OutMode;
+use std::borrow::Cow;
 
-#[derive(Debug, PartialEq)]
-pub enum BFCompileError {
-    Basic {
-        id: String,
-        msg: String,
-    },
-    Instruction {
-        id: String,
-        msg: String,
-        instr: char,
-    },
-    Positional {
-        id: String,
-        msg: String,
-        instr: u8,
-        loc: CodePosition,
-    },
-    UnknownFlag(u8), // flag is a c character
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[allow(non_camel_case_types)]
+pub enum BFErrorID {
+    BAD_EXTENSION,
+    FAILED_READ,
+    FAILED_WRITE,
+    IMMEDIATE_TOO_LARGE,
+    INVALID_JUMP_ADDRESS,
+    JUMP_TOO_LONG,
+    MISSING_OPERAND,
+    MULTIPLE_ARCHES,
+    MULTIPLE_EXTENSIONS,
+    MULTIPLE_TAPE_BLOCK_COUNTS,
+    NO_SOURCE_FILES,
+    NO_TAPE,
+    NOT_NUMERIC,
+    OPEN_R_FAILED,
+    OPEN_W_FAILED,
+    TAPE_TOO_LARGE,
+    UNKNOWN_ARCH,
+    UNKNOWN_ARG,
+    UNMATCHED_CLOSE,
+    UNMATCHED_OPEN,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
+pub struct BFCompileError {
+    pub kind: BFErrorID,
+    msg: Cow<'static, str>,
+    instr: Option<u8>,
+    loc: Option<CodePosition>,
+}
+
+type ErrMsg = Cow<'static, str>;
+
+impl BFCompileError {
+    pub fn basic<M: Into<ErrMsg>>(kind: BFErrorID, msg: M) -> Self {
+        Self {
+            kind,
+            msg: msg.into(),
+            instr: None,
+            loc: None,
+        }
+    }
+    pub fn instruction<M: Into<ErrMsg>>(kind: BFErrorID, msg: M, instr: u8) -> Self {
+        Self {
+            kind,
+            msg: msg.into(),
+            instr: Some(instr),
+            loc: None,
+        }
+    }
+    pub fn positional<M: Into<ErrMsg>>(
+        kind: BFErrorID,
+        msg: M,
+        instr: u8,
+        loc: CodePosition,
+    ) -> Self {
+        Self {
+            kind,
+            msg: msg.into(),
+            instr: Some(instr),
+            loc: Some(loc),
+        }
+    }
+    pub fn unknown_flag(flag: u8) -> Self {
+        Self {
+            kind: BFErrorID::UNKNOWN_ARG,
+            msg: Cow::from(format!(
+                "'{}' is not a recognized argument",
+                flag.escape_ascii()
+            )),
+            instr: None,
+            loc: None,
+        }
+    }
+
+    fn report_basic(&self) {
+        let mut report_string = format!("Error {:?}", self.kind);
+        if let Some(instr) = self.instr {
+            report_string.push_str(&format!(" when compiling '{}'", instr.escape_ascii()));
+        }
+        if let Some(loc) = self.loc {
+            report_string.push_str(&format!(" at line {} column {}", loc.line, loc.col));
+        }
+        eprintln!("{report_string}: {}", self.msg);
+    }
+
+    fn report_json(&self) {
+        let mut report_string = format!("{{\"errorId\":\"{:?}\",", self.kind);
+        if let Some(instr) = self.instr {
+            report_string.push_str(",\"instruction\":\"");
+            match instr {
+                // characters with special backslash escapes in JSON but not Rust
+                0x08 => report_string.push_str("\\b"),
+                0x0c => report_string.push_str("\\f"),
+                // single quote doesn't need to be escaped for JSON, but Rust escapes it
+                b'\'' => report_string.push('\''),
+                c => report_string.push_str(&c.escape_ascii().to_string()),
+            }
+            report_string.push('\"');
+        }
+        if let Some(CodePosition { line, col }) = self.loc {
+            report_string.push_str(&format!(",\"line\":{line},\"column\":{col}"));
+        }
+        println!("{report_string},\"msg\":{}}}", self.msg);
+    }
+
+    pub fn report(&self, out_mode: OutMode) {
+        match out_mode {
+            OutMode::Quiet => (),
+            OutMode::Basic => self.report_basic(),
+            OutMode::JSON => self.report_json(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct CodePosition {
     pub line: usize,
     pub col: usize,
-}
-
-impl BFCompileError {
-    pub fn report(&self, out_mode: &OutMode) {
-        if *out_mode == OutMode::Quiet {
-            return;
-        }
-        match &self {
-            BFCompileError::Basic { id, msg } => {
-                if *out_mode == OutMode::Basic {
-                    eprintln!("Error {}: {}", id, msg);
-                } else {
-                    println!(
-                        "{{\"errorId\":\"{}\",\"message\":\"{}\"}}",
-                        json_str(id),
-                        json_str(msg)
-                    );
-                }
-            }
-            BFCompileError::Instruction { id, msg, instr } => {
-                if *out_mode == OutMode::Basic {
-                    eprintln!("Error {} when compiling {}: {}", id, instr, msg);
-                } else {
-                    println!(
-                        "{{\"errorId\":\"{}\",\"message\":\"{}\",\"instruction\":\"{}\"}}",
-                        json_str(id),
-                        json_str(msg),
-                        json_str(&instr.to_string())
-                    );
-                }
-            }
-            BFCompileError::Positional {
-                id,
-                msg,
-                instr,
-                loc,
-            } => {
-                let (line, col) = (loc.line, loc.col);
-                if *out_mode == OutMode::Basic {
-                    eprintln!(
-                        "Error {} when compiling {} at line {}, colunm {}: {}",
-                        id, instr, line, col, msg
-                    );
-                } else {
-                    println!(
-                        "{{\"errorId\":\"{}\",\"message\":\"{}\",\"instruction\":\"{}\",\
-                        \"line\":{},\"column\":{}}}",
-                        json_str(id),
-                        json_str(msg),
-                        json_str(&instr.to_string()),
-                        line,
-                        col
-                    );
-                }
-            }
-            BFCompileError::UnknownFlag(c) => {
-                if *out_mode == OutMode::Basic {
-                    eprintln!(
-                        "Error UNKNOWN_ARG: {} is not a recognized argument.",
-                        match *c {
-                            n if n < 0x80_u8 => (*c as char).to_string(),
-                            _ => format!("non-ASCII byte char 0x{c:02x}"),
-                        }
-                    );
-                } else {
-                    println!(
-                        "{{\"errorId\":\"UNKNOWN_ARG\",\
-                        \"message\":\"{} is not a recognized argument\"}}",
-                        match *c {
-                            n if n < 0x80_u8 => json_str(&(*c as char).to_string()),
-                            _ => format!("non-ASCII byte char 0x{c:02x}"),
-                        }
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn json_str(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            '\n' => "\\n".to_string(),
-            '\r' => "\\r".to_string(),
-            '\x0c' => "\\f".to_string(),
-            '\t' => "\\t".to_string(),
-            '\x08' => "\\b".to_string(),
-            '\\' => "\\\\".to_string(),
-            '"' => "\\\"".to_string(),
-            n if n < '\x20' => format!("\\u00{:02x}", n as u32),
-            _ => c.to_string(),
-        })
-        .collect::<Vec<String>>()
-        .join("")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn json_str_no_escapes() -> Result<(), String> {
-        assert_eq!(json_str("foo bar baz"), String::from("foo bar baz"));
-        Ok(())
-    }
-
-    #[test]
-    fn json_str_special_escapes() -> Result<(), String> {
-        assert_eq!(
-            json_str("\n\r\x0c\t\x08\\\""),
-            String::from("\\n\\r\\f\\t\\b\\\\\\\"")
-        );
-        Ok(())
-    }
 }
