@@ -297,13 +297,9 @@ mod tests {
 
     #[test]
     fn fallback_for_empty_args() -> Result<(), String> {
-        let err = parse_args(vec![].into_iter()).unwrap_err();
-        match err {
-            (bf_err, name, _) => {
-                assert_eq!(name, String::from("eambfc-rs"));
-                assert_eq!(bf_err.kind, BFErrorID::NO_SOURCE_FILES);
-            }
-        }
+        let (bf_err, name, _) = parse_args(vec![].into_iter()).unwrap_err();
+        assert_eq!(name, String::from("eambfc-rs"));
+        assert_eq!(bf_err.kind, BFErrorID::NO_SOURCE_FILES);
 
         Ok(())
     }

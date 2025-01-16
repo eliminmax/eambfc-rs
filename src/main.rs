@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn rmext_success_ascii() -> Result<(), String> {
         assert_eq!(
-            rm_ext(&OsString::from("foobar"), &OsString::from("bar")),
+            rm_ext(OsStr::from_bytes(b"foobar"), OsStr::from_bytes(b"bar")),
             Ok(OsString::from("foo"))
         );
         Ok(())
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn rmext_success_non_ascii() -> Result<(), String> {
         assert_eq!(
-            rm_ext(&OsStr::from_bytes(b"\xee.e"), &OsStr::from_bytes(b".e")),
+            rm_ext(OsStr::from_bytes(b"\xee.e"), OsStr::from_bytes(b".e")),
             Ok(OsString::from_vec(vec![0xeeu8]))
         );
         Ok(())
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn rmext_fail_ascii() -> Result<(), String> {
         assert_eq!(
-            rm_ext(&OsString::from("foobar"), &OsString::from("baz")),
+            rm_ext(OsStr::from_bytes(b"foobar"), OsStr::from_bytes(b"baz")),
             Err(OsStr::from_bytes(b"foobar"))
         );
         Ok(())
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn rmext_fail_non_ascii() -> Result<(), String> {
         assert_eq!(
-            rm_ext(&OsStr::from_bytes(b"\xee.e"), &OsStr::from_bytes(b".bf")),
+            rm_ext(OsStr::from_bytes(b"\xee.e"), OsStr::from_bytes(b".bf")),
             Err(OsStr::from_bytes(b"\xee.e"))
         );
         Ok(())
