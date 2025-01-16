@@ -123,24 +123,26 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
     }
 }
 
-fn condense_instr(instr: u8, count: usize) -> Vec<CondensedInstruction> {
+fn condense_instr(instr: u8, count: usize, condensed: &mut Vec<CondensedInstruction>) {
     macro_rules! condense_to {
-        ($condensed_instr:expr) => {{
+        ($condensed_instr: ident) => {{
             if count == 1 {
-                vec![CondensedInstruction::BFInstruction(instr)]
+                condensed.push(CondensedInstruction::BFInstruction(instr));
             } else {
-                vec![$condensed_instr(count)]
+                condensed.push(CondensedInstruction::$condensed_instr(count));
             }
         }};
     }
     match instr {
-        b'\0' => vec![], // null char used as a placeholder
-        b'[' | b'.' | b']' | b',' => [CondensedInstruction::BFInstruction(instr)].repeat(count),
-        b'@' => [CondensedInstruction::SetZero].repeat(count),
-        b'+' => condense_to!(CondensedInstruction::RepeatAdd),
-        b'-' => condense_to!(CondensedInstruction::RepeatSub),
-        b'<' => condense_to!(CondensedInstruction::RepeatMoveL),
-        b'>' => condense_to!(CondensedInstruction::RepeatMoveR),
+        b'\0' => (), // null char used as a placeholder
+        b'[' | b'.' | b']' | b',' => {
+            condensed.extend([CondensedInstruction::BFInstruction(instr)].repeat(count))
+        }
+        b'@' => condensed.extend([CondensedInstruction::SetZero].repeat(count)),
+        b'+' => condense_to!(RepeatAdd),
+        b'-' => condense_to!(RepeatSub),
+        b'<' => condense_to!(RepeatMoveL),
+        b'>' => condense_to!(RepeatMoveR),
         _ => unreachable!("Non-bf byte values are already purged"),
     }
 }
@@ -160,12 +162,12 @@ fn condense(stripped_bytes: Vec<u8>) -> Vec<CondensedInstruction> {
         if current_instr == prev_instr {
             count += 1;
         } else {
-            condensed_instrs.append(&mut condense_instr(prev_instr, count));
+            condense_instr(prev_instr, count, &mut condensed_instrs);
             count = 1;
             prev_instr = current_instr;
         }
     }
-    condensed_instrs.append(&mut condense_instr(prev_instr, count));
+    condense_instr(prev_instr, count, &mut condensed_instrs);
     condensed_instrs
 }
 
