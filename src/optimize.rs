@@ -60,7 +60,7 @@ fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
 fn remove_loop_at(index: usize, target: &mut Vec<u8>) {
     if target.get(index).unwrap_or(&b'_') != &b'[' {
         // early return - maybe removed if nested inside of another loop removed in an earlier run
-        // through this function, and vec.split_off(at) panics if at > vec.len.
+        // through this function, and vec.split_off(at) panics if out-of-bounds
         return;
     }
     let split_holder = target.split_off(index);
@@ -141,7 +141,7 @@ fn condense_instr(instr: u8, count: usize) -> Vec<CondensedInstruction> {
         b'-' => condense_to!(CondensedInstruction::RepeatSub),
         b'<' => condense_to!(CondensedInstruction::RepeatMoveL),
         b'>' => condense_to!(CondensedInstruction::RepeatMoveR),
-        b => panic!("Invalid byte value: {b}"),
+        _ => unreachable!("Non-bf byte values are already purged"),
     }
 }
 
