@@ -136,7 +136,7 @@ fn condense_instr(instr: u8, count: usize, condensed: &mut Vec<CondensedInstruct
     match instr {
         b'\0' => (), // null char used as a placeholder
         b'[' | b'.' | b']' | b',' => {
-            condensed.extend([CondensedInstruction::BFInstruction(instr)].repeat(count))
+            condensed.extend([CondensedInstruction::BFInstruction(instr)].repeat(count));
         }
         b'@' => condensed.extend([CondensedInstruction::SetZero].repeat(count)),
         b'+' => condense_to!(RepeatAdd),
