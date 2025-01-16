@@ -305,7 +305,7 @@ mod tests {
             false,
             8,
         )
-        .map_err(|e| format!("Failed to compile: {:?}", e))
+        .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
     #[test]
@@ -318,7 +318,7 @@ mod tests {
             false,
             8,
         )
-        .map_err(|e| format!("Failed to compile: {:?}", e))
+        .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
     #[test]
