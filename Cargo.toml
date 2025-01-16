@@ -14,6 +14,10 @@ s390x = []
 x86_64 = []
 
 [lints.clippy]
+# enable these categories with a negative priority, so that individual lints can
+# be overridden
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 # bit manipulation is needed often, and these types of casts are often needed
 cast_possible_truncation = "allow"
@@ -21,6 +25,11 @@ cast_possible_wrap = "allow"
 cast_sign_loss = "allow"
 # this one doesn't make sense until I actually switch to proper rustdoc docs
 missing_errors_doc = "allow"
+# some clippy::restriction tests that I want enabled
+deref_by_slicing = "warn"
+empty_structs_with_brackets = "warn"
+format_push_string = "warn"
+if_then_some_else_none = "warn"
 
 [profile.release]
 lto = "thin"

@@ -4,6 +4,7 @@
 
 use super::OutMode;
 use std::borrow::Cow;
+use std::fmt::Write;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[allow(non_camel_case_types)]
@@ -86,10 +87,10 @@ impl BFCompileError {
     fn report_basic(&self) {
         let mut report_string = format!("Error {:?}", self.kind);
         if let Some(instr) = self.instr {
-            report_string.push_str(&format!(" when compiling '{}'", instr.escape_ascii()));
+            let _ = write!(report_string, " when compiling '{}'", instr.escape_ascii());
         }
         if let Some(loc) = self.loc {
-            report_string.push_str(&format!(" at line {} column {}", loc.line, loc.col));
+            let _ = write!(report_string, " at line {} column {}", loc.line, loc.col);
         }
         eprintln!("{report_string}: {}", self.msg);
     }
@@ -109,7 +110,7 @@ impl BFCompileError {
             report_string.push('\"');
         }
         if let Some(CodePosition { line, col }) = self.loc {
-            report_string.push_str(&format!(",\"line\":{line},\"column\":{col}"));
+            let _ = write!(report_string, ",\"line\":{line},\"column\":{col}");
         }
         println!("{report_string},\"msg\":{}}}", self.msg);
     }

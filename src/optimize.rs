@@ -110,7 +110,8 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
             .as_slice()
             .windows(2)
             .enumerate()
-            .filter_map(|(i, val)| if val == b"][" { Some(i + 1) } else { None });
+            .filter(|(_, val)| (val == b"]["))
+            .map(|(i, _)| i + 1);
 
         if let Some(index) = dead_loop_starts.next() {
             remove_loop_at(index, &mut new_filtered);
@@ -205,7 +206,7 @@ mod tests {
     }
 
     use std::io::ErrorKind;
-    struct Unreadable {}
+    struct Unreadable;
     impl Read for Unreadable {
         fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
             Err(std::io::Error::new(ErrorKind::Unsupported, "Unreadable"))
