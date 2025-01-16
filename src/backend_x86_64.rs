@@ -306,7 +306,7 @@ mod tests {
         assert_eq!(
             v,
             // XOR EBX, EBX
-            vec![0x31, 0xc0 | 0b011000 | 0b011]
+            vec![0x31, 0xc0 | (0b011 << 3) | 0b011]
         );
         v.clear();
         X86_64Inter::set_reg(&mut v, X86_64Register::RBX, 128);
