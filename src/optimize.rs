@@ -123,7 +123,6 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
     }
 }
 
-#[inline]
 fn condense_instr(instr: u8, count: usize) -> Vec<CondensedInstruction> {
     macro_rules! condense_to {
         ($condensed_instr:expr) => {{
