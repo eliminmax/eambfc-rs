@@ -161,7 +161,7 @@ pub trait BFCompile: ArchInter {
                 let mut jump_code: Vec<u8> = Vec::with_capacity(Self::JUMP_SIZE);
                 Self::jump_zero(&mut jump_code, Self::REGISTERS.bf_ptr, distance as i64)?;
                 code_buf[open_address..open_address + Self::JUMP_SIZE]
-                    .swap_with_slice(&mut jump_code[..]);
+                    .swap_with_slice(&mut jump_code);
                 Self::jump_not_zero(code_buf, Self::REGISTERS.bf_ptr, -(distance as i64))?;
             }
             b'\n' => {
