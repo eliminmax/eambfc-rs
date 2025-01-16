@@ -67,14 +67,14 @@ fn write_headers(
     };
     let code_segment = Phdr {
         e_data: ei_data,
-        p_type: PType::Load,                     // loadable segment
-        p_flags: 4 | 1,                          // PF_R | PF_X (readable and executable)
-        p_offset: 0,                             // load bytes from this index in the file
-        p_vaddr: load_vaddr,                     // load segment into this section of memory
-        p_paddr: 0,                              // load from this physical address
+        p_type: PType::Load,                    // loadable segment
+        p_flags: 4 | 1,                         // PF_R | PF_X (readable and executable)
+        p_offset: 0,                            // load bytes from this index in the file
+        p_vaddr: load_vaddr,                    // load segment into this section of memory
+        p_paddr: 0,                             // load from this physical address
         p_filesz: start_addr + codesize as u64, // load this many bytes from file…
         p_memsz: start_addr + codesize as u64,  // allocate this many bytes of memory…
-        p_align: 1,                              // align with this power of 2
+        p_align: 1,                             // align with this power of 2
     };
     let mut to_write = Vec::<u8>::from(ehdr);
     to_write.extend(Vec::<u8>::from(tape_segment));
@@ -154,7 +154,7 @@ pub trait BFCompile: ArchInter {
                             BFErrorID::UNMATCHED_CLOSE,
                             "Found ']' without matching '['.",
                             b']',
-                            *loc
+                            *loc,
                         ))?;
                 let open_address = open_location.index;
                 let distance = code_buf.len() - open_address;
@@ -240,7 +240,7 @@ pub trait BFCompile: ArchInter {
                         BFErrorID::FAILED_READ,
                         String::from("Failed to read byte after current position"),
                         b'\0',
-                        loc
+                        loc,
                     ));
                 }
             });
@@ -322,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn unmatched_open() -> Result<(), String> {
+    fn unmatched_open() {
         assert!(X86_64Inter::compile(
             Box::new(b"[".as_slice()),
             Box::new(Vec::<u8>::new()),
@@ -330,11 +330,10 @@ mod tests {
             8,
         )
         .is_err_and(|e| e[0].kind == BFErrorID::UNMATCHED_OPEN));
-        Ok(())
     }
 
     #[test]
-    fn unmatched_close() -> Result<(), String> {
+    fn unmatched_close() {
         assert!(X86_64Inter::compile(
             Box::new(b"]".as_slice()),
             Box::new(Vec::<u8>::new()),
@@ -342,6 +341,5 @@ mod tests {
             8,
         )
         .is_err_and(|e| e[0].kind == BFErrorID::UNMATCHED_CLOSE));
-        Ok(())
     }
 }

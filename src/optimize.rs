@@ -176,18 +176,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn strip_dead_code_test() -> Result<(), String> {
+    fn strip_dead_code_test() {
         let mut code = Vec::from(b"[+++++]><+---+++-[-][,[-][+>-<]]-+[-+]-+[]+-[]");
         code.extend(b"+".repeat(256));
         code.extend_from_slice(b"[+-]>");
         code.extend(b"-".repeat(256));
         code.extend_from_slice(b"[->+<][,.]");
         assert_eq!(strip_dead_code(code), Vec::from(b">[->+<]"));
-        Ok(())
     }
 
     #[test]
-    fn to_condensed_test() -> Result<(), String> {
+    fn to_condensed_test() {
         assert_eq!(
             to_condensed(Box::new(b"e+[+]++[-],.....".as_slice())).unwrap(),
             vec![
@@ -203,7 +202,6 @@ mod tests {
                 CondensedInstruction::BFInstruction(b'.'),
             ]
         );
-        Ok(())
     }
 
     use std::io::ErrorKind;
@@ -215,21 +213,14 @@ mod tests {
     }
 
     #[test]
-    fn read_failure_handled() -> Result<(), String> {
+    fn read_failure_handled() {
         let unreadable = Box::new(Unreadable {});
-        match to_condensed(unreadable) {
-            Ok(_) => {
-                return Err(String::from(
-                    "Did not see error when trying to read from unreadable",
-                ))
-            }
-            Err(e) => assert_eq!(e.kind, BFErrorID::FAILED_READ),
-        };
-        Ok(())
+
+        assert!(to_condensed(unreadable).is_err_and(|e| e.kind == BFErrorID::FAILED_READ));
     }
 
     #[test]
-    fn unmatched_loops_detected() -> Result<(), String> {
+    fn unmatched_loops_detected() {
         assert_eq!(
             loops_match(b"[").unwrap_err().kind,
             BFErrorID::UNMATCHED_OPEN,
@@ -238,6 +229,5 @@ mod tests {
             loops_match(b"]").unwrap_err().kind,
             BFErrorID::UNMATCHED_CLOSE,
         );
-        Ok(())
     }
 }

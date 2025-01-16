@@ -197,7 +197,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn combined_args() -> Result<(), String> {
+    fn combined_args() {
         // ensure that combined arguments are processed properly
         let args_set_0 = vec![
             OsString::from("eambfc-rs-test"),
@@ -223,11 +223,10 @@ mod tests {
             parse_args(args_set_0).unwrap(),
             parse_args(args_set_1).unwrap()
         );
-        Ok(())
     }
 
     #[test]
-    fn options_stop_on_double_dash() -> Result<(), String> {
+    fn options_stop_on_double_dash() {
         let args_set = vec![
             OsString::from("eambfc-rs-test"),
             OsString::from("--"),
@@ -237,9 +236,8 @@ mod tests {
         ]
         .into_iter();
         // ensure that -h, -j and -e.notbf are interpreted as the list of file names
-        let parsed_args = match parse_args(args_set).unwrap() {
-            RunConfig::StandardRun(rc) => rc,
-            _ => panic!("Arguments not parsed into StandardRunConfig!"),
+        let RunConfig::StandardRun(parsed_args) = parse_args(args_set).unwrap() else {
+            panic!("Arguments not parsed into StandardRunConfig!")
         };
         assert_eq!(parsed_args.out_mode, OutMode::Basic);
         assert_eq!(
@@ -250,62 +248,55 @@ mod tests {
                 OsString::from("-e.notbf"),
             ]
         );
-        Ok(())
     }
 
     #[test]
-    fn options_dont_mix_with_files() -> Result<(), String> {
+    fn options_dont_mix_with_files() {
         let args_set = vec![
             OsString::from("eambfc-rs-test"),
             OsString::from("e.bf"),
             OsString::from("-h"),
         ]
         .into_iter();
-        // ensure that -h is interpreted as a of file name
-        let parsed_args = match parse_args(args_set).unwrap() {
-            RunConfig::StandardRun(rc) => rc,
-            _ => panic!("Arguments not parsed into StandardRunConfig!"),
+        // ensure that -h is interpreted as a file name
+        let RunConfig::StandardRun(parsed_args) = parse_args(args_set).unwrap() else {
+            panic!("Arguments not parsed into StandardRunConfig!")
         };
         assert_eq!(
             parsed_args.source_files,
             vec![OsString::from("e.bf"), OsString::from("-h"),]
         );
-        Ok(())
     }
 
     #[test]
-    fn help_includes_progname() -> Result<(), String> {
+    fn help_includes_progname() {
         let args_set =
             vec![OsString::from("not-eambfc-i-promise"), OsString::from("-h")].into_iter();
         assert_eq!(
             parse_args(args_set),
             Ok(RunConfig::ShowHelp(String::from("not-eambfc-i-promise")))
         );
-        Ok(())
     }
 
     #[test]
-    fn version_includes_progname() -> Result<(), String> {
+    fn version_includes_progname() {
         let args_set =
             vec![OsString::from("not-eambfc-i-promise"), OsString::from("-V")].into_iter();
         assert_eq!(
             parse_args(args_set),
             Ok(RunConfig::ShowVersion(String::from("not-eambfc-i-promise")))
         );
-        Ok(())
     }
 
     #[test]
-    fn fallback_for_empty_args() -> Result<(), String> {
+    fn fallback_for_empty_args() {
         let (bf_err, name, _) = parse_args(vec![].into_iter()).unwrap_err();
         assert_eq!(name, String::from("eambfc-rs"));
         assert_eq!(bf_err.kind, BFErrorID::NO_SOURCE_FILES);
-
-        Ok(())
     }
 
     #[test]
-    fn arg0_contains_non_utf8() -> Result<(), String> {
+    fn arg0_contains_non_utf8() {
         let args_set = vec![
             OsString::from_vec(b"not-\xeeambfc-i-promis\xee".into()),
             OsString::from("-h"),
@@ -315,11 +306,10 @@ mod tests {
             parse_args(args_set),
             Ok(RunConfig::ShowHelp(String::from("not-�ambfc-i-promis�")))
         );
-        Ok(())
     }
 
     #[test]
-    fn filename_contains_non_utf8() -> Result<(), String> {
+    fn filename_contains_non_utf8() {
         let args_set = vec![
             OsString::from("eambfc-rs"),
             OsString::from_vec(b"fil\xee.bf".into()),
@@ -333,11 +323,10 @@ mod tests {
                 ..StandardRunConfig::default()
             }))
         );
-        Ok(())
     }
 
     #[test]
-    fn non_numeric_tape_size() -> Result<(), String> {
+    fn non_numeric_tape_size() {
         let args_set = vec![
             OsString::from("eambfc-rs"),
             OsString::from_vec(b"-t".into()),
@@ -346,11 +335,10 @@ mod tests {
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::NOT_NUMERIC);
-        Ok(())
     }
 
     #[test]
-    fn multiple_tape_size() -> Result<(), String> {
+    fn multiple_tape_size() {
         let args_set = vec![
             OsString::from("eambfc-rs"),
             OsString::from_vec(b"-t1".into()),
@@ -359,11 +347,10 @@ mod tests {
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::MULTIPLE_TAPE_BLOCK_COUNTS);
-        Ok(())
     }
 
     #[test]
-    fn tape_size_zero() -> Result<(), String> {
+    fn tape_size_zero() {
         let args_set = vec![
             OsString::from("eambfc-rs"),
             OsString::from_vec(b"-t0".into()),
@@ -371,11 +358,10 @@ mod tests {
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::NO_TAPE);
-        Ok(())
     }
 
     #[test]
-    fn missing_tape_size() -> Result<(), String> {
+    fn missing_tape_size() {
         let args_set = vec![
             OsString::from("eambfc-rs"),
             OsString::from_vec(b"-t".into()),
@@ -383,6 +369,5 @@ mod tests {
         .into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
-        Ok(())
     }
 }

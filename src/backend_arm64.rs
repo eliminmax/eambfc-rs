@@ -342,7 +342,7 @@ fn add_sub(
 mod tests {
     use super::*;
     #[test]
-    fn test_set_reg_simple() -> Result<(), String> {
+    fn test_set_reg_simple() {
         // the following can be set with 1 instruction each.
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
@@ -369,11 +369,10 @@ mod tests {
             v,
             vec![0xe1, 0xdd, 0x97, 0xd2], // MOVZ x1, 0xbeef
         );
-        Ok(())
     }
 
     #[test]
-    fn test_reg_multiple() -> Result<(), String> {
+    fn test_reg_multiple() {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
         assert_eq!(
@@ -383,11 +382,10 @@ mod tests {
                 0xa0, 0xd5, 0xbb, 0xf2, // MOVK x0, 0xdead, lsl #16
             ],
         );
-        Ok(())
     }
 
     #[test]
-    fn test_reg_split() -> Result<(), String> {
+    fn test_reg_split() {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead0000beef);
         assert_eq!(
@@ -397,11 +395,10 @@ mod tests {
                 0xb3, 0xd5, 0xdb, 0xf2, // MOVK x19, 0xdead, lsl #32
             ],
         );
-        Ok(())
     }
 
     #[test]
-    fn test_reg_neg() -> Result<(), String> {
+    fn test_reg_neg() {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
         assert_eq!(
@@ -411,11 +408,10 @@ mod tests {
                 0x53, 0x2a, 0xa4, 0xf2, // MOVK x19, ~0xdead, lsl #16
             ],
         );
-        Ok(())
     }
 
     #[test]
-    fn test_inc_dec_reg() -> Result<(), String> {
+    fn test_inc_dec_reg() {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::inc_reg(&mut v, Arm64Register::X0);
         assert_eq!(
@@ -443,11 +439,10 @@ mod tests {
             v,
             vec![0x73, 0x06, 0x00, 0xd1], // SUB x19, x19, 1
         );
-        Ok(())
     }
 
     #[test]
-    fn test_load_store() -> Result<(), String> {
+    fn test_load_store() {
         assert_eq!(
             load_from_byte(Arm64Register::X19, Arm64Register::X16),
             [0x70, 0x06, 0x40, 0x38], // LRDB w16, [x19], 0
@@ -457,11 +452,10 @@ mod tests {
             store_to_byte(Arm64Register::X19, Arm64Register::X16),
             [0x70, 0x06, 0x00, 0x38], // STDB w16, [x19], 0
         );
-        Ok(())
     }
 
     #[test]
-    fn test_add_sub_reg() -> Result<(), String> {
+    fn test_add_sub_reg() {
         let mut v: Vec<u8> = Vec::new();
         // Handling of 24-bit values
         assert!(add_sub(&mut v, Arm64Register::X16, 0xabcdef, ArithOp::Add).is_ok());
@@ -483,11 +477,10 @@ mod tests {
                 0x10, 0xf2, 0x6a, 0xd1, // SUB x16, x16, 0xabc, lsl 12
             ],
         );
-        Ok(())
     }
 
     #[test]
-    fn test_add_sub_byte() -> Result<(), String> {
+    fn test_add_sub_byte() {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::add_byte(&mut v, Arm64Register::X19, 0xa5u8 as i8);
         assert_eq!(
@@ -498,11 +491,10 @@ mod tests {
                 0x71, 0x06, 0x00, 0x38, // STDB w17, [x19], 0
             ],
         );
-        Ok(())
     }
 
     #[test]
-    fn test_zero_byte() -> Result<(), String> {
+    fn test_zero_byte() {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
         assert_eq!(
@@ -512,6 +504,5 @@ mod tests {
                 0x71, 0x06, 0x00, 0x38, // STRB w17, [X19], 0
             ]
         );
-        Ok(())
     }
 }

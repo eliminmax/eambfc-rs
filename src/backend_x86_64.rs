@@ -299,7 +299,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_set_reg() -> Result<(), String> {
+    fn test_set_reg() {
         // test that appropriate encodings are used for different immediates
         let mut v: Vec<u8> = Vec::new();
         X86_64Inter::set_reg(&mut v, X86_64Register::RBX, 0);
@@ -326,6 +326,5 @@ mod tests {
             vec![0x48, 0xb8 | 0b011, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
         );
 
-        Ok(())
     }
 }
