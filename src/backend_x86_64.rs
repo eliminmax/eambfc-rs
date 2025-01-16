@@ -269,23 +269,20 @@ fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
 // original value.
 fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64, op: ArithOp) {
     // cast reg in advanced as it's used multiple times
-    let reg = reg as u8;
-    // the temporary register shouldn't be the target register. This guarantees it won't be.
-    let tmp_reg = if reg == 0 { 1_u8 } else { 0_u8 };
-    #[rustfmt::skip]
+    // the temporary register shouldn't be the target register, so using RCX, which is a volatile
+    // register not used anywhere else in eambfc, encoded as 0b001.
+    const TMP_REG: u8 = 0b001;
     code_buf.extend([
-        // PUSH tmp_reg
-        0x50_u8|tmp_reg,
         // MOV tmp_reg, (imm64 to be appended)
-        0x48_u8, 0xb8_u8|tmp_reg
+        0x48_u8,
+        0xb8_u8 | TMP_REG,
     ]);
     code_buf.extend(imm64.to_le_bytes());
-    #[rustfmt::skip]
     code_buf.extend([
         // (ADD||SUB) reg, tmp_reg
-        0x48_u8, 0x01_u8 | op as u8, 0xc0_u8 + (tmp_reg << 3) + reg,
-        // POP tmp_reg
-        0x58 + tmp_reg,
+        0x48_u8,
+        0x01_u8 | op as u8,
+        0xc0_u8 + (TMP_REG << 3) + (reg as u8),
     ]);
 }
 
