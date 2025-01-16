@@ -140,7 +140,7 @@ pub trait BFCompile: ArchInter {
             // will replace when reaching the corresponding ']' instruction
             b'[' => {
                 jump_stack.push(JumpLocation {
-                    loc: loc.clone(),
+                    loc: *loc,
                     index: code_buf.len(),
                 });
                 Self::nop_loop_open(code_buf);
@@ -154,7 +154,7 @@ pub trait BFCompile: ArchInter {
                             BFErrorID::UNMATCHED_CLOSE,
                             "Found ']' without matching '['.",
                             b']',
-                            loc.clone(),
+                            *loc
                         ))?;
                 let open_address = open_location.index;
                 let distance = code_buf.len() - open_address;
@@ -240,7 +240,7 @@ pub trait BFCompile: ArchInter {
                         BFErrorID::FAILED_READ,
                         String::from("Failed to read byte after current position"),
                         b'\0',
-                        loc.clone(),
+                        loc
                     ));
                 }
             });
