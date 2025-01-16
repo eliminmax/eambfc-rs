@@ -51,8 +51,8 @@ pub enum X86_64Register {
 #[derive(Debug)]
 #[repr(u8)]
 enum ArithOp {
-    Add = 0b11000000,
-    Sub = 0b11101000,
+    Add = 0xc0,
+    Sub = 0xe8,
 }
 
 // INC and DEC are encoded very similarly with very few differences between
@@ -208,10 +208,10 @@ impl ArchInter for X86_64Inter {
     }
     fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) -> FailableInstrEncoding {
         match imm {
-            i if ((i8::MIN as i64)..=(i8::MAX as i64)).contains(&i) => {
+            i if (i64::from(i8::MIN)..=i64::from(i8::MAX)).contains(&i) => {
                 add_reg_imm8(code_buf, reg, imm as i8);
             }
-            i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
+            i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
                 add_reg_imm32(code_buf, reg, imm as i32);
             }
             _ => add_reg_imm64(code_buf, reg, imm),
@@ -224,11 +224,11 @@ impl ArchInter for X86_64Inter {
     }
     fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) -> FailableInstrEncoding {
         match imm {
-            i if ((i8::MIN as i64)..=(i8::MAX as i64)).contains(&i) => {
-                sub_reg_imm8(code_buf, reg, imm as i8)
+            i if (i64::from(i8::MIN)..=i64::from(i8::MAX)).contains(&i) => {
+                sub_reg_imm8(code_buf, reg, imm as i8);
             }
-            i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
-                sub_reg_imm32(code_buf, reg, imm as i32)
+            i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
+                sub_reg_imm32(code_buf, reg, imm as i32);
             }
             _ => sub_reg_imm64(code_buf, reg, imm),
         }
@@ -236,7 +236,7 @@ impl ArchInter for X86_64Inter {
     }
     fn sub_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
         // SUB byte [reg], imm8
-        code_buf.extend([0x80_u8, 0b00101000_u8 | (reg as u8), imm as u8]);
+        code_buf.extend([0x80_u8, 0x28 | (reg as u8), imm as u8]);
     }
     fn zero_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // MOV byte [reg], 0

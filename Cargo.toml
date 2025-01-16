@@ -13,6 +13,15 @@ arm64 = []
 s390x = []
 x86_64 = []
 
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# bit manipulation is needed often, and these types of casts are often needed
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+# this one doesn't make sense until I actually switch to proper rustdoc docs
+missing_errors_doc = "allow"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

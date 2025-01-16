@@ -32,8 +32,8 @@ fn write_headers(
     // ELF addressing stuff that depends on tape_blocks, so can't be constant
     let tape_size: u64 = tape_blocks * 0x1000;
     let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffffu64)) + 0x10000u64;
-    let start_paddr: u64 = ((EHDR_SIZE as u64 + PHTB_SIZE) & (!0xffu64)) + 0x100u64;
-    let start_vaddr: u64 = start_paddr + load_vaddr;
+    let start_addr: u64 = ((u64::from(EHDR_SIZE) + PHTB_SIZE) & (!0xffu64)) + 0x100u64;
+    let start_virt_addr: u64 = start_addr + load_vaddr;
     let ehdr = Ehdr {
         e_ident: EIdent {
             ei_class: EIClass::ELFClass64,
@@ -45,13 +45,13 @@ fn write_headers(
         e_version: ELFVersion::EvCurrent, // The only valid version number
         e_phnum: PHNUM,
         e_shnum: 0,
-        e_phoff: EHDR_SIZE as u64,
+        e_phoff: u64::from(EHDR_SIZE),
         e_shoff: 0, // no section header table, must be 0
         e_ehsize: EHDR_SIZE,
         e_phentsize: PHDR_SIZE,
         e_shentsize: 0, // no section header table, must be 0
         e_shstrndx: 0,  // no section header table, must be 0
-        e_entry: start_vaddr,
+        e_entry: start_virt_addr,
         e_flags,
     };
     let tape_segment = Phdr {
@@ -72,8 +72,8 @@ fn write_headers(
         p_offset: 0,                             // load bytes from this index in the file
         p_vaddr: load_vaddr,                     // load segment into this section of memory
         p_paddr: 0,                              // load from this physical address
-        p_filesz: start_paddr + codesize as u64, // load this many bytes from file…
-        p_memsz: start_paddr + codesize as u64,  // allocate this many bytes of memory…
+        p_filesz: start_addr + codesize as u64, // load this many bytes from file…
+        p_memsz: start_addr + codesize as u64,  // allocate this many bytes of memory…
         p_align: 1,                              // align with this power of 2
     };
     let mut to_write = Vec::<u8>::from(ehdr);
@@ -81,7 +81,7 @@ fn write_headers(
     to_write.extend(Vec::<u8>::from(code_segment));
 
     // add padding bytes
-    to_write.resize(start_paddr as usize, 0u8);
+    to_write.resize(start_addr as usize, 0u8);
     match output.write(to_write.as_slice()) {
         Ok(count) if count == to_write.len() => Ok(()),
         Ok(count) => Err(BFCompileError::basic(

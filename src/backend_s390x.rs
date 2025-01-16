@@ -333,37 +333,37 @@ impl ArchInter for S390xInter {
     fn set_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         match imm {
             0 => Self::reg_copy(code_buf, reg, S390xRegister::R0),
-            i if ((i16::MIN as i64)..=(i16::MAX as i64)).contains(&i) => {
+            i if (i64::from(i16::MIN)..=i64::from(i16::MAX)).contains(&i) => {
                 // if it fits in a halfword, use Load Halfword Immediate (64 <- 16)
                 // LGHI r.reg, imm {RI-a}
-                encode_ri_op!(code_buf, 0xa79, reg, i16, imm)
+                encode_ri_op!(code_buf, 0xa79, reg, i16, imm);
             }
-            i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
+            i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
                 // if it fits within a word, use Load Immediate (64 <- 32)
                 // LGFI r.reg, imm {RIL-a}
-                encode_ri_op!(code_buf, 0xc01, reg, i32, imm)
+                encode_ri_op!(code_buf, 0xc01, reg, i32, imm);
             }
             _ => {
-                let (imm_h, imm_l) = ((imm >> 32) as i32, imm as i32);
-                if imm_l != 0 {
-                    Self::set_reg(code_buf, reg, imm_l as i64);
+                let (imm_high, imm_low) = ((imm >> 32) as i32, imm as i32);
+                if imm_low != 0 {
+                    Self::set_reg(code_buf, reg, i64::from(imm_low));
                 }
-                match ((imm_h >> 16) as i16, imm_h as i16) {
+                match ((imm_high >> 16) as i16, imm_high as i16) {
                     (0, 0) => unreachable!(),
-                    (0, imm_hl) => {
+                    (0, imm_high_low) => {
                         // set bits 16-31 of the register to the immediate, leave other bits as-is
                         // IIHL reg, upper_imm {RI-a}
-                        encode_ri_op!(code_buf, 0xa51, reg, i16, imm_hl)
+                        encode_ri_op!(code_buf, 0xa51, reg, i16, imm_high_low);
                     }
-                    (imm_hh, 0) => {
+                    (imm_high_high, 0) => {
                         // set bits 0-15 of the register to the immediate, leave other bits as-is
                         // IIHH reg, upper_imm {RI-a}
-                        encode_ri_op!(code_buf, 0xa50, reg, i16, imm_hh)
+                        encode_ri_op!(code_buf, 0xa50, reg, i16, imm_high_high);
                     }
                     _ => {
                         // need to set the full upper word, with Insert Immediate (high)
                         // IIHF reg, imm {RIL-a}
-                        encode_ri_op!(code_buf, 0xc09, reg, i32, imm_h)
+                        encode_ri_op!(code_buf, 0xc09, reg, i32, imm_high);
                     }
                 }
             }
@@ -424,19 +424,19 @@ impl ArchInter for S390xInter {
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) -> FailableInstrEncoding {
         match imm {
-            i if ((i16::MIN as i64)..=(i16::MAX as i64)).contains(&i) => {
+            i if (i64::from(i16::MIN)..=i64::from(i16::MAX)).contains(&i) => {
                 // AGHI reg, imm {RI-a}
                 encode_ri_op!(code_buf, 0xa7b, reg, i16, imm);
             }
-            i if ((i32::MIN as i64)..=(i32::MAX as i64)).contains(&i) => {
+            i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
                 // AFGI reg, imm {RIL-a}
                 encode_ri_op!(code_buf, 0xc28, reg, i32, imm);
             }
             _ => {
                 let (imm_h, imm_l) = (imm >> 32, imm as i32);
                 if imm_l != 0 {
-                    S390xInter::add_reg(code_buf, reg, imm_l as i64)
-                        .expect("S390xInter::add_reg doesn't return Err variant")
+                    S390xInter::add_reg(code_buf, reg, i64::from(imm_l))
+                        .expect("S390xInter::add_reg doesn't return Err variant");
                 }
                 // AIX reg, imm {RIL-a}
                 encode_ri_op!(code_buf, 0xcc8, reg, i32, imm_h);
@@ -449,7 +449,7 @@ impl ArchInter for S390xInter {
         let aux = aux_reg(reg);
 
         code_buf.extend(load_from_byte(reg, aux));
-        S390xInter::add_reg(code_buf, aux, imm as i64)
+        S390xInter::add_reg(code_buf, aux, i64::from(imm))
             .expect("S390xInter::add_reg doesn't return Err variant");
         code_buf.extend(store_to_byte(reg, aux));
     }
@@ -469,7 +469,7 @@ impl ArchInter for S390xInter {
     fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
         let aux = aux_reg(reg);
         code_buf.extend(load_from_byte(reg, aux));
-        S390xInter::add_reg(code_buf, aux, -imm as i64)
+        S390xInter::add_reg(code_buf, aux, i64::from(-imm))
             .expect("S390xInter::add_reg doesn't return Err variant");
         code_buf.extend(store_to_byte(reg, aux));
     }

@@ -28,10 +28,10 @@ pub enum Arm64Register {
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 enum ShiftLevel {
-    NoShift = 0b0000000,
-    Shift16 = 0b0100000,
-    Shift32 = 0b1000000,
-    Shift48 = 0b1100000,
+    NoShift = 0b000_0000,
+    Shift16 = 0b010_0000,
+    Shift32 = 0b100_0000,
+    Shift48 = 0b110_0000,
 }
 
 #[derive(Debug, PartialEq)]
@@ -284,12 +284,12 @@ fn add_sub_imm(
     op: ArithOp,
     shift: bool,
 ) -> FailableInstrEncoding {
-    if (shift && (imm & !0xfff000) != 0) || (!shift && (imm & !0xfff) != 0) {
+    if (shift && (imm & !0xfff_000) != 0) || (!shift && (imm & !0xfff) != 0) {
         return Err(BFCompileError::basic(
             BFErrorID::IMMEDIATE_TOO_LARGE,
             format!(
                 "0x{imm:x} is invalid for shift level {}",
-                12 * (shift as u8)
+                12 * u8::from(shift)
             ),
         ));
     }
@@ -312,9 +312,9 @@ fn add_sub(
     op: ArithOp,
 ) -> FailableInstrEncoding {
     match imm {
-        i if i < 0x1000 => add_sub_imm(code_buf, reg, imm, op, false)?,
-        i if i < 0x1000000 => {
-            add_sub_imm(code_buf, reg, imm & 0xfff000, op, true)?;
+        i if i < 0x1_000 => add_sub_imm(code_buf, reg, imm, op, false)?,
+        i if i < 0x1_000_000 => {
+            add_sub_imm(code_buf, reg, imm & 0xfff_000, op, true)?;
             if i & 0xfff != 0 {
                 add_sub_imm(code_buf, reg, imm & 0xfff, op, false)?;
             }

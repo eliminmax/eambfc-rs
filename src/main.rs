@@ -203,9 +203,8 @@ fn main() {
                     errs.into_iter().for_each(|e| e.report(rc.out_mode));
                     if !rc.cont {
                         process::exit(1);
-                    } else {
-                        exit_code = 1;
                     }
+                    exit_code = 1;
                 }
             });
         }
@@ -227,7 +226,7 @@ There is NO WARRANTY, to the extent permitted by law.
         Err((err, progname, out_mode)) => {
             err.report(out_mode);
             if out_mode == OutMode::Basic {
-                show_help(&mut stderr, &progname)
+                show_help(&mut stderr, &progname);
             }
         }
     }

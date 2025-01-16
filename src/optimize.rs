@@ -35,7 +35,7 @@ fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
             if nest_level == 0 {
                 ret = Err(());
             } else {
-                nest_level -= 1
+                nest_level -= 1;
             }
         }
         _ => {}
@@ -47,7 +47,7 @@ fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
                     Compile without -O for more information.",
         ))
     } else {
-        ret.map_err(|_| {
+        ret.map_err(|()| {
             BFCompileError::basic(
                 BFErrorID::UNMATCHED_CLOSE,
                 "Found an unmatched ']' while preparing for optimization. \
@@ -70,9 +70,9 @@ fn remove_loop_at(index: usize, target: &mut Vec<u8>) {
         .into_iter()
         .skip_while(|b| {
             if b == &b'[' {
-                nest_level += 1
+                nest_level += 1;
             } else if b == &b']' {
-                nest_level -= 1
+                nest_level -= 1;
             }
 
             index += 1;
@@ -118,9 +118,8 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
         // finally, check if any of the above changed anything. If not, break out of the loop.
         if old_filtered.as_bytes() == new_filtered.as_slice() {
             return new_filtered;
-        } else {
-            filtered_bytes = new_filtered;
         }
+        filtered_bytes = new_filtered;
     }
 }
 
@@ -160,7 +159,7 @@ fn condense(stripped_bytes: Vec<u8>) -> Vec<CondensedInstruction> {
 
     for current_instr in instr_chars {
         if current_instr == prev_instr {
-            count += 1
+            count += 1;
         } else {
             condensed_instrs.append(&mut condense_instr(prev_instr, count));
             count = 1;

@@ -70,6 +70,7 @@ impl BFCompileError {
             loc: Some(loc),
         }
     }
+    #[allow(clippy::must_use_candidate)]
     pub fn unknown_flag(flag: u8) -> Self {
         Self {
             kind: BFErrorID::UNKNOWN_ARG,
