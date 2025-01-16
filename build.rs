@@ -24,7 +24,7 @@ fn main() {
     let commit_id = if git_found() && PathBuf::from(".git").exists() {
         match git_invocation {
             Ok(Output { stdout, status, .. }) if status.success() => {
-                let mut s = String::from_utf8(stdout).expect("Failed to parse bytes  as UTF-8");
+                let mut s = String::from_utf8(stdout).expect("Failed to parse bytes as UTF-8");
                 let git_status = Command::new("git")
                     .args(["status", "--short"])
                     .output()
