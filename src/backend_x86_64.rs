@@ -33,7 +33,6 @@
 // * RBX is 011b
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
 use super::err::{BFCompileError, BFErrorID};
 
@@ -244,8 +243,6 @@ impl ArchInter for X86_64Inter {
         code_buf.extend([0x67_u8, 0xc6_u8, reg as u8, 0x00_u8]);
     }
 }
-
-impl BFCompile for X86_64Inter {}
 
 fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86_64Register, imm8: i8) {
     code_buf.extend([0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);

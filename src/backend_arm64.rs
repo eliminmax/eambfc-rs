@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
 use super::err::{BFCompileError, BFErrorID};
 
@@ -269,8 +268,6 @@ impl ArchInter for Arm64Inter {
     fn_branch_cond!(jump_not_zero, 0x1u8);
     fn_branch_cond!(jump_zero, 0x00u8);
 }
-
-impl BFCompile for Arm64Inter {}
 
 // discriminants used here are often, but not always, the last byte in an ADD or SUB instructions
 #[derive(Clone, Copy, Debug, PartialEq)]

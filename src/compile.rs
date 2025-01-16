@@ -290,6 +290,8 @@ pub trait BFCompile: ArchInter {
     }
 }
 
+impl<A: ArchInter> BFCompile for A {}
+
 #[cfg(all(test, feature = "x86_64"))]
 mod tests {
     use super::super::backend_x86_64::X86_64Inter;

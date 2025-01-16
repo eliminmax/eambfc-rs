@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::compile::BFCompile;
 use super::elf_tools::{EIData, ELFArch};
 use super::err::{BFCompileError, BFErrorID};
 
@@ -479,5 +478,3 @@ impl ArchInter for S390xInter {
         code_buf.extend(store_to_byte(reg, S390xRegister::R0));
     }
 }
-
-impl BFCompile for S390xInter {}
