@@ -121,7 +121,7 @@ impl BFCompileError {
             write!(report_string, ",\"line\":{line},\"column\":{col}")
                 .unwrap_or_else(|_| panic!("Failed to write! to String"));
         }
-        println!("{report_string},\"msg\":{}}}", self.msg);
+        println!("{report_string},\"msg\":\"{}\"}}", self.msg);
     }
 
     pub fn report(&self, out_mode: OutMode) {
