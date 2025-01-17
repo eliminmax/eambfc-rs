@@ -19,6 +19,7 @@ use arg_parse::RunConfig;
 use compile::BFCompile;
 use elf_tools::ELFArch;
 use err::{BFCompileError, BFErrorID};
+use std::borrow::Cow;
 use std::env::args_os;
 use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
@@ -165,8 +166,9 @@ fn main() {
     let mut exit_code = 0;
     let mut args = args_os();
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
-    let progname = args.next().unwrap_or(OsString::from("eambfc-rs"));
-    let progname = progname.to_string_lossy().to_string();
+    let progname = args.next().map_or(Cow::Borrowed("eambfc-rs"), |c| {
+        Cow::Owned(c.to_string_lossy().to_string())
+    });
     match arg_parse::parse_args(args) {
         Ok(RunConfig::ListArches) => {
             println!("This build of {progname} supports the following architectures:\n");
