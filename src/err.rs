@@ -104,7 +104,7 @@ impl BFCompileError {
     }
 
     fn report_json(&self) {
-        let mut report_string = format!("{{\"errorId\":\"{:?}\",", self.kind);
+        let mut report_string = format!("{{\"errorId\":\"{:?}\"", self.kind);
         if let Some(instr) = self.instr {
             report_string.push_str(",\"instruction\":\"");
             match instr {
