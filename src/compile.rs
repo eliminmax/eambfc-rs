@@ -165,7 +165,7 @@ pub trait BFCompile: ArchInter {
                 Self::jump_not_zero(code_buf, Self::REGISTERS.bf_ptr, -(distance as i64))?;
             }
             b'\n' => {
-                loc.col = 1;
+                loc.col = 0;
                 loc.line += 1;
             }
             _ => (),
