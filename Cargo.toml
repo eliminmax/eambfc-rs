@@ -32,6 +32,10 @@ format_push_string = "warn"
 if_then_some_else_none = "warn"
 let_underscore_must_use = "warn"
 allow_attributes_without_reason = "warn"
+assertions_on_result_states = "warn"
+dbg_macro = "warn"
+same_name_method = "warn"
+semicolon_outside_block = "warn"
 
 [profile.release]
 lto = "thin"
