@@ -338,7 +338,6 @@ fn add_sub(
 }
 
 #[cfg(test)]
-#[allow(clippy::unreadable_literal)]
 mod tests {
     use super::*;
     #[test]
@@ -359,7 +358,7 @@ mod tests {
         );
 
         v.clear();
-        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100001);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001);
         assert_eq!(v, vec![0x00, 0x02, 0xa0, 0x92]);
 
         v.clear();
@@ -374,6 +373,7 @@ mod tests {
     #[test]
     fn test_reg_multiple() {
         let mut v: Vec<u8> = Vec::new();
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
         assert_eq!(
             v,
@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn test_reg_split() {
         let mut v: Vec<u8> = Vec::new();
-        Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead0000beef);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead_0000_beef);
         assert_eq!(
             v,
             vec![
@@ -400,6 +400,7 @@ mod tests {
     #[test]
     fn test_reg_neg() {
         let mut v: Vec<u8> = Vec::new();
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
         assert_eq!(
             v,
@@ -458,7 +459,7 @@ mod tests {
     fn test_add_sub_reg() {
         let mut v: Vec<u8> = Vec::new();
         // Handling of 24-bit values
-        assert!(add_sub(&mut v, Arm64Register::X16, 0xabcdef, ArithOp::Add).is_ok());
+        assert!(add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add).is_ok());
         assert_eq!(
             v,
             vec![
@@ -470,7 +471,7 @@ mod tests {
         // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
         // included
         v.clear();
-        assert!(add_sub(&mut v, Arm64Register::X16, 0xabc000, ArithOp::Sub).is_ok());
+        assert!(add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub).is_ok());
         assert_eq!(
             v,
             vec![

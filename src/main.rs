@@ -71,7 +71,9 @@ will raise an error.
 ",
         ELFArch::default(),
     );
-    let _ = outfile.write(help_text.as_bytes());
+    outfile
+        .write_all(help_text.as_bytes())
+        .expect("Failed to write help text - things are truly borked.");
 }
 
 // if filename ends with extension, return Ok(f), where f is the filename without the extension
@@ -138,7 +140,11 @@ fn compile_wrapper<Compiler: BFCompile>(
     if let Err(e) = Compiler::compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks) {
         if !keep {
             // try to delete the file
-            let _ = remove_file(rm_ext(file_name, extension).unwrap_or(OsString::from("")));
+            #[allow(
+                clippy::let_underscore_must_use,
+                reason = "if file can't be deleted, there's nothing to do"
+            )]
+            let _ = remove_file(outfile_name);
         }
         Err(e)
     } else {
@@ -168,7 +174,10 @@ fn main() {
         Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
-                #[allow(unreachable_patterns)]
+                #[allow(
+                    unreachable_patterns,
+                    reason = "Pattern is only unreachable if all backends are compiled in"
+                )]
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]
                     ELFArch::Arm64 => compile_wrapper(

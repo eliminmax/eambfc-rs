@@ -7,7 +7,10 @@ use std::borrow::Cow;
 use std::fmt::Write;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-#[allow(non_camel_case_types)]
+#[allow(
+    non_camel_case_types,
+    reason = "matches error IDs from C version, and allows derived Debug to be sufficient"
+)]
 pub enum BFErrorID {
     BAD_EXTENSION,
     FAILED_READ,
@@ -42,6 +45,7 @@ pub struct BFCompileError {
 type ErrMsg = Cow<'static, str>;
 
 impl BFCompileError {
+    #[must_use]
     pub fn basic<M: Into<ErrMsg>>(kind: BFErrorID, msg: M) -> Self {
         Self {
             kind,
@@ -50,6 +54,7 @@ impl BFCompileError {
             loc: None,
         }
     }
+    #[must_use]
     pub fn instruction<M: Into<ErrMsg>>(kind: BFErrorID, msg: M, instr: u8) -> Self {
         Self {
             kind,
@@ -58,6 +63,7 @@ impl BFCompileError {
             loc: None,
         }
     }
+    #[must_use]
     pub fn positional<M: Into<ErrMsg>>(
         kind: BFErrorID,
         msg: M,
@@ -71,7 +77,7 @@ impl BFCompileError {
             loc: Some(loc),
         }
     }
-    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn unknown_flag(flag: u8) -> Self {
         Self {
             kind: BFErrorID::UNKNOWN_ARG,
@@ -87,10 +93,12 @@ impl BFCompileError {
     fn report_basic(&self) {
         let mut report_string = format!("Error {:?}", self.kind);
         if let Some(instr) = self.instr {
-            let _ = write!(report_string, " when compiling '{}'", instr.escape_ascii());
+            write!(report_string, " when compiling '{}'", instr.escape_ascii())
+                .unwrap_or_else(|_| panic!("Failed to write! to String"));
         }
         if let Some(loc) = self.loc {
-            let _ = write!(report_string, " at line {} column {}", loc.line, loc.col);
+            write!(report_string, " at line {} column {}", loc.line, loc.col)
+                .unwrap_or_else(|_| panic!("Failed to write! to String"));
         }
         eprintln!("{report_string}: {}", self.msg);
     }
@@ -110,7 +118,8 @@ impl BFCompileError {
             report_string.push('\"');
         }
         if let Some(CodePosition { line, col }) = self.loc {
-            let _ = write!(report_string, ",\"line\":{line},\"column\":{col}");
+            write!(report_string, ",\"line\":{line},\"column\":{col}")
+                .unwrap_or_else(|_| panic!("Failed to write! to String"));
         }
         println!("{report_string},\"msg\":{}}}", self.msg);
     }

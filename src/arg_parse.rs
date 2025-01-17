@@ -46,7 +46,7 @@ fn parameter_instr<T: Iterator<Item = OsString>>(
     }
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, reason = "Can't cleanly split up much more")]
 pub fn parse_args<T: Iterator<Item = OsString>>(
     mut args: T,
 ) -> Result<RunConfig, (BFCompileError, String, OutMode)> {
