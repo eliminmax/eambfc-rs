@@ -15,6 +15,7 @@ pub mod elf_tools;
 pub mod err;
 pub mod optimize;
 
+use std::process::ExitCode;
 use arg_parse::RunConfig;
 use compile::BFCompile;
 use elf_tools::ELFArch;
@@ -25,7 +26,6 @@ use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
-use std::process;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
@@ -162,8 +162,8 @@ fn compile_wrapper<Compiler: BFCompile>(
     }
 }
 
-fn main() {
-    let mut exit_code = 0;
+fn main() -> ExitCode {
+    let mut exit_code = ExitCode::SUCCESS;
     let mut args = args_os();
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
     let progname = args.next().map_or(Cow::Borrowed("eambfc-rs"), |c| {
@@ -185,7 +185,7 @@ fn main() {
         }
         Ok(RunConfig::ShowHelp) => println!("{}", help_text(&progname)),
         Ok(RunConfig::StandardRun(rc)) => {
-            rc.source_files.iter().for_each(|f| {
+            for f in rc.source_files {
                 #[allow(
                     unreachable_patterns,
                     reason = "Pattern is only unreachable if all backends are compiled in"
@@ -194,7 +194,7 @@ fn main() {
                     #[cfg(feature = "arm64")]
                     ELFArch::Arm64 => compile_wrapper(
                         Arm64Inter,
-                        f,
+                        &f,
                         &rc.extension,
                         rc.optimize,
                         rc.keep,
@@ -203,7 +203,7 @@ fn main() {
                     #[cfg(feature = "s390x")]
                     ELFArch::S390x => compile_wrapper(
                         S390xInter,
-                        f,
+                        &f,
                         &rc.extension,
                         rc.optimize,
                         rc.keep,
@@ -212,7 +212,7 @@ fn main() {
                     #[cfg(feature = "x86_64")]
                     ELFArch::X86_64 => compile_wrapper(
                         X86_64Inter,
-                        f,
+                        &f,
                         &rc.extension,
                         rc.optimize,
                         rc.keep,
@@ -223,11 +223,11 @@ fn main() {
                 if let Err(errs) = comp_result {
                     errs.into_iter().for_each(|e| e.report(rc.out_mode));
                     if !rc.cont {
-                        process::exit(1);
+                        return ExitCode::FAILURE;
                     }
-                    exit_code = 1;
+                    exit_code = ExitCode::FAILURE;
                 }
-            });
+            }
         }
         Ok(RunConfig::ShowVersion) => {
             println!(
@@ -242,7 +242,7 @@ There is NO WARRANTY, to the extent permitted by law.
                 env!("CARGO_PKG_VERSION"),
                 env!("EAMBFC_RS_GIT_COMMIT")
             );
-            process::exit(exit_code);
+            return exit_code;
         }
         Err((err, out_mode)) => {
             err.report(out_mode);
@@ -251,7 +251,7 @@ There is NO WARRANTY, to the extent permitted by law.
             }
         }
     }
-    process::exit(exit_code);
+    exit_code
 }
 
 #[cfg(test)]

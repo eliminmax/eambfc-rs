@@ -4,7 +4,6 @@
 
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::process::exit;
 use std::process::Command;
 
 #[cfg(not(any(feature = "x86_64", feature = "arm64", feature = "s390x")))]
@@ -12,7 +11,7 @@ compile_error!("Must have at least one architecture enabled");
 fn main() {
     if !PathBuf::from(".git").exists() {
         println!("cargo::rustc-env=EAMBFC_RS_GIT_COMMIT=unknown: not built from git repository");
-        exit(0);
+        return;
     }
 
     if Command::new("git")
@@ -20,7 +19,7 @@ fn main() {
         .is_err_and(|e| e.kind() == ErrorKind::NotFound)
     {
         println!("cargo::rustc-env=EAMBFC_RS_GIT_COMMIT=unknown: git not available at build time");
-        exit(0);
+        return;
     }
 
     println!("cargo::rerun-if-changed=.git/index");
