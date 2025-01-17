@@ -36,6 +36,7 @@ assertions_on_result_states = "warn"
 dbg_macro = "warn"
 same_name_method = "warn"
 semicolon_outside_block = "warn"
+exit = "warn"
 
 [profile.release]
 lto = "thin"
