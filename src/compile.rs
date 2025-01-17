@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024-2025 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024 - 2025 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 use super::arch_inter::ArchInter;
