@@ -459,7 +459,7 @@ mod tests {
     fn test_add_sub_reg() {
         let mut v: Vec<u8> = Vec::new();
         // Handling of 24-bit values
-        assert!(add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add).is_ok());
+        add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add).unwrap();
         assert_eq!(
             v,
             vec![
@@ -471,7 +471,7 @@ mod tests {
         // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
         // included
         v.clear();
-        assert!(add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub).is_ok());
+        add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub).unwrap();
         assert_eq!(
             v,
             vec![
