@@ -179,12 +179,22 @@ pub trait BFCompile: ArchInter {
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
         use CondensedInstruction as CI;
+        macro_rules! as_t {
+            ($v: ident, $t: ty) => {{
+                $v.get() as $t
+            }};
+        }
+
         match condensed_instr {
             CI::SetZero => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
-            CI::RepeatAdd(count) => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as i8),
-            CI::RepeatSub(count) => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as i8),
-            CI::RepeatMoveR(count) => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as i64)?,
-            CI::RepeatMoveL(count) => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as i64)?,
+            CI::RepeatAdd(count) => Self::add_byte(dst, Self::REGISTERS.bf_ptr, as_t!(count, i8)),
+            CI::RepeatSub(count) => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, as_t!(count, i8)),
+            CI::RepeatMoveR(count) => {
+                Self::add_reg(dst, Self::REGISTERS.bf_ptr, as_t!(count, i64))?;
+            }
+            CI::RepeatMoveL(count) => {
+                Self::sub_reg(dst, Self::REGISTERS.bf_ptr, as_t!(count, i64))?;
+            }
             CI::BFInstruction(i) => {
                 Self::compile_instr(
                     i,

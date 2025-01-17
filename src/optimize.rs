@@ -4,14 +4,15 @@
 
 use super::err::{BFCompileError, BFErrorID};
 use std::io::Read;
+use std::num::NonZeroUsize;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum CondensedInstruction {
     BFInstruction(u8),
-    RepeatMoveR(usize),
-    RepeatMoveL(usize),
-    RepeatAdd(usize),
-    RepeatSub(usize),
+    RepeatMoveR(NonZeroUsize),
+    RepeatMoveL(NonZeroUsize),
+    RepeatAdd(NonZeroUsize),
+    RepeatSub(NonZeroUsize),
     SetZero,
 }
 
@@ -130,6 +131,7 @@ fn condense_instr(instr: u8, count: usize, condensed: &mut Vec<CondensedInstruct
             if count == 1 {
                 condensed.push(CondensedInstruction::BFInstruction(instr));
             } else {
+                let count = NonZeroUsize::new(count).expect("count is nonzero");
                 condensed.push(CondensedInstruction::$condensed_instr(count));
             }
         }};
@@ -193,7 +195,7 @@ mod tests {
             vec![
                 CondensedInstruction::BFInstruction(b'+'),
                 CondensedInstruction::SetZero,
-                CondensedInstruction::RepeatAdd(2usize),
+                CondensedInstruction::RepeatAdd(const { NonZeroUsize::new(2usize).unwrap() }),
                 CondensedInstruction::SetZero,
                 CondensedInstruction::BFInstruction(b','),
                 CondensedInstruction::BFInstruction(b'.'),
