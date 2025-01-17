@@ -4,7 +4,8 @@
 #
 # SPDX-License-Identifier: 0BSD
 
-cd "$(git rev-parse --show-toplevel)" || exit 1
+set -e
+cd "$(git rev-parse --show-toplevel)"
 
 cargo test
 cargo clippy --tests -- -D warnings
