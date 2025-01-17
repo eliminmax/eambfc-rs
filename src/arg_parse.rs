@@ -5,12 +5,11 @@
 use super::elf_tools::ELFArch;
 use super::err::{BFCompileError, BFErrorID};
 use super::OutMode;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
 #[derive(PartialEq, Debug)]
 pub struct StandardRunConfig {
-    pub progname: String,
     pub out_mode: OutMode,
     pub optimize: bool,
     pub keep: bool,
@@ -24,9 +23,9 @@ pub struct StandardRunConfig {
 #[derive(PartialEq, Debug)]
 pub enum RunConfig {
     StandardRun(StandardRunConfig),
-    ShowHelp(String),
-    ShowVersion(String),
-    ShowArches(String),
+    ShowHelp,
+    ShowVersion,
+    ListArches,
 }
 
 fn parameter_instr<T: Iterator<Item = OsString>>(
@@ -46,60 +45,71 @@ fn parameter_instr<T: Iterator<Item = OsString>>(
     }
 }
 
-#[allow(clippy::too_many_lines, reason = "Can't cleanly split up much more")]
 pub fn parse_args<T: Iterator<Item = OsString>>(
     mut args: T,
-) -> Result<RunConfig, (BFCompileError, String, OutMode)> {
-    // argument 0 should be the name of the file.
-    // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
-    let progname = args.next().unwrap_or(OsString::from("eambfc-rs"));
-    let progname = progname.to_string_lossy().to_string();
+) -> Result<RunConfig, (BFCompileError, OutMode)> {
+
     let mut extension: Option<OsString> = None;
-    let mut source_files = Vec::<OsString>::new();
-    let mut out_mode = OutMode::Basic;
-    let mut optimize = false;
-    let mut keep = false;
-    let mut cont = false;
+    let mut source_files: Option<Vec<OsString>> = None;
     let mut tape_blocks: Option<u64> = None;
     let mut arch: Option<ELFArch> = None;
 
+    let mut out_mode = OutMode::Basic;
+    // boolean flags
+    let (mut optimize, mut keep, mut cont) = (false, false, false);
+
+
     macro_rules! error_out {
         ($error_type: ident, $msg: expr) => {{
-            return Err((
-                BFCompileError::basic(BFErrorID::$error_type, $msg),
-                progname,
-                out_mode,
-            ));
+            let err = BFCompileError::basic(BFErrorID::$error_type, $msg);
+            return Err((err, out_mode));
         }};
     }
+
     while let Some(arg) = args.next() {
         // handle non-flag values
         if arg == "--" {
-            source_files.extend(args);
+            source_files = Some(args.collect());
             break;
         }
         let arg_bytes = arg.into_vec();
         if arg_bytes[0] != b'-' {
-            source_files.push(OsString::from_vec(arg_bytes));
-            source_files.extend(args);
+            let mut sf = vec![OsString::from_vec(arg_bytes)];
+            sf.extend(args);
+            source_files = Some(sf);
             break;
         }
+
         let mut arg_byte_iter = arg_bytes.into_iter().skip(1);
+        macro_rules! parameter_instr {
+            ($flag: literal) => {{
+                parameter_instr($flag, arg_byte_iter.collect(), &mut args)
+                    .map_err(|e| (e, out_mode))?
+            }};
+        }
+
         while let Some(b) = arg_byte_iter.next() {
-            macro_rules! parameter_instr {
-                ($flag: literal) => {{
-                    match parameter_instr($flag, arg_byte_iter.collect(), &mut args) {
-                        Ok(o) => o,
-                        Err(e) => return Err((e, progname, out_mode)),
+            macro_rules! param_arg {
+                (($flag: literal, $var: ident, $error_type: ident), $body: expr) => {{
+                    if $var.is_some() {
+                        error_out!($error_type, concat!("passed -", $flag, "multiple times"));
                     }
+                    $var = $body;
+                    break;
                 }};
             }
             match b {
-                b'a' => {
-                    if arch.is_some() {
-                        error_out!(MULTIPLE_ARCHES, "passed -a multiple times");
-                    }
-                    arch = match parameter_instr!(b'a').as_bytes() {
+                b'h' => return Ok(RunConfig::ShowHelp),
+                b'V' => return Ok(RunConfig::ShowVersion),
+                b'A' => return Ok(RunConfig::ListArches),
+                b'j' => out_mode.json(),
+                b'q' => out_mode.quiet(),
+                b'O' => optimize = true,
+                b'k' => keep = true,
+                b'c' => cont = true,
+                b'a' => param_arg!(
+                    ('a', arch, MULTIPLE_ARCHES),
+                    match parameter_instr!(b'a').as_bytes() {
                         #[cfg(feature = "x86_64")]
                         b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(ELFArch::X86_64),
                         #[cfg(feature = "arm64")]
@@ -108,62 +118,36 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                         b"s390x" | b"s390" | b"z/architecture" => Some(ELFArch::S390x),
                         f => error_out!(
                             UNKNOWN_ARCH,
-                            format!(
-                                "{} is not a recognized architecture",
-                                OsStr::from_bytes(f).to_string_lossy()
-                            )
+                            format!("{} is not a recognized architecture", f.escape_ascii())
                         ),
-                    };
-                    break;
-                }
-                b'e' => {
-                    if extension.is_some() {
-                        error_out!(MULTIPLE_EXTENSIONS, "passed -e multiple times");
                     }
-                    extension = Some(parameter_instr!(b'e'));
-                    break;
-                }
-                b't' => {
-                    if tape_blocks.is_some() {
-                        error_out!(MULTIPLE_TAPE_BLOCK_COUNTS, "passed -t multiple times");
-                    }
+                ),
+                b'e' => param_arg!(
+                    ('e', extension, MULTIPLE_EXTENSIONS),
+                    Some(parameter_instr!(b'e'))
+                ),
+                b't' => param_arg!(
+                    ('t', tape_blocks, MULTIPLE_TAPE_BLOCK_COUNTS),
                     match parameter_instr!(b't').to_string_lossy().parse::<u64>() {
-                        Ok(0) => error_out!(NO_TAPE, "Tape value for -t must be at least 1."),
-                        Ok(i) if i >= u64::MAX >> 12 => error_out!(
-                            TAPE_TOO_LARGE,
-                            format!("{i} * 0x1000 exceeds the 64-bit integer limit.")
-                        ),
-                        Ok(i) => tape_blocks = Some(i),
-                        Err(s) => error_out!(
+                        Ok(0) => error_out!(NO_TAPE, "Tape value for -t must be at least 1"),
+                        Ok(i) if i >= u64::MAX >> 12 =>
+                            error_out!(TAPE_TOO_LARGE, "tape size exceeds 64-bit integer limit"),
+                        Ok(i) => Some(i),
+                        Err(_) => error_out!(
                             NOT_NUMERIC,
-                            format!("{s} could not be parsed as a numeric value")
+                            "tape size could not be parsed as a numeric value"
                         ),
                     }
-                    break;
-                }
-                b'h' => return Ok(RunConfig::ShowHelp(progname)),
-                b'V' => return Ok(RunConfig::ShowVersion(progname)),
-                b'A' => return Ok(RunConfig::ShowArches(progname)),
-                b'j' => out_mode = OutMode::JSON,
-                // for consistency with original C version, quiet doesn't override JSON mode
-                b'q' => {
-                    if out_mode == OutMode::Basic {
-                        out_mode = OutMode::Quiet;
-                    }
-                }
-                b'O' => optimize = true,
-                b'k' => keep = true,
-                b'c' => cont = true,
-                c => return Err((BFCompileError::unknown_flag(c), progname, out_mode)),
+                ),
+                c => return Err((BFCompileError::unknown_flag(c), out_mode)),
             };
         }
     }
-    if source_files.is_empty() {
+    let Some(source_files) = source_files else {
         error_out!(NO_SOURCE_FILES, "No source files provided");
-    }
+    };
 
     Ok(RunConfig::StandardRun(StandardRunConfig {
-        progname,
         out_mode,
         optimize,
         keep,
@@ -179,7 +163,6 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
 impl Default for StandardRunConfig {
     fn default() -> Self {
         StandardRunConfig {
-            progname: String::from("eambfc-rs"),
             out_mode: OutMode::Basic,
             optimize: false,
             keep: false,
@@ -200,7 +183,6 @@ mod tests {
     fn combined_args() {
         // ensure that combined arguments are processed properly
         let args_set_0 = vec![
-            OsString::from("eambfc-rs-test"),
             // should be interpreted identically to -k -j -e .brainfuck'
             OsString::from("-kje.brainfuck"),
             OsString::from("foo.brainfuck"),
@@ -208,7 +190,6 @@ mod tests {
         ]
         .into_iter();
         let args_set_1 = vec![
-            OsString::from("eambfc-rs-test"),
             // should be interpreted identically to -kje.brainfuck'
             OsString::from("-k"),
             OsString::from("-j"),
@@ -228,7 +209,6 @@ mod tests {
     #[test]
     fn options_stop_on_double_dash() {
         let args_set = vec![
-            OsString::from("eambfc-rs-test"),
             OsString::from("--"),
             OsString::from("-j"),
             OsString::from("-h"),
@@ -252,12 +232,7 @@ mod tests {
 
     #[test]
     fn options_dont_mix_with_files() {
-        let args_set = vec![
-            OsString::from("eambfc-rs-test"),
-            OsString::from("e.bf"),
-            OsString::from("-h"),
-        ]
-        .into_iter();
+        let args_set = vec![OsString::from("e.bf"), OsString::from("-h")].into_iter();
         // ensure that -h is interpreted as a file name
         let RunConfig::StandardRun(parsed_args) = parse_args(args_set).unwrap() else {
             panic!("Arguments not parsed into StandardRunConfig!")
@@ -269,56 +244,35 @@ mod tests {
     }
 
     #[test]
-    fn help_includes_progname() {
-        let args_set =
-            vec![OsString::from("not-eambfc-i-promise"), OsString::from("-h")].into_iter();
-        assert_eq!(
-            parse_args(args_set),
-            Ok(RunConfig::ShowHelp(String::from("not-eambfc-i-promise")))
-        );
+    fn help_returned() {
+        let args_set = vec![OsString::from("-h")].into_iter();
+        assert_eq!(parse_args(args_set), Ok(RunConfig::ShowHelp));
     }
 
     #[test]
-    fn version_includes_progname() {
-        let args_set =
-            vec![OsString::from("not-eambfc-i-promise"), OsString::from("-V")].into_iter();
-        assert_eq!(
-            parse_args(args_set),
-            Ok(RunConfig::ShowVersion(String::from("not-eambfc-i-promise")))
-        );
+    fn version_returned() {
+        let args_set = vec![OsString::from("-V")].into_iter();
+        assert_eq!(parse_args(args_set), Ok(RunConfig::ShowVersion));
     }
 
     #[test]
-    fn fallback_for_empty_args() {
-        let (bf_err, name, _) = parse_args(vec![].into_iter()).unwrap_err();
-        assert_eq!(name, String::from("eambfc-rs"));
+    fn handle_empty_args() {
+        let (bf_err, _) = parse_args(vec![].into_iter()).unwrap_err();
         assert_eq!(bf_err.kind, BFErrorID::NO_SOURCE_FILES);
     }
 
     #[test]
     fn arg0_contains_non_utf8() {
-        let args_set = vec![
-            OsString::from_vec(b"not-\xeeambfc-i-promis\xee".into()),
-            OsString::from("-h"),
-        ]
-        .into_iter();
-        assert_eq!(
-            parse_args(args_set),
-            Ok(RunConfig::ShowHelp(String::from("not-�ambfc-i-promis�")))
-        );
+        let args_set = vec![OsString::from("-h")].into_iter();
+        assert_eq!(parse_args(args_set), Ok(RunConfig::ShowHelp));
     }
 
     #[test]
     fn filename_contains_non_utf8() {
-        let args_set = vec![
-            OsString::from("eambfc-rs"),
-            OsString::from_vec(b"fil\xee.bf".into()),
-        ]
-        .into_iter();
+        let args_set = vec![OsString::from_vec(b"fil\xee.bf".into())].into_iter();
         assert_eq!(
             parse_args(args_set),
             Ok(RunConfig::StandardRun(StandardRunConfig {
-                progname: String::from("eambfc-rs"),
                 source_files: vec![OsString::from_vec(b"fil\xee.bf".into())],
                 ..StandardRunConfig::default()
             }))
@@ -328,7 +282,6 @@ mod tests {
     #[test]
     fn non_numeric_tape_size() {
         let args_set = vec![
-            OsString::from("eambfc-rs"),
             OsString::from_vec(b"-t".into()),
             OsString::from_vec(b"###".into()),
         ]
@@ -340,7 +293,6 @@ mod tests {
     #[test]
     fn multiple_tape_size() {
         let args_set = vec![
-            OsString::from("eambfc-rs"),
             OsString::from_vec(b"-t1".into()),
             OsString::from_vec(b"-t1024".into()),
         ]
@@ -351,22 +303,14 @@ mod tests {
 
     #[test]
     fn tape_size_zero() {
-        let args_set = vec![
-            OsString::from("eambfc-rs"),
-            OsString::from_vec(b"-t0".into()),
-        ]
-        .into_iter();
+        let args_set = vec![OsString::from_vec(b"-t0".into())].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::NO_TAPE);
     }
 
     #[test]
     fn missing_tape_size() {
-        let args_set = vec![
-            OsString::from("eambfc-rs"),
-            OsString::from_vec(b"-t".into()),
-        ]
-        .into_iter();
+        let args_set = vec![OsString::from_vec(b"-t".into())].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
     }

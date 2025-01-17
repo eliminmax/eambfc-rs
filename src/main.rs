@@ -24,7 +24,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
-use std::{io, process};
+use std::process;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
@@ -41,8 +41,20 @@ pub enum OutMode {
     Quiet,
 }
 
-fn show_help(outfile: &mut dyn io::Write, progname: &str) {
-    let help_text = format!(
+impl OutMode {
+    fn json(&mut self) {
+        *self = OutMode::JSON;
+    }
+    fn quiet(&mut self) {
+        // for consistency with original C version, quiet doesn't override JSON mode
+        if *self == OutMode::Basic {
+            *self = OutMode::Quiet;
+        }
+    }
+}
+
+fn help_text(progname: &str) -> String {
+    format!(
         "Usage: {progname} [options] <program.bf> [<program2.bf> ...]
 
  -h        - display this help text and exit
@@ -70,10 +82,7 @@ end with '.bf' (or the extension specified with '-e'), the program
 will raise an error.
 ",
         ELFArch::default(),
-    );
-    outfile
-        .write_all(help_text.as_bytes())
-        .expect("Failed to write help text - things are truly borked.");
+    )
 }
 
 // if filename ends with extension, return Ok(f), where f is the filename without the extension
@@ -153,12 +162,13 @@ fn compile_wrapper<Compiler: BFCompile>(
 }
 
 fn main() {
-    let mut stdout = io::stdout();
-    let mut stderr = io::stderr();
-
     let mut exit_code = 0;
-    match arg_parse::parse_args(args_os()) {
-        Ok(RunConfig::ShowArches(progname)) => {
+    let mut args = args_os();
+    // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
+    let progname = args.next().unwrap_or(OsString::from("eambfc-rs"));
+    let progname = progname.to_string_lossy().to_string();
+    match arg_parse::parse_args(args) {
+        Ok(RunConfig::ListArches) => {
             println!("This build of {progname} supports the following architectures:\n");
             #[cfg(feature = "x86_64")]
             println!("- x86_64 (aliases: x64, amd64, x86-64)");
@@ -171,7 +181,7 @@ fn main() {
                 ELFArch::default()
             );
         }
-        Ok(RunConfig::ShowHelp(progname)) => show_help(&mut stdout, &progname),
+        Ok(RunConfig::ShowHelp) => println!("{}", help_text(&progname)),
         Ok(RunConfig::StandardRun(rc)) => {
             rc.source_files.iter().for_each(|f| {
                 #[allow(
@@ -217,7 +227,7 @@ fn main() {
                 }
             });
         }
-        Ok(RunConfig::ShowVersion(progname)) => {
+        Ok(RunConfig::ShowVersion) => {
             println!(
                 "{progname}: eambfc-rs version {}
 
@@ -232,10 +242,10 @@ There is NO WARRANTY, to the extent permitted by law.
             );
             process::exit(exit_code);
         }
-        Err((err, progname, out_mode)) => {
+        Err((err, out_mode)) => {
             err.report(out_mode);
             if out_mode == OutMode::Basic {
-                show_help(&mut stderr, &progname);
+                eprintln!("{}", help_text(&progname));
             }
         }
     }
