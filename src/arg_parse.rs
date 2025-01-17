@@ -5,6 +5,7 @@
 use super::elf_tools::ELFArch;
 use super::err::{BFCompileError, BFErrorID};
 use super::OutMode;
+use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
@@ -20,6 +21,48 @@ pub struct StandardRunConfig {
     pub arch: ELFArch,
 }
 
+#[derive(Default)]
+struct PartialRunConfig {
+    out_mode: OutMode,
+    optimize: bool,
+    keep: bool,
+    cont: bool,
+    tape_blocks: Option<u64>,
+    extension: Option<OsString>,
+    source_files: Option<Vec<OsString>>,
+    arch: Option<ELFArch>,
+}
+
+impl TryFrom<PartialRunConfig> for StandardRunConfig {
+    type Error = (BFCompileError, OutMode);
+    fn try_from(pcfg: PartialRunConfig) -> Result<Self, Self::Error> {
+        let PartialRunConfig {
+            out_mode,
+            optimize,
+            keep,
+            cont,
+            tape_blocks,
+            extension,
+            source_files,
+            arch,
+        } = pcfg;
+        let source_files = source_files.ok_or((
+            BFCompileError::basic(BFErrorID::NO_SOURCE_FILES, "No source files provided"),
+            out_mode,
+        ))?;
+        Ok(StandardRunConfig {
+            out_mode,
+            optimize,
+            keep,
+            cont,
+            tape_blocks: tape_blocks.unwrap_or(8),
+            extension: extension.unwrap_or(".bf".into()),
+            source_files,
+            arch: arch.unwrap_or_default(),
+        })
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum RunConfig {
     StandardRun(StandardRunConfig),
@@ -28,73 +71,67 @@ pub enum RunConfig {
     ListArches,
 }
 
-fn parameter_instr<T: Iterator<Item = OsString>>(
-    flag: u8,
-    remainder: Vec<u8>,
-    args: &mut T,
-) -> Result<OsString, BFCompileError> {
-    if remainder.is_empty() {
-        args.next().ok_or_else(|| {
-            BFCompileError::basic(
-                BFErrorID::MISSING_OPERAND,
-                format!("-{} requires an additional argument", flag.escape_ascii()),
-            )
-        })
-    } else {
-        Ok(OsString::from_vec(remainder))
-    }
-}
-
 pub fn parse_args<T: Iterator<Item = OsString>>(
     mut args: T,
 ) -> Result<RunConfig, (BFCompileError, OutMode)> {
-
-    let mut extension: Option<OsString> = None;
-    let mut source_files: Option<Vec<OsString>> = None;
-    let mut tape_blocks: Option<u64> = None;
-    let mut arch: Option<ELFArch> = None;
-
-    let mut out_mode = OutMode::Basic;
-    // boolean flags
-    let (mut optimize, mut keep, mut cont) = (false, false, false);
-
+    let mut pcfg = PartialRunConfig::default();
 
     macro_rules! error_out {
         ($error_type: ident, $msg: expr) => {{
             let err = BFCompileError::basic(BFErrorID::$error_type, $msg);
-            return Err((err, out_mode));
+            return Err((err, pcfg.out_mode));
         }};
     }
 
     while let Some(arg) = args.next() {
         // handle non-flag values
         if arg == "--" {
-            source_files = Some(args.collect());
+            pcfg.source_files = Some(args.collect());
             break;
         }
         let arg_bytes = arg.into_vec();
         if arg_bytes[0] != b'-' {
             let mut sf = vec![OsString::from_vec(arg_bytes)];
             sf.extend(args);
-            source_files = Some(sf);
+            pcfg.source_files = Some(sf);
             break;
         }
 
         let mut arg_byte_iter = arg_bytes.into_iter().skip(1);
         macro_rules! parameter_instr {
             ($flag: literal) => {{
-                parameter_instr($flag, arg_byte_iter.collect(), &mut args)
-                    .map_err(|e| (e, out_mode))?
+                let remainder: Vec<_> = arg_byte_iter.collect();
+                if remainder.is_empty() {
+                    args.next().ok_or_else(|| {
+                        (
+                            BFCompileError::basic(
+                                BFErrorID::MISSING_OPERAND,
+                                format!(
+                                    "-{} requires an additional argument",
+                                    $flag.escape_ascii()
+                                ),
+                            ),
+                            pcfg.out_mode,
+                        )
+                    })?
+                } else {
+                    OsString::from_vec(remainder)
+                }
             }};
         }
 
         while let Some(b) = arg_byte_iter.next() {
+            // if cfg.$var is none, set it to the result of evaluating $body, otherwise, error out
+            // with error id BFErrorID::$error_id
             macro_rules! param_arg {
-                (($flag: literal, $var: ident, $error_type: ident), $body: expr) => {{
-                    if $var.is_some() {
-                        error_out!($error_type, concat!("passed -", $flag, "multiple times"));
+                ($var: ident, $error_id: ident, $body: expr) => {{
+                    if pcfg.$var.is_some() {
+                        error_out!(
+                            $error_id,
+                            format!("passed -{} multiple times", b.escape_ascii())
+                        );
                     }
-                    $var = $body;
+                    pcfg.$var = $body;
                     break;
                 }};
             }
@@ -102,13 +139,14 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                 b'h' => return Ok(RunConfig::ShowHelp),
                 b'V' => return Ok(RunConfig::ShowVersion),
                 b'A' => return Ok(RunConfig::ListArches),
-                b'j' => out_mode.json(),
-                b'q' => out_mode.quiet(),
-                b'O' => optimize = true,
-                b'k' => keep = true,
-                b'c' => cont = true,
+                b'j' => pcfg.out_mode.json(),
+                b'q' => pcfg.out_mode.quiet(),
+                b'O' => pcfg.optimize = true,
+                b'k' => pcfg.keep = true,
+                b'c' => pcfg.cont = true,
                 b'a' => param_arg!(
-                    ('a', arch, MULTIPLE_ARCHES),
+                    arch,
+                    MULTIPLE_ARCHES,
                     match parameter_instr!(b'a').as_bytes() {
                         #[cfg(feature = "x86_64")]
                         b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(ELFArch::X86_64),
@@ -122,12 +160,10 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                         ),
                     }
                 ),
-                b'e' => param_arg!(
-                    ('e', extension, MULTIPLE_EXTENSIONS),
-                    Some(parameter_instr!(b'e'))
-                ),
+                b'e' => param_arg!(extension, MULTIPLE_EXTENSIONS, Some(parameter_instr!(b'e'))),
                 b't' => param_arg!(
-                    ('t', tape_blocks, MULTIPLE_TAPE_BLOCK_COUNTS),
+                    tape_blocks,
+                    MULTIPLE_TAPE_BLOCK_COUNTS,
                     match parameter_instr!(b't').to_string_lossy().parse::<u64>() {
                         Ok(0) => error_out!(NO_TAPE, "Tape value for -t must be at least 1"),
                         Ok(i) if i >= u64::MAX >> 12 =>
@@ -139,24 +175,11 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                         ),
                     }
                 ),
-                c => return Err((BFCompileError::unknown_flag(c), out_mode)),
+                c => return Err((BFCompileError::unknown_flag(c), pcfg.out_mode)),
             };
         }
     }
-    let Some(source_files) = source_files else {
-        error_out!(NO_SOURCE_FILES, "No source files provided");
-    };
-
-    Ok(RunConfig::StandardRun(StandardRunConfig {
-        out_mode,
-        optimize,
-        keep,
-        cont,
-        tape_blocks: tape_blocks.unwrap_or(8),
-        extension: extension.unwrap_or(".bf".into()),
-        source_files,
-        arch: arch.unwrap_or_default(),
-    }))
+    Ok(RunConfig::StandardRun(pcfg.try_into()?))
 }
 
 #[cfg(test)]

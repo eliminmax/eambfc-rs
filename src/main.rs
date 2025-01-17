@@ -35,8 +35,9 @@ use backend_s390x::S390xInter;
 #[cfg(feature = "x86_64")]
 use backend_x86_64::X86_64Inter;
 
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy, Default)]
 pub enum OutMode {
+    #[default]
     Basic,
     JSON,
     Quiet,
