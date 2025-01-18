@@ -153,7 +153,11 @@ fn main() -> ExitCode {
             );
         }
         Ok(RunConfig::ShowHelp) => {
-            println!(include_str!("help_template.txt"), progname, ELFArch::default());
+            println!(
+                include_str!("help_template.txt"),
+                progname,
+                ELFArch::default()
+            );
         }
         Ok(RunConfig::StandardRun(rc)) => {
             for f in rc.source_files {
@@ -212,7 +216,11 @@ fn main() -> ExitCode {
         Err((err, out_mode)) => {
             err.report(out_mode);
             if out_mode == OutMode::Basic {
-                eprintln!(include_str!("help_template.txt"), progname, ELFArch::default());
+                eprintln!(
+                    include_str!("help_template.txt"),
+                    progname,
+                    ELFArch::default()
+                );
             }
         }
     }

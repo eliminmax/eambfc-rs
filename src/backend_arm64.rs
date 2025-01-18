@@ -324,11 +324,7 @@ fn add_sub(
             let aux = aux_reg(reg);
             Arm64Inter::set_reg(code_buf, aux, i);
             // either ADD reg, reg, aux or SUB reg, reg, aux
-            code_buf.extend(inject_reg_operands(
-                reg,
-                reg,
-                [0, 0, aux as u8, op_byte],
-            ));
+            code_buf.extend(inject_reg_operands(reg, reg, [0, 0, aux as u8, op_byte]));
         }
     }
     Ok(())
