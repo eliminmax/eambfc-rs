@@ -136,12 +136,14 @@ pub struct Phdr {
     pub p_align: u64,
 }
 
+pub const EHDR_SIZE: u16 = 64;
+pub const PHDR_SIZE: u16 = 56;
 // better this than having identical implementations, differing only in whether to_le_bytes or
 // to_be_bytes are called.
 macro_rules! serialize_ehdr {
     ($item:ident, $func:ident) => {{
-        let e_ident: [u8; 16] = $item.e_ident.into();
-        let mut v = Vec::from(e_ident);
+        let mut v = Vec::with_capacity(usize::from(EHDR_SIZE));
+        v.extend(<[u8; 16]>::from($item.e_ident));
         v.extend(($item.e_type as u16).$func());
         v.extend(($item.e_machine as u16).$func());
         v.extend(($item.e_version as u32).$func());
@@ -161,7 +163,8 @@ macro_rules! serialize_ehdr {
 
 macro_rules! serialize_phdr {
     ($item:ident, $func:ident) => {{
-        let mut v = Vec::from(($item.p_type as u32).$func());
+        let mut v = Vec::with_capacity(usize::from(PHDR_SIZE));
+        v.extend(($item.p_type as u32).$func());
         v.extend($item.p_flags.$func());
         v.extend($item.p_offset.$func());
         v.extend($item.p_vaddr.$func());

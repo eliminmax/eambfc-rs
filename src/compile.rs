@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::arch_inter::ArchInter;
 use super::elf_tools::{
-    EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, ELFOSABI,
+    EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, EHDR_SIZE, ELFOSABI,
+    PHDR_SIZE,
 };
 use super::err::{BFCompileError, BFErrorID, CodePosition};
 use super::optimize::{to_condensed, CondensedInstruction};
@@ -15,8 +16,6 @@ pub struct JumpLocation {
 }
 
 // ELF addressing stuff
-const EHDR_SIZE: u16 = 64u16;
-const PHDR_SIZE: u16 = 56u16;
 const PHTB_SIZE: u64 = (PHDR_SIZE * PHNUM) as u64;
 const TAPE_ADDR: u64 = 0x10000;
 const PHNUM: u16 = 2;
