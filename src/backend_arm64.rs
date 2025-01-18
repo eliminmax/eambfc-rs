@@ -132,12 +132,10 @@ macro_rules! fn_branch_cond {
             // Ensure only lower 4 bits of cond are used
             const { assert!($cond & 0xf0 == 0) };
             // as A64 uses fixed-size 32-bit instructions, offset must be a multiple of 4.
-            if offset % 4 != 0 {
-                return Err(BFCompileError::basic(
-                    BFErrorID::INVALID_JUMP_ADDRESS,
-                    format!("{offset} is an invalid address offset (offset % 4 != 0)"),
-                ));
-            }
+            assert!(
+                offset.trailing_zeros() >= 2,
+                "offset {offset} is invalid for architecture (offset % 4 != 0)"
+            );
             // Encoding uses 19 immediate bits, and treats it as having an implicit 0b00 at the
             // end, as it needs to be a multiple of 4 anyway. The result is that it must be a
             // 21-bit value. Make sure that it fits within that value.

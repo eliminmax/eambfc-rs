@@ -236,13 +236,21 @@ macro_rules! encode_ri_op {
             ($reg as u8) << 4 | (($opcode & 0xf) as u8),
         ]);
     }};
-    ($code_buf:ident, $opcode:literal, $reg:ident, $t:ty, $imm:ident) => {{
+    ($code_buf:ident, $opcode:literal, $reg:ident, $t:ty, $imm:expr) => {{
         encode_ri_op!($code_buf, $opcode, $reg);
         $code_buf.extend(($imm as $t).to_be_bytes());
     }};
-    ($code_buf:ident, $opcode:literal, $reg:ident, $t:ty, $imm:literal) => {{
+    ($code_buf:ident, $opcode:literal, $reg:ident, $imm:literal) => {{
         encode_ri_op!($code_buf, $opcode, $reg);
-        $code_buf.extend(($imm as $t).to_be_bytes());
+        #[allow(
+            clippy::unseparated_literal_suffix,
+            reason = "Need to specify type for literal"
+        )]
+        $code_buf.extend($imm.to_be_bytes());
+    }};
+    ($code_buf:ident, $opcode:literal, $reg:ident, $imm:expr) => {{
+        encode_ri_op!($code_buf, $opcode, $reg);
+        $code_buf.extend($imm.to_be_bytes());
     }};
 }
 
@@ -251,7 +259,6 @@ enum ComparisonMask {
     MaskEQ = 8,
     MaskNE = 6, // `MaskLT | MaskGT` (i.e. 4 | 2)
 }
-
 
 // temporary scratch register
 const TMP_REG: S390xRegister = S390xRegister::R5;
@@ -279,27 +286,21 @@ fn branch_cond(
     offset: i64,
     comp_mask: ComparisonMask,
 ) -> FailableInstrEncoding {
-    // jumps are done by halfwords, not bytes, so make sure it's a valid offset with that in mind
-    match offset {
-        i if i % 2 != 0 => Err(BFCompileError::basic(
-            BFErrorID::INVALID_JUMP_ADDRESS,
-            "offset is not on a halfword boundary",
-        )),
-        i if (i > 0 && (i >> 17) != 0) || (i < 0 && (i >> 17 != -1)) => Err(BFCompileError::basic(
-            BFErrorID::JUMP_TOO_LONG,
-            "offset out of range for this architecture",
-        )),
-        _ => {
-            code_buf.extend(load_from_byte(reg));
-            let offset = offset >> 1;
-            // CFI aux, 0 {RIL-a}
-            encode_ri_op!(code_buf, 0xc2d, TMP_REG, i32, 0);
-            // BRCL mask, offset
-            encode_ri_op!(code_buf, 0xc04, comp_mask, i32, offset);
+    let offset: i32 = i16::try_from(offset >> 1)
+        .map_err(|_| {
+            BFCompileError::basic(
+                BFErrorID::JUMP_TOO_LONG,
+                "offset out of range for this architecture",
+            )
+        })?
+        .into();
+    code_buf.extend(load_from_byte(reg));
+    // CFI aux, 0 {RIL-a}
+    encode_ri_op!(code_buf, 0xc2d, TMP_REG, 0i32);
+    // BRCL mask, offset
+    encode_ri_op!(code_buf, 0xc04, comp_mask, offset);
 
-            Ok(())
-        }
-    }
+    Ok(())
 }
 
 pub struct S390xInter;
