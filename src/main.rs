@@ -55,38 +55,6 @@ impl OutMode {
     }
 }
 
-fn help_text(progname: &str) -> String {
-    format!(
-        "Usage: {progname} [options] <program.bf> [<program2.bf> ...]
-
- -h        - display this help text and exit
- -V        - print version information and exit
- -j        - print errors in JSON format
- -q        - don't print errors unless -j was passed
- -O        - enable optimization*.
- -k        - keep files that failed to compile (for debugging)
- -c        - continue to the next file instead of quitting if a
-             file fails to compile
- -t count  - allocate <count> 4-KiB blocks for the tape
-             (defaults to 8 if not specified)**
- -e ext    - use 'ext' as the extension for source files instead of '.bf'
-             (This program will remove this at the end of the input
-             file to create the output file name)**
- -a arch   - compile for specified architecture
-             (defaults to {} if not specified)**
- -A        - list supported architectures and exit
-
-* Optimization can make error reporting less precise.
-** -a, -t and -e can only be passed at most once each.
-
-Remaining options are treated as source file names. If they don't
-end with '.bf' (or the extension specified with '-e'), the program
-will raise an error.
-",
-        ELFArch::default(),
-    )
-}
-
 // if filename ends with extension, return Ok(f), where f is the filename without the extension
 // otherwise, return Err(filename)
 fn rm_ext<'a>(filename: &'a OsStr, extension: &OsStr) -> Result<OsString, &'a OsStr> {
@@ -184,7 +152,9 @@ fn main() -> ExitCode {
                 ELFArch::default()
             );
         }
-        Ok(RunConfig::ShowHelp) => println!("{}", help_text(&progname)),
+        Ok(RunConfig::ShowHelp) => {
+            println!(include_str!("help_template.txt"), progname, ELFArch::default());
+        }
         Ok(RunConfig::StandardRun(rc)) => {
             for f in rc.source_files {
                 #[allow(
@@ -232,14 +202,8 @@ fn main() -> ExitCode {
         }
         Ok(RunConfig::ShowVersion) => {
             println!(
-                "{progname}: eambfc-rs version {}
-
-Copyright (c) 2024 Eli Array Minkoff
-License: GNU GPL version 3 <https://gnu.org/licenses/gpl.html>
-This is free software: you are free to change and redistribute it.
-There is NO WARRANTY, to the extent permitted by law.
-
-{}",
+                include_str!("version_template.txt"),
+                progname,
                 env!("CARGO_PKG_VERSION"),
                 env!("EAMBFC_RS_GIT_COMMIT")
             );
@@ -248,7 +212,7 @@ There is NO WARRANTY, to the extent permitted by law.
         Err((err, out_mode)) => {
             err.report(out_mode);
             if out_mode == OutMode::Basic {
-                eprintln!("{}", help_text(&progname));
+                eprintln!(include_str!("help_template.txt"), progname, ELFArch::default());
             }
         }
     }
