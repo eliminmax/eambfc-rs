@@ -108,7 +108,7 @@ fn rm_ext<'a>(filename: &'a OsStr, extension: &OsStr) -> Result<OsString, &'a Os
 // wrapper around the compilation of a specific file
 fn compile_wrapper<Compiler: BFCompile>(
     _compiler: Compiler,
-    file_name: &OsString,
+    file_name: &OsStr,
     extension: &OsStr,
     optimize: bool,
     keep: bool,
