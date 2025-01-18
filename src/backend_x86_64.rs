@@ -109,7 +109,7 @@ macro_rules! fn_test_jcc {
             // Ensure only lower 4 bits of tttn are used - the const _: () mess forces the check to
             // run at compile time rather than runtime.
             const _: () = assert!($tttn & 0xf0_u8 == 0);
-            let offset_bytes = TryInto::<i32>::try_into(offset)
+            let offset_bytes = i32::try_from(offset)
                 .map_err(|_| {
                     BFCompileError::basic(
                         BFErrorID::JUMP_TOO_LONG,
