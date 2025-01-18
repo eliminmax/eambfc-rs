@@ -222,8 +222,8 @@ pub enum S390xRegister {
     R1 = 1, // syscall register
     R2 = 2, // arg1 register
     R3 = 3, // arg2 register
-    R4 = 4, // arg3 register, scratch register
-    R5 = 5, // scratch register
+    R4 = 4, // arg3 register
+    R5 = 5, // temporary scratch register
     R8 = 8, // bf pointer register
 }
 
@@ -252,24 +252,20 @@ enum ComparisonMask {
     MaskNE = 6, // `MaskLT | MaskGT` (i.e. 4 | 2)
 }
 
-fn aux_reg(reg: S390xRegister) -> S390xRegister {
-    if reg == S390xRegister::R4 {
-        S390xRegister::R5
-    } else {
-        S390xRegister::R4
-    }
-}
+
+// temporary scratch register
+const TMP_REG: S390xRegister = S390xRegister::R5;
 
 fn store_to_byte(reg: S390xRegister, aux: S390xRegister) -> [u8; 4] {
     /* STC aux, 0(reg) {RX-a} */
     [0x42, ((aux as u8) << 4) | (reg as u8), 0x00, 0x00]
 }
 
-fn load_from_byte(reg: S390xRegister, aux: S390xRegister) -> [u8; 6] {
+fn load_from_byte(reg: S390xRegister) -> [u8; 6] {
     // LLGC aux, 0(reg) {RXY-a}
     [
         0xe3,
-        ((aux as u8) << 4) | (reg as u8),
+        ((TMP_REG as u8) << 4) | (reg as u8),
         0x00, // base register and displacement are set to 0.
         0x00,
         0x00,
@@ -294,11 +290,10 @@ fn branch_cond(
             "offset out of range for this architecture",
         )),
         _ => {
-            let aux = aux_reg(reg);
-            code_buf.extend(load_from_byte(reg, aux));
+            code_buf.extend(load_from_byte(reg));
             let offset = offset >> 1;
             // CFI aux, 0 {RIL-a}
-            encode_ri_op!(code_buf, 0xc2d, aux, i32, 0);
+            encode_ri_op!(code_buf, 0xc2d, TMP_REG, i32, 0);
             // BRCL mask, offset
             encode_ri_op!(code_buf, 0xc04, comp_mask, i32, offset);
 
@@ -445,12 +440,10 @@ impl ArchInter for S390xInter {
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
-        let aux = aux_reg(reg);
-
-        code_buf.extend(load_from_byte(reg, aux));
-        S390xInter::add_reg(code_buf, aux, i64::from(imm))
+        code_buf.extend(load_from_byte(reg));
+        S390xInter::add_reg(code_buf, TMP_REG, i64::from(imm))
             .expect("S390xInter::add_reg doesn't return Err variant");
-        code_buf.extend(store_to_byte(reg, aux));
+        code_buf.extend(store_to_byte(reg, TMP_REG));
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) -> FailableInstrEncoding {
@@ -466,11 +459,10 @@ impl ArchInter for S390xInter {
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
-        let aux = aux_reg(reg);
-        code_buf.extend(load_from_byte(reg, aux));
-        S390xInter::add_reg(code_buf, aux, i64::from(-imm))
+        code_buf.extend(load_from_byte(reg));
+        S390xInter::add_reg(code_buf, TMP_REG, i64::from(-imm))
             .expect("S390xInter::add_reg doesn't return Err variant");
-        code_buf.extend(store_to_byte(reg, aux));
+        code_buf.extend(store_to_byte(reg, TMP_REG));
     }
 
     fn zero_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
