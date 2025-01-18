@@ -339,9 +339,7 @@ impl ArchInter for S390xInter {
             }
             _ => {
                 let (imm_high, imm_low) = ((imm >> 32) as i32, imm as i32);
-                if imm_low != 0 {
-                    Self::set_reg(code_buf, reg, i64::from(imm_low));
-                }
+                Self::set_reg(code_buf, reg, i64::from(imm_low));
                 match ((imm_high >> 16) as i16, imm_high as i16) {
                     (0, 0) => unreachable!(),
                     (0, imm_high_low) => {
