@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::err::{BFCompileError, BFErrorID};
+use std::collections::VecDeque;
 use std::io::Read;
 use std::num::NonZeroUsize;
 
@@ -16,7 +17,105 @@ pub enum CondensedInstruction {
     SetZero,
 }
 
-pub fn to_condensed(mut file: Box<dyn Read>) -> Result<Vec<CondensedInstruction>, BFCompileError> {
+#[derive(PartialEq, Clone, Copy)]
+enum InstructionTag {
+    BFAdd,
+    BFSub,
+    BFMoveR,
+    BFMoveL,
+    BFRead,
+    BFWrite,
+    BFLoopStart,
+    BFLoopEnd,
+    RepeatAdd,
+    RepeatSub,
+    RepeatMoveL,
+    RepeatMoveR,
+    SetZero,
+}
+
+struct CondensedInstructions {
+    instructions: VecDeque<InstructionTag>,
+    repeat_counts: VecDeque<NonZeroUsize>,
+}
+
+impl CondensedInstructions {
+    fn new() -> Self {
+        Self {
+            instructions: VecDeque::new(),
+            repeat_counts: VecDeque::new(),
+        }
+    }
+
+    fn push(&mut self, instr: u8, count: usize) {
+        macro_rules! bulk_push_uncondensed {
+            ($id: ident) => {{
+                self.instructions
+                    .extend([InstructionTag::$id].repeat(count));
+            }};
+        }
+        macro_rules! repeat_push {
+            ($single: ident, $multi: ident) => {{
+                if count == 1 {
+                    self.instructions.push_back(InstructionTag::$single)
+                } else {
+                    let count = NonZeroUsize::new(count).expect("count is nonzero");
+                    self.instructions.push_back(InstructionTag::$multi);
+                    self.repeat_counts.push_back(count);
+                }
+            }};
+        }
+
+        match instr {
+            b'\0' => (),
+            b'[' => bulk_push_uncondensed!(BFLoopStart),
+            b']' => bulk_push_uncondensed!(BFLoopEnd),
+            b',' => bulk_push_uncondensed!(BFRead),
+            b'.' => bulk_push_uncondensed!(BFWrite),
+            b'@' => self.instructions.push_back(InstructionTag::SetZero),
+            b'+' => repeat_push!(BFAdd, RepeatAdd),
+            b'-' => repeat_push!(BFSub, RepeatSub),
+            b'<' => repeat_push!(BFMoveL, RepeatMoveL),
+            b'>' => repeat_push!(BFMoveR, RepeatMoveR),
+            i => panic!(
+                "instruction {} is invalid and should've been filtered",
+                i.escape_ascii()
+            ),
+        }
+    }
+}
+
+impl Iterator for CondensedInstructions {
+    type Item = CondensedInstruction;
+    fn next(&mut self) -> Option<Self::Item> {
+        macro_rules! get_count {
+            () => {
+                self.repeat_counts
+                    .pop_front()
+                    .expect("CondensedInstructions must have valid internal state")
+            };
+        }
+        self.instructions.pop_front().map(|i| match i {
+            InstructionTag::BFAdd => CondensedInstruction::BFInstruction(b'+'),
+            InstructionTag::BFSub => CondensedInstruction::BFInstruction(b'-'),
+            InstructionTag::BFMoveR => CondensedInstruction::BFInstruction(b'>'),
+            InstructionTag::BFMoveL => CondensedInstruction::BFInstruction(b'<'),
+            InstructionTag::BFRead => CondensedInstruction::BFInstruction(b','),
+            InstructionTag::BFWrite => CondensedInstruction::BFInstruction(b'.'),
+            InstructionTag::BFLoopStart => CondensedInstruction::BFInstruction(b'['),
+            InstructionTag::BFLoopEnd => CondensedInstruction::BFInstruction(b']'),
+            InstructionTag::RepeatAdd => CondensedInstruction::RepeatAdd(get_count!()),
+            InstructionTag::RepeatSub => CondensedInstruction::RepeatSub(get_count!()),
+            InstructionTag::RepeatMoveR => CondensedInstruction::RepeatMoveR(get_count!()),
+            InstructionTag::RepeatMoveL => CondensedInstruction::RepeatMoveL(get_count!()),
+            InstructionTag::SetZero => CondensedInstruction::SetZero,
+        })
+    }
+}
+
+pub fn to_condensed(
+    mut file: Box<dyn Read>,
+) -> Result<impl Iterator<Item = CondensedInstruction>, BFCompileError> {
     let mut code_buf = Vec::<u8>::new();
     let _ = file.read_to_end(&mut code_buf).map_err(|_| {
         BFCompileError::basic(BFErrorID::FAILED_READ, "Failed to read file into buffer")
@@ -125,33 +224,8 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
     }
 }
 
-fn condense_instr(instr: u8, count: usize, condensed: &mut Vec<CondensedInstruction>) {
-    macro_rules! condense_to {
-        ($condensed_instr: ident) => {{
-            if count == 1 {
-                condensed.push(CondensedInstruction::BFInstruction(instr));
-            } else {
-                let count = NonZeroUsize::new(count).expect("count is nonzero");
-                condensed.push(CondensedInstruction::$condensed_instr(count));
-            }
-        }};
-    }
-    match instr {
-        b'\0' => (), // null char used as a placeholder
-        b'[' | b'.' | b']' | b',' => {
-            condensed.extend([CondensedInstruction::BFInstruction(instr)].repeat(count));
-        }
-        b'@' => condensed.extend([CondensedInstruction::SetZero].repeat(count)),
-        b'+' => condense_to!(RepeatAdd),
-        b'-' => condense_to!(RepeatSub),
-        b'<' => condense_to!(RepeatMoveL),
-        b'>' => condense_to!(RepeatMoveR),
-        _ => unreachable!("Non-bf byte values are already purged"),
-    }
-}
-
-fn condense(stripped_bytes: Vec<u8>) -> Vec<CondensedInstruction> {
-    let mut condensed_instrs = Vec::<CondensedInstruction>::new();
+fn condense(stripped_bytes: Vec<u8>) -> CondensedInstructions {
+    let mut condensed_instrs = CondensedInstructions::new();
     let mut prev_instr = b'\0';
     let mut count = 0usize;
     let instr_string = String::from_utf8(stripped_bytes)
@@ -165,12 +239,12 @@ fn condense(stripped_bytes: Vec<u8>) -> Vec<CondensedInstruction> {
         if current_instr == prev_instr {
             count += 1;
         } else {
-            condense_instr(prev_instr, count, &mut condensed_instrs);
+            condensed_instrs.push(prev_instr, count);
             count = 1;
             prev_instr = current_instr;
         }
     }
-    condense_instr(prev_instr, count, &mut condensed_instrs);
+    condensed_instrs.push(prev_instr, count);
     condensed_instrs
 }
 
@@ -191,7 +265,9 @@ mod tests {
     #[test]
     fn to_condensed_test() {
         assert_eq!(
-            to_condensed(Box::new(b"e+[+]++[-],.....".as_slice())).unwrap(),
+            to_condensed(Box::new(b"e+[+]++[-],.....".as_slice()))
+                .unwrap()
+                .collect::<Vec<_>>(),
             vec![
                 CondensedInstruction::BFInstruction(b'+'),
                 CondensedInstruction::SetZero,
