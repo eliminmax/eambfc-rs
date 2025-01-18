@@ -6,11 +6,8 @@ use super::elf_tools::{EIData, ELFArch};
 use super::err::BFCompileError;
 
 pub type FailableInstrEncoding = Result<(), BFCompileError>;
-pub trait ArchInter
-where
-    <Self as ArchInter>::RegType: Copy,
-{
-    type RegType;
+pub trait ArchInter {
+    type RegType: Copy;
     const JUMP_SIZE: usize;
     const REGISTERS: Registers<Self::RegType>;
     const SC_NUMS: SyscallNums;
@@ -39,7 +36,7 @@ where
 }
 
 #[derive(Debug)]
-pub struct Registers<R: Copy + Clone> {
+pub struct Registers<R: Copy> {
     pub sc_num: R,
     pub arg1: R,
     pub arg2: R,
