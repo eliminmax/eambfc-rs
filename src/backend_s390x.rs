@@ -340,14 +340,16 @@ impl ArchInter for S390xInter {
             _ => {
                 let (imm_high, imm_low) = ((imm >> 32) as i32, imm as i32);
                 Self::set_reg(code_buf, reg, i64::from(imm_low));
+
+                let default_val: i16 = if imm.is_negative() { -1 } else { 0 };
+
                 match ((imm_high >> 16) as i16, imm_high as i16) {
-                    (0, 0) => unreachable!(),
-                    (0, imm_high_low) => {
+                    (n, imm_high_low) if n == default_val => {
                         // set bits 16-31 of the register to the immediate, leave other bits as-is
                         // IIHL reg, upper_imm {RI-a}
                         encode_ri_op!(code_buf, 0xa51, reg, i16, imm_high_low);
                     }
-                    (imm_high_high, 0) => {
+                    (imm_high_high, n) if n == default_val => {
                         // set bits 0-15 of the register to the immediate, leave other bits as-is
                         // IIHH reg, upper_imm {RI-a}
                         encode_ri_op!(code_buf, 0xa50, reg, i16, imm_high_high);
