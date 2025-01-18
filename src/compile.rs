@@ -99,7 +99,7 @@ fn write_headers(
     }
 }
 
-pub trait BFCompile: ArchInter {
+pub trait BFCompile {
     fn compile(
         in_f: impl Read,
         out_f: impl Write,
@@ -220,7 +220,7 @@ trait BFCompileHelper: ArchInter {
 
 impl<A: ArchInter> BFCompileHelper for A {}
 
-impl<A: BFCompileHelper> BFCompile for A {
+impl<B: BFCompileHelper> BFCompile for B {
     fn compile(
         in_f: impl Read,
         mut out_f: impl Write,
