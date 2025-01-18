@@ -100,6 +100,15 @@ fn write_headers(
 }
 
 pub trait BFCompile: ArchInter {
+    fn compile(
+        in_f: Box<dyn Read>,
+        out_f: Box<dyn Write>,
+        optimize: bool,
+        tape_blocks: u64,
+    ) -> Result<(), Vec<BFCompileError>>;
+}
+
+trait BFCompileHelper: ArchInter {
     // The brainfuck instructions "." and "," are similar from an implementation
     // perspective. Both require making system calls for I/O, and the system calls
     // have 3 nearly identical arguments:
@@ -207,7 +216,11 @@ pub trait BFCompile: ArchInter {
         }
         Ok(())
     }
+}
 
+impl<A: ArchInter> BFCompileHelper for A {}
+
+impl<A: BFCompileHelper> BFCompile for A {
     fn compile(
         in_f: Box<dyn Read>,
         mut out_f: Box<dyn Write>,
@@ -299,8 +312,6 @@ pub trait BFCompile: ArchInter {
         }
     }
 }
-
-impl<A: ArchInter> BFCompile for A {}
 
 #[cfg(all(test, feature = "x86_64"))]
 mod tests {
