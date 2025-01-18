@@ -15,7 +15,6 @@ pub mod elf_tools;
 pub mod err;
 pub mod optimize;
 
-use std::process::ExitCode;
 use arg_parse::RunConfig;
 use compile::BFCompile;
 use elf_tools::ELFArch;
@@ -26,6 +25,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
+use std::process::ExitCode;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
