@@ -326,40 +326,38 @@ impl ArchInter for S390xInter {
     const EI_DATA: EIData = EIData::ELFDATA2MSB;
 
     fn set_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
-        match imm {
-            0 => Self::reg_copy(code_buf, reg, S390xRegister::R0),
-            i if (i64::from(i16::MIN)..=i64::from(i16::MAX)).contains(&i) => {
-                // if it fits in a halfword, use Load Halfword Immediate (64 <- 16)
-                // LGHI r.reg, imm {RI-a}
-                encode_ri_op!(code_buf, 0xa79, reg, i16, imm);
-            }
-            i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
-                // if it fits within a word, use Load Immediate (64 <- 32)
-                // LGFI r.reg, imm {RIL-a}
-                encode_ri_op!(code_buf, 0xc01, reg, i32, imm);
-            }
-            _ => {
-                let (imm_high, imm_low) = ((imm >> 32) as i32, imm as i32);
-                Self::set_reg(code_buf, reg, i64::from(imm_low));
+        if imm == 0 {
+            Self::reg_copy(code_buf, reg, S390xRegister::R0);
+        } else if let Ok(imm16) = i16::try_from(imm) {
+            // if it fits in a halfword, use Load Halfword Immediate (64 <- 16)
+            // LGHI r.reg, imm {RI-a}
+            encode_ri_op!(code_buf, 0xa79, reg, imm16);
+        } else if let Ok(imm32) = i32::try_from(imm) {
+            // if it fits within a word, use Load Immediate (64 <- 32)
+            // LGFI r.reg, imm {RIL-a}
+            encode_ri_op!(code_buf, 0xc01, reg, imm32);
+        } else {
+            Self::set_reg(code_buf, reg, ((imm as u64) & 0xffff_ffff) as i64);
 
-                let default_val: i16 = if imm.is_negative() { -1 } else { 0 };
+            let default_val: i16 = if imm.is_negative() { -1 } else { 0 };
 
-                match ((imm_high >> 16) as i16, imm_high as i16) {
-                    (n, imm_high_low) if n == default_val => {
-                        // set bits 16-31 of the register to the immediate, leave other bits as-is
-                        // IIHL reg, upper_imm {RI-a}
-                        encode_ri_op!(code_buf, 0xa51, reg, i16, imm_high_low);
-                    }
-                    (imm_high_high, n) if n == default_val => {
-                        // set bits 0-15 of the register to the immediate, leave other bits as-is
-                        // IIHH reg, upper_imm {RI-a}
-                        encode_ri_op!(code_buf, 0xa50, reg, i16, imm_high_high);
-                    }
-                    _ => {
-                        // need to set the full upper word, with Insert Immediate (high)
-                        // IIHF reg, imm {RIL-a}
-                        encode_ri_op!(code_buf, 0xc09, reg, i32, imm_high);
-                    }
+            let imm_high = (imm >> 32) as i32;
+
+            match ((imm_high >> 16) as i16, imm_high as i16) {
+                (n, imm_high_low) if n == default_val => {
+                    // set bits 16-31 of the register to the immediate, leave other bits as-is
+                    // IIHL reg, upper_imm {RI-a}
+                    encode_ri_op!(code_buf, 0xa51, reg, imm_high_low);
+                }
+                (imm_high_high, n) if n == default_val => {
+                    // set bits 0-15 of the register to the immediate, leave other bits as-is
+                    // IIHH reg, upper_imm {RI-a}
+                    encode_ri_op!(code_buf, 0xa50, reg, imm_high_high);
+                }
+                _ => {
+                    // need to set the full upper word, with Insert Immediate (high)
+                    // IIHF reg, imm {RIL-a}
+                    encode_ri_op!(code_buf, 0xc09, reg, imm_high);
                 }
             }
         }
