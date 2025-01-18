@@ -114,7 +114,7 @@ impl Iterator for CondensedInstructions {
 }
 
 pub fn to_condensed(
-    mut file: Box<dyn Read>,
+    mut file: impl Read,
 ) -> Result<impl Iterator<Item = CondensedInstruction>, BFCompileError> {
     let mut code_buf = Vec::<u8>::new();
     let _ = file.read_to_end(&mut code_buf).map_err(|_| {

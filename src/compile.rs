@@ -22,7 +22,7 @@ const TAPE_ADDR: u64 = 0x10000;
 const PHNUM: u16 = 2;
 
 fn write_headers(
-    output: &mut dyn Write,
+    output: &mut impl Write,
     codesize: usize,
     tape_blocks: u64,
     ei_data: EIData,
@@ -101,8 +101,8 @@ fn write_headers(
 
 pub trait BFCompile: ArchInter {
     fn compile(
-        in_f: Box<dyn Read>,
-        out_f: Box<dyn Write>,
+        in_f: impl Read,
+        out_f: impl Write,
         optimize: bool,
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>>;
@@ -222,8 +222,8 @@ impl<A: ArchInter> BFCompileHelper for A {}
 
 impl<A: BFCompileHelper> BFCompile for A {
     fn compile(
-        in_f: Box<dyn Read>,
-        mut out_f: Box<dyn Write>,
+        in_f: impl Read,
+        mut out_f: impl Write,
         optimize: bool,
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>> {
