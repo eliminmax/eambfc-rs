@@ -76,7 +76,7 @@ fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, reg: Arm64Register) -
     } else {
         imm16
     };
-    inject_imm16_operands(imm16, shift, reg, [0x00u8, 0x00, 0x80, move_type as u8])
+    inject_imm16_operands(imm16, shift, reg, [0x00, 0x00, 0x80, move_type as u8])
 }
 
 fn aux_reg(reg: Arm64Register) -> Arm64Register {
@@ -131,7 +131,7 @@ macro_rules! fn_branch_cond {
         ) -> FailableInstrEncoding {
             // Ensure only lower 4 bits of cond are used - the const _: () mess forces the check to
             // run at compile time rather than runtime.
-            const _: () = assert!($cond & 0xf0_u8 == 0);
+            const _: () = assert!($cond & 0xf0 == 0);
             // as A64 uses fixed-size 32-bit instructions, offset must be a multiple of 4.
             if offset % 4 != 0 {
                 return Err(BFCompileError::basic(
@@ -153,7 +153,7 @@ macro_rules! fn_branch_cond {
             code_buf.extend(load_from_byte(reg, aux));
             code_buf.extend([
                 // TST reg, 0xff (technically an alias for ANDS xzr, reg, 0xff)
-                0x1f_u8 | (aux as u8) << 5,
+                0x1f | (aux as u8) << 5,
                 (aux as u8) >> 3 | 0x1c,
                 0x40,
                 0xf2,
@@ -222,7 +222,7 @@ impl ArchInter for Arm64Inter {
     }
     fn syscall(code_buf: &mut Vec<u8>) {
         // SVC 0
-        code_buf.extend([0x01u8, 0x00, 0x00, 0xd4]);
+        code_buf.extend([0x01, 0x00, 0x00, 0xd4]);
     }
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // 3 NOP instructions.
@@ -265,8 +265,8 @@ impl ArchInter for Arm64Inter {
     fn_byte_arith_wrapper!(sub_byte, Sub, arith_op);
     fn_byte_arith_wrapper!(inc_byte, inc_reg, internal_fn);
     fn_byte_arith_wrapper!(dec_byte, dec_reg, internal_fn);
-    fn_branch_cond!(jump_not_zero, 0x1u8);
-    fn_branch_cond!(jump_zero, 0x00u8);
+    fn_branch_cond!(jump_not_zero, 0x1);
+    fn_branch_cond!(jump_zero, 0x0);
 }
 
 // discriminants used here are often, but not always, the last byte in an ADD or SUB instructions
@@ -330,7 +330,7 @@ fn add_sub(
             code_buf.extend(inject_reg_operands(
                 reg,
                 reg,
-                [0u8, 0u8, aux as u8, op_byte],
+                [0, 0, aux as u8, op_byte],
             ));
         }
     }
@@ -483,7 +483,7 @@ mod tests {
     #[test]
     fn test_add_sub_byte() {
         let mut v: Vec<u8> = Vec::new();
-        Arm64Inter::add_byte(&mut v, Arm64Register::X19, 0xa5u8 as i8);
+        Arm64Inter::add_byte(&mut v, Arm64Register::X19, i8::from_le_bytes([0xa5]));
         assert_eq!(
             v,
             vec![

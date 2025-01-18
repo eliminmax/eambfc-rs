@@ -86,7 +86,7 @@ enum OffsetMode {
 fn x86_offset(code_buf: &mut Vec<u8>, op: OffsetOp, mode: OffsetMode, reg: X86_64Register) {
     // as it's used more than once, cast mode in advance
     code_buf.extend([
-        0xfe_u8 | (mode as u8 & 1),
+        0xfe | (mode as u8 & 1),
         (op as u8) | (reg as u8) | ((mode as u8) << 6),
     ]);
 }
@@ -108,7 +108,7 @@ macro_rules! fn_test_jcc {
         ) -> FailableInstrEncoding {
             // Ensure only lower 4 bits of tttn are used - the const _: () mess forces the check to
             // run at compile time rather than runtime.
-            const _: () = assert!($tttn & 0xf0_u8 == 0);
+            const _: () = assert!($tttn & 0xf0 == 0);
             let offset_bytes = i32::try_from(offset)
                 .map_err(|_| {
                     BFCompileError::basic(
@@ -120,9 +120,9 @@ macro_rules! fn_test_jcc {
             #[rustfmt::skip]
             code_buf.extend([
                 // TEST byte [reg], 0xff
-                0xf6_u8, reg as u8, 0xff_u8,
+                0xf6, reg as u8, 0xff,
                 // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
-                0x0f_u8, 0x80_u8|$tttn
+                0x0f, 0x80|$tttn
             ]);
             code_buf.extend(offset_bytes);
             Ok(())
@@ -158,7 +158,7 @@ impl ArchInter for X86_64Inter {
         let reg = reg as u8;
         match imm {
             // XOR reg, reg
-            0 => code_buf.extend([0x31_u8, 0xc0_u8 | (reg << 3) | reg]),
+            0 => code_buf.extend([0x31, 0xc0 | (reg << 3) | reg]),
             // MOV reg, imm32
             i if i < i32::MAX.into() => {
                 code_buf.push(0xb8 + reg);
@@ -173,7 +173,7 @@ impl ArchInter for X86_64Inter {
     }
     fn reg_copy(code_buf: &mut Vec<u8>, dst: X86_64Register, src: X86_64Register) {
         // MOV dst, src
-        code_buf.extend([0x89_u8, 0xc0 + ((src as u8) << 3) + dst as u8]);
+        code_buf.extend([0x89, 0xc0 + ((src as u8) << 3) + dst as u8]);
     }
     fn syscall(code_buf: &mut Vec<u8>) {
         // SYSCALL
@@ -181,9 +181,9 @@ impl ArchInter for X86_64Inter {
     }
 
     // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
-    fn_test_jcc!(jump_not_zero, 0b0101_u8);
+    fn_test_jcc!(jump_not_zero, 0b0101);
     // according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
-    fn_test_jcc!(jump_zero, 0b0100_u8);
+    fn_test_jcc!(jump_zero, 0b0100);
 
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // times JUMP_SIZE NOP
@@ -220,7 +220,7 @@ impl ArchInter for X86_64Inter {
     }
     fn add_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
         // ADD byte [reg], imm8
-        code_buf.extend([0x80_u8, reg as u8, imm as u8]);
+        code_buf.extend([0x80, reg as u8, imm as u8]);
     }
     fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) -> FailableInstrEncoding {
         match imm {
@@ -236,11 +236,11 @@ impl ArchInter for X86_64Inter {
     }
     fn sub_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
         // SUB byte [reg], imm8
-        code_buf.extend([0x80_u8, 0x28 | (reg as u8), imm as u8]);
+        code_buf.extend([0x80, 0x28 | (reg as u8), imm as u8]);
     }
     fn zero_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // MOV byte [reg], 0
-        code_buf.extend([0x67_u8, 0xc6_u8, reg as u8, 0x00_u8]);
+        code_buf.extend([0x67, 0xc6, reg as u8, 0x00]);
     }
 }
 
@@ -274,15 +274,15 @@ fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64, op: Arith
     const TMP_REG: u8 = 0b001;
     code_buf.extend([
         // MOV tmp_reg, (imm64 to be appended)
-        0x48_u8,
-        0xb8_u8 | TMP_REG,
+        0x48,
+        0xb8 | TMP_REG,
     ]);
     code_buf.extend(imm64.to_le_bytes());
     code_buf.extend([
         // (ADD||SUB) reg, tmp_reg
-        0x48_u8,
-        0x01_u8 | op as u8,
-        0xc0_u8 + (TMP_REG << 3) + (reg as u8),
+        0x48,
+        0x01 | op as u8,
+        0xc0 + (TMP_REG << 3) + (reg as u8),
     ]);
 }
 

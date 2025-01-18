@@ -227,7 +227,7 @@ fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
 fn condense(stripped_bytes: Vec<u8>) -> CondensedInstructions {
     let mut condensed_instrs = CondensedInstructions::new();
     let mut prev_instr = b'\0';
-    let mut count = 0usize;
+    let mut count: usize = 0;
     let instr_string = String::from_utf8(stripped_bytes)
         .expect("non-bf bytes shouldn't have appeared!")
         .replace("[-]", "@")
@@ -271,7 +271,7 @@ mod tests {
             vec![
                 CondensedInstruction::BFInstruction(b'+'),
                 CondensedInstruction::SetZero,
-                CondensedInstruction::RepeatAdd(const { NonZeroUsize::new(2usize).unwrap() }),
+                CondensedInstruction::RepeatAdd(const { NonZeroUsize::new(2).unwrap() }),
                 CondensedInstruction::SetZero,
                 CondensedInstruction::BFInstruction(b','),
                 CondensedInstruction::BFInstruction(b'.'),

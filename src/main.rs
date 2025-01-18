@@ -235,7 +235,7 @@ mod tests {
     fn rmext_success_non_ascii() {
         assert_eq!(
             rm_ext(OsStr::from_bytes(b"\xee.e"), OsStr::from_bytes(b".e")),
-            Ok(OsString::from_vec(vec![0xeeu8]))
+            Ok(OsString::from_vec(vec![0xee]))
         );
     }
 

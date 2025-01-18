@@ -30,8 +30,8 @@ fn write_headers(
 ) -> Result<(), BFCompileError> {
     // ELF addressing stuff that depends on tape_blocks, so can't be constant
     let tape_size: u64 = tape_blocks * 0x1000;
-    let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffffu64)) + 0x10000u64;
-    let start_addr: u64 = ((u64::from(EHDR_SIZE) + PHTB_SIZE) & (!0xffu64)) + 0x100u64;
+    let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffff)) + 0x10000;
+    let start_addr: u64 = ((u64::from(EHDR_SIZE) + PHTB_SIZE) & (!0xff)) + 0x100;
     let start_virt_addr: u64 = start_addr + load_vaddr;
     let ehdr = Ehdr {
         e_ident: EIdent {
@@ -80,7 +80,7 @@ fn write_headers(
     to_write.extend(Vec::<u8>::from(code_segment));
 
     // add padding bytes
-    to_write.resize(start_addr as usize, 0u8);
+    to_write.resize(start_addr as usize, 0);
     match output.write(to_write.as_slice()) {
         Ok(count) if count == to_write.len() => Ok(()),
         Ok(count) => Err(BFCompileError::basic(

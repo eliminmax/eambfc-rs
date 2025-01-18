@@ -79,12 +79,12 @@ pub struct EIdent {
 impl From<EIdent> for [u8; 16] {
     fn from(e_ident: EIdent) -> [u8; 16] {
         let (osabi, abi_version) = match e_ident.ei_osabi {
-            ELFOSABI::None | ELFOSABI::SYSV => (0u8, 0u8),
+            ELFOSABI::None | ELFOSABI::SYSV => (0, 0),
         };
         #[rustfmt::skip]
         let arr: [u8; 16] = [
             // magic numbers
-            0x7fu8, b'E', b'L', b'F',
+            0x7f, b'E', b'L', b'F',
             // 32 or 64 bit
             e_ident.ei_class as u8,
             // byte ordering
@@ -94,7 +94,7 @@ impl From<EIdent> for [u8; 16] {
             // ABI and ABI version
             osabi, abi_version,
             // padding bytes
-            0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8
+            0, 0, 0, 0, 0, 0, 0
         ];
         arr
     }

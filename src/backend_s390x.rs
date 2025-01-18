@@ -263,7 +263,7 @@ fn aux_reg(reg: S390xRegister) -> S390xRegister {
 
 fn store_to_byte(reg: S390xRegister, aux: S390xRegister) -> [u8; 4] {
     /* STC aux, 0(reg) {RX-a} */
-    [0x42u8, ((aux as u8) << 4) | (reg as u8), 0x00, 0x00]
+    [0x42, ((aux as u8) << 4) | (reg as u8), 0x00, 0x00]
 }
 
 fn load_from_byte(reg: S390xRegister, aux: S390xRegister) -> [u8; 6] {
@@ -377,7 +377,7 @@ impl ArchInter for S390xInter {
 
     fn syscall(code_buf: &mut Vec<u8>) {
         // SVC 0 {I}
-        code_buf.extend([0x0a_u8, 0x00]);
+        code_buf.extend([0x0a, 0x00]);
     }
 
     fn jump_zero(code_buf: &mut Vec<u8>, reg: S390xRegister, offset: i64) -> FailableInstrEncoding {
