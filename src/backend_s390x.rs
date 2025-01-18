@@ -229,9 +229,8 @@ pub enum S390xRegister {
 
 macro_rules! encode_ri_op {
     ($code_buf:ident, $opcode:literal, $reg:ident) => {{
-        // Ensure only lower 4 bits of cond are used - the const _: () mess forces the check to
-        // run at compile time rather than runtime.
-        const _: () = assert!($opcode & (!0xfff) == 0);
+        // Ensure only lower 12 bits of cond are used
+        const { assert!($opcode & (!0xfff) == 0) };
         $code_buf.extend([
             ($opcode >> 4) as u8,
             ($reg as u8) << 4 | (($opcode & 0xf) as u8),

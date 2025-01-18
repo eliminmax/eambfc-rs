@@ -129,9 +129,8 @@ macro_rules! fn_branch_cond {
             reg: Arm64Register,
             offset: i64,
         ) -> FailableInstrEncoding {
-            // Ensure only lower 4 bits of cond are used - the const _: () mess forces the check to
-            // run at compile time rather than runtime.
-            const _: () = assert!($cond & 0xf0 == 0);
+            // Ensure only lower 4 bits of cond are used
+            const { assert!($cond & 0xf0 == 0) };
             // as A64 uses fixed-size 32-bit instructions, offset must be a multiple of 4.
             if offset % 4 != 0 {
                 return Err(BFCompileError::basic(
