@@ -304,6 +304,58 @@ mod tests {
     }
 
     #[test]
+    // throw a whole bunch of instructions at the wall and ensure they all stick
+    fn all_instructons_work() {
+        let mut ci = CondensedInstructions::new();
+        ci.push(b'>', 1);
+        ci.push(b'+', 1);
+        ci.push(b'<', 1);
+        ci.push(b'-', 1);
+        ci.push(b'>', 32);
+        ci.push(b'+', 32);
+        ci.push(b'<', 32);
+        ci.push(b'-', 32);
+        ci.push(b'@', 2);
+        ci.push(b'[', 3);
+        ci.push(b'-', 101);
+        ci.push(b']', 3);
+        ci.push(b',', 3);
+        ci.push(b',', 1);
+        ci.push(b'.', 3);
+        ci.push(b'.', 1);
+        let instructions: Vec<CondensedInstruction> = ci.collect();
+        assert_eq!(
+            instructions,
+            vec![
+                CondensedInstruction::BFInstruction(b'>'),
+                CondensedInstruction::BFInstruction(b'+'),
+                CondensedInstruction::BFInstruction(b'<'),
+                CondensedInstruction::BFInstruction(b'-'),
+                CondensedInstruction::RepeatMoveR(NonZeroUsize::new(32).unwrap()),
+                CondensedInstruction::RepeatAdd(NonZeroUsize::new(32).unwrap()),
+                CondensedInstruction::RepeatMoveL(NonZeroUsize::new(32).unwrap()),
+                CondensedInstruction::RepeatSub(NonZeroUsize::new(32).unwrap()),
+                CondensedInstruction::SetZero,
+                CondensedInstruction::BFInstruction(b'['),
+                CondensedInstruction::BFInstruction(b'['),
+                CondensedInstruction::BFInstruction(b'['),
+                CondensedInstruction::RepeatSub(NonZeroUsize::new(101).unwrap()),
+                CondensedInstruction::BFInstruction(b']'),
+                CondensedInstruction::BFInstruction(b']'),
+                CondensedInstruction::BFInstruction(b']'),
+                CondensedInstruction::BFInstruction(b','),
+                CondensedInstruction::BFInstruction(b','),
+                CondensedInstruction::BFInstruction(b','),
+                CondensedInstruction::BFInstruction(b','),
+                CondensedInstruction::BFInstruction(b'.'),
+                CondensedInstruction::BFInstruction(b'.'),
+                CondensedInstruction::BFInstruction(b'.'),
+                CondensedInstruction::BFInstruction(b'.'),
+            ]
+        );
+    }
+
+    #[test]
     fn unmatched_loops_detected() {
         assert_eq!(
             loops_match(b"[").unwrap_err().kind,
