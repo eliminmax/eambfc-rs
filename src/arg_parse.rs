@@ -63,6 +63,20 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
     }
 }
 
+impl PartialRunConfig {
+    fn parse_standalone_flag(&mut self, flag: u8) -> Result<(), (BFCompileError, OutMode)> {
+        match flag {
+            b'j' => self.out_mode.json(),
+            b'q' => self.out_mode.quiet(),
+            b'O' => self.optimize = true,
+            b'k' => self.keep = true,
+            b'c' => self.cont = true,
+            _ => return Err((BFCompileError::unknown_flag(flag), self.out_mode)),
+        }
+        Ok(())
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum RunConfig {
     StandardRun(StandardRunConfig),
@@ -139,11 +153,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                 b'h' => return Ok(RunConfig::ShowHelp),
                 b'V' => return Ok(RunConfig::ShowVersion),
                 b'A' => return Ok(RunConfig::ListArches),
-                b'j' => pcfg.out_mode.json(),
-                b'q' => pcfg.out_mode.quiet(),
-                b'O' => pcfg.optimize = true,
-                b'k' => pcfg.keep = true,
-                b'c' => pcfg.cont = true,
+                b'e' => param_arg!(extension, MULTIPLE_EXTENSIONS, Some(parameter_instr!(b'e'))),
                 b'a' => param_arg!(
                     arch,
                     MULTIPLE_ARCHES,
@@ -160,7 +170,6 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                         ),
                     }
                 ),
-                b'e' => param_arg!(extension, MULTIPLE_EXTENSIONS, Some(parameter_instr!(b'e'))),
                 b't' => param_arg!(
                     tape_blocks,
                     MULTIPLE_TAPE_BLOCK_COUNTS,
@@ -175,7 +184,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                         ),
                     }
                 ),
-                c => return Err((BFCompileError::unknown_flag(c), pcfg.out_mode)),
+                flag => pcfg.parse_standalone_flag(flag)?,
             };
         }
     }
