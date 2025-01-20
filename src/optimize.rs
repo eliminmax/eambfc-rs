@@ -47,54 +47,52 @@ impl CondensedInstructions {
         }
     }
 
+    fn bulk_push_uncondensed(&mut self, tag: InstructionTag, count: usize) {
+        self.instructions.extend([tag].repeat(count));
+    }
+    fn repeat_push(
+        &mut self,
+        single_tag: InstructionTag,
+        repeat_tag: InstructionTag,
+        count: usize,
+    ) {
+        if count == 1 {
+            self.instructions.push_back(single_tag);
+        } else {
+            let count = NonZeroUsize::new(count).expect("count is nonzero");
+            self.instructions.push_back(repeat_tag);
+            self.repeat_counts.push_back(count);
+        }
+    }
     fn push(&mut self, instr: u8, count: usize) {
-        macro_rules! bulk_push_uncondensed {
-            ($id: ident) => {{
-                self.instructions
-                    .extend([InstructionTag::$id].repeat(count));
-            }};
-        }
-        macro_rules! repeat_push {
-            ($single: ident, $multi: ident) => {{
-                if count == 1 {
-                    self.instructions.push_back(InstructionTag::$single)
-                } else {
-                    let count = NonZeroUsize::new(count).expect("count is nonzero");
-                    self.instructions.push_back(InstructionTag::$multi);
-                    self.repeat_counts.push_back(count);
-                }
-            }};
-        }
-
         match instr {
             b'\0' => (),
-            b'[' => bulk_push_uncondensed!(BFLoopStart),
-            b']' => bulk_push_uncondensed!(BFLoopEnd),
-            b',' => bulk_push_uncondensed!(BFRead),
-            b'.' => bulk_push_uncondensed!(BFWrite),
+            b'[' => self.bulk_push_uncondensed(InstructionTag::BFLoopStart, count),
+            b']' => self.bulk_push_uncondensed(InstructionTag::BFLoopEnd, count),
+            b',' => self.bulk_push_uncondensed(InstructionTag::BFRead, count),
+            b'.' => self.bulk_push_uncondensed(InstructionTag::BFWrite, count),
             b'@' => self.instructions.push_back(InstructionTag::SetZero),
-            b'+' => repeat_push!(BFAdd, RepeatAdd),
-            b'-' => repeat_push!(BFSub, RepeatSub),
-            b'<' => repeat_push!(BFMoveL, RepeatMoveL),
-            b'>' => repeat_push!(BFMoveR, RepeatMoveR),
+            b'+' => self.repeat_push(InstructionTag::BFAdd, InstructionTag::RepeatAdd, count),
+            b'-' => self.repeat_push(InstructionTag::BFSub, InstructionTag::RepeatSub, count),
+            b'<' => self.repeat_push(InstructionTag::BFMoveL, InstructionTag::RepeatMoveL, count),
+            b'>' => self.repeat_push(InstructionTag::BFMoveR, InstructionTag::RepeatMoveR, count),
             i => panic!(
                 "instruction {} is invalid and should've been filtered",
                 i.escape_ascii()
             ),
         }
     }
+
+    fn get_count(&mut self) -> NonZeroUsize {
+        self.repeat_counts
+            .pop_front()
+            .expect("CondensedInstructions will always have exactly enough repeat_counts")
+    }
 }
 
 impl Iterator for CondensedInstructions {
     type Item = CondensedInstruction;
     fn next(&mut self) -> Option<Self::Item> {
-        macro_rules! get_count {
-            () => {
-                self.repeat_counts
-                    .pop_front()
-                    .expect("CondensedInstructions must have valid internal state")
-            };
-        }
         self.instructions.pop_front().map(|i| match i {
             InstructionTag::BFAdd => CondensedInstruction::BFInstruction(b'+'),
             InstructionTag::BFSub => CondensedInstruction::BFInstruction(b'-'),
@@ -104,10 +102,10 @@ impl Iterator for CondensedInstructions {
             InstructionTag::BFWrite => CondensedInstruction::BFInstruction(b'.'),
             InstructionTag::BFLoopStart => CondensedInstruction::BFInstruction(b'['),
             InstructionTag::BFLoopEnd => CondensedInstruction::BFInstruction(b']'),
-            InstructionTag::RepeatAdd => CondensedInstruction::RepeatAdd(get_count!()),
-            InstructionTag::RepeatSub => CondensedInstruction::RepeatSub(get_count!()),
-            InstructionTag::RepeatMoveR => CondensedInstruction::RepeatMoveR(get_count!()),
-            InstructionTag::RepeatMoveL => CondensedInstruction::RepeatMoveL(get_count!()),
+            InstructionTag::RepeatAdd => CondensedInstruction::RepeatAdd(self.get_count()),
+            InstructionTag::RepeatSub => CondensedInstruction::RepeatSub(self.get_count()),
+            InstructionTag::RepeatMoveR => CondensedInstruction::RepeatMoveR(self.get_count()),
+            InstructionTag::RepeatMoveL => CondensedInstruction::RepeatMoveL(self.get_count()),
             InstructionTag::SetZero => CondensedInstruction::SetZero,
         })
     }
