@@ -154,7 +154,7 @@ fn main() -> ExitCode {
         }
         Ok(RunConfig::ShowHelp) => {
             println!(
-                include_str!("help_template.txt"),
+                include_str!("text_assets/help_template.txt"),
                 progname,
                 ELFArch::default()
             );
@@ -206,7 +206,7 @@ fn main() -> ExitCode {
         }
         Ok(RunConfig::ShowVersion) => {
             println!(
-                include_str!("version_template.txt"),
+                include_str!("text_assets/version_template.txt"),
                 progname,
                 env!("CARGO_PKG_VERSION"),
                 env!("EAMBFC_RS_GIT_COMMIT")
@@ -217,7 +217,7 @@ fn main() -> ExitCode {
             err.report(out_mode);
             if out_mode == OutMode::Basic {
                 eprintln!(
-                    include_str!("help_template.txt"),
+                    include_str!("text_assets/help_template.txt"),
                     progname,
                     ELFArch::default()
                 );
