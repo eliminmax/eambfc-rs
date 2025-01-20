@@ -91,42 +91,38 @@ fn x86_offset(code_buf: &mut Vec<u8>, op: OffsetOp, mode: OffsetMode, reg: X86_6
     ]);
 }
 
-// macro to declare a conditional jump instruction.
-// Takes a function identifier, and a 4-bit condition as defined in the Manual, specifically the
-// Vol. 2D B.1.4.7 Condition Test (tttn) Field table, and generates a function which takes a
-// register and a signed 64-bit offset, and if the offset is within range, returns a vector of
-// bytes representing a TEST instruction that runs on the byte pointed to by the register, and
-// returns a BFCompileError::JUMP_TOO_LONG if it's out of range. The reason it takes an i64 instead
-// of an i32 is so that other architectures with different maximum jump lengths could have the same
-// interface as x86_64.
-macro_rules! fn_test_jcc {
-    ($fn_name:ident, $tttn:literal) => {
-        fn $fn_name(
-            code_buf: &mut Vec<u8>,
-            reg: X86_64Register,
-            offset: i64,
-        ) -> FailableInstrEncoding {
-            // Ensure only lower 4 bits of tttn are used
-            const { assert!($tttn & 0xf0 == 0) };
-            let offset_bytes = i32::try_from(offset)
-                .map_err(|_| {
-                    BFCompileError::basic(
-                        BFErrorID::JUMP_TOO_LONG,
-                        format!("{offset} is outside the range of possible 32-bit signed values"),
-                    )
-                })?
-                .to_le_bytes();
-            #[rustfmt::skip]
-            code_buf.extend([
-                // TEST byte [reg], 0xff
-                0xf6, reg as u8, 0xff,
-                // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
-                0x0f, 0x80|$tttn
-            ]);
-            code_buf.extend(offset_bytes);
-            Ok(())
-        }
-    };
+#[derive(Clone, Copy)]
+#[repr(u8)]
+enum ConditionCode {
+    // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
+    Zero = 0b0100,
+    // according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
+    NotZero = 0b0101,
+}
+
+fn conditional_jump(
+    code_buf: &mut Vec<u8>,
+    reg: X86_64Register,
+    offset: i64,
+    condition: ConditionCode,
+) -> FailableInstrEncoding {
+    let offset_bytes = i32::try_from(offset)
+        .map_err(|_| {
+            BFCompileError::basic(
+                BFErrorID::JUMP_TOO_LONG,
+                format!("{offset} is outside the range of possible 32-bit signed values"),
+            )
+        })?
+        .to_le_bytes();
+    #[rustfmt::skip]
+    code_buf.extend([
+        // TEST byte [reg], 0xff
+        0xf6, reg as u8, 0xff,
+        // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
+        0x0f, 0x80| (condition as u8)
+    ]);
+    code_buf.extend(offset_bytes);
+    Ok(())
 }
 
 pub struct X86_64Inter;
@@ -179,10 +175,16 @@ impl ArchInter for X86_64Inter {
         code_buf.extend([0x0f, 0x05]);
     }
 
-    // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
-    fn_test_jcc!(jump_not_zero, 0b0101);
-    // according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
-    fn_test_jcc!(jump_zero, 0b0100);
+    fn jump_zero(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64) -> FailableInstrEncoding {
+        conditional_jump(code_buf, reg, offset, ConditionCode::Zero)
+    }
+    fn jump_not_zero(
+        code_buf: &mut Vec<u8>,
+        reg: Self::RegType,
+        offset: i64,
+    ) -> FailableInstrEncoding {
+        conditional_jump(code_buf, reg, offset, ConditionCode::NotZero)
+    }
 
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // times JUMP_SIZE NOP
