@@ -297,6 +297,13 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn unfiltered_bf_panics() {
+        let mut ci = CondensedInstructions::new();
+        ci.push(b'i', 32);
+    }
+
+    #[test]
     fn unmatched_loops_detected() {
         assert_eq!(
             loops_match(b"[").unwrap_err().kind,
