@@ -297,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "instruction i is invalid and should've been filtered")]
     fn unfiltered_bf_panics() {
         let mut ci = CondensedInstructions::new();
         ci.push(b'i', 32);
