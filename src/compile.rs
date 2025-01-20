@@ -312,7 +312,8 @@ impl<B: BFCompileHelper> BFCompile for B {
     }
 }
 
-#[cfg(all(test, feature = "x86_64"))]
+#[cfg(feature = "x86_64")]
+#[cfg(test)]
 mod tests {
     use super::super::backend_x86_64::X86_64Inter;
     use super::*;
