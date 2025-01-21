@@ -211,24 +211,30 @@ impl Default for StandardRunConfig {
 mod tests {
     use super::*;
 
+    macro_rules! arg {
+        ($arg: literal) => {
+            OsString::from($arg)
+        };
+    }
+
     #[test]
     fn combined_args() {
         // ensure that combined arguments are processed properly
         let args_set_0 = vec![
             // should be interpreted identically to -k -j -e .brainfuck'
-            OsString::from("-kje.brainfuck"),
-            OsString::from("foo.brainfuck"),
-            OsString::from("bar.brainfuck"),
+            arg!("-kje.brainfuck"),
+            arg!("foo.brainfuck"),
+            arg!("bar.brainfuck"),
         ]
         .into_iter();
         let args_set_1 = vec![
             // should be interpreted identically to -kje.brainfuck'
-            OsString::from("-k"),
-            OsString::from("-j"),
-            OsString::from("-e"),
-            OsString::from(".brainfuck"),
-            OsString::from("foo.brainfuck"),
-            OsString::from("bar.brainfuck"),
+            arg!("-k"),
+            arg!("-j"),
+            arg!("-e"),
+            arg!(".brainfuck"),
+            arg!("foo.brainfuck"),
+            arg!("bar.brainfuck"),
         ]
         .into_iter();
 
@@ -240,13 +246,7 @@ mod tests {
 
     #[test]
     fn options_stop_on_double_dash() {
-        let args_set = vec![
-            OsString::from("--"),
-            OsString::from("-j"),
-            OsString::from("-h"),
-            OsString::from("-e.notbf"),
-        ]
-        .into_iter();
+        let args_set = vec![arg!("--"), arg!("-j"), arg!("-h"), arg!("-e.notbf")].into_iter();
         // ensure that -h, -j and -e.notbf are interpreted as the list of file names
         let RunConfig::StandardRun(parsed_args) = parse_args(args_set).unwrap() else {
             panic!("Arguments not parsed into StandardRunConfig!")
@@ -254,36 +254,29 @@ mod tests {
         assert_eq!(parsed_args.out_mode, OutMode::Basic);
         assert_eq!(
             parsed_args.source_files,
-            vec![
-                OsString::from("-j"),
-                OsString::from("-h"),
-                OsString::from("-e.notbf"),
-            ]
+            vec![arg!("-j"), arg!("-h"), arg!("-e.notbf"),]
         );
     }
 
     #[test]
     fn options_dont_mix_with_files() {
-        let args_set = vec![OsString::from("e.bf"), OsString::from("-h")].into_iter();
+        let args_set = vec![arg!("e.bf"), arg!("-h")].into_iter();
         // ensure that -h is interpreted as a file name
         let RunConfig::StandardRun(parsed_args) = parse_args(args_set).unwrap() else {
             panic!("Arguments not parsed into StandardRunConfig!")
         };
-        assert_eq!(
-            parsed_args.source_files,
-            vec![OsString::from("e.bf"), OsString::from("-h"),]
-        );
+        assert_eq!(parsed_args.source_files, vec![arg!("e.bf"), arg!("-h"),]);
     }
 
     #[test]
     fn help_returned() {
-        let args_set = vec![OsString::from("-h")].into_iter();
+        let args_set = vec![arg!("-h")].into_iter();
         assert_eq!(parse_args(args_set), Ok(RunConfig::ShowHelp));
     }
 
     #[test]
     fn version_returned() {
-        let args_set = vec![OsString::from("-V")].into_iter();
+        let args_set = vec![arg!("-V")].into_iter();
         assert_eq!(parse_args(args_set), Ok(RunConfig::ShowVersion));
     }
 
@@ -295,7 +288,7 @@ mod tests {
 
     #[test]
     fn arg0_contains_non_utf8() {
-        let args_set = vec![OsString::from("-h")].into_iter();
+        let args_set = vec![arg!("-h")].into_iter();
         assert_eq!(parse_args(args_set), Ok(RunConfig::ShowHelp));
     }
 
@@ -313,66 +306,56 @@ mod tests {
 
     #[test]
     fn non_numeric_tape_size() {
-        let args_set = vec![
-            OsString::from_vec(b"-t".into()),
-            OsString::from_vec(b"###".into()),
-        ]
-        .into_iter();
-        let (err, ..) = parse_args(args_set).unwrap_err();
+        let (err, ..) = parse_args(vec![arg!("-t"), arg!("###")].into_iter()).unwrap_err();
         assert_eq!(err.kind, BFErrorID::NOT_NUMERIC);
     }
 
     #[test]
     fn multiple_tape_size() {
-        let args_set = vec![
-            OsString::from_vec(b"-t1".into()),
-            OsString::from_vec(b"-t1024".into()),
-        ]
-        .into_iter();
+        let args_set = vec![arg!("-t1"), arg!("-t1024")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::MULTIPLE_TAPE_BLOCK_COUNTS);
     }
 
     #[test]
     fn tape_size_zero() {
-        let args_set = vec![OsString::from_vec(b"-t0".into())].into_iter();
+        let args_set = vec![arg!("-t0")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::NO_TAPE);
     }
 
     #[test]
     fn missing_tape_size() {
-        let args_set = vec![OsString::from_vec(b"-t".into())].into_iter();
+        let args_set = vec![arg!("-t")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
     }
 
     #[test]
     fn out_mode_options() {
-        let fakefile = OsString::from("foo.bf");
         if let Ok(RunConfig::StandardRun(args)) =
-            parse_args(vec![OsString::from("-q"), fakefile.clone()].into_iter())
+            parse_args(vec![arg!("-q"), arg!("f.bf")].into_iter())
         {
             assert_eq!(args.out_mode, OutMode::Quiet);
         } else {
             panic!("Failed to process standard arg -q");
         }
         if let Ok(RunConfig::StandardRun(args)) =
-            parse_args(vec![OsString::from("-j"), fakefile.clone()].into_iter())
+            parse_args(vec![arg!("-j"), arg!("f.bf")].into_iter())
         {
             assert_eq!(args.out_mode, OutMode::JSON);
         } else {
             panic!("Failed to process standard arg -j");
         }
         if let Ok(RunConfig::StandardRun(args)) =
-            parse_args(vec![OsString::from("-qj"), fakefile.clone()].into_iter())
+            parse_args(vec![arg!("-qj"), arg!("f.bf")].into_iter())
         {
             assert_eq!(args.out_mode, OutMode::JSON);
         } else {
             panic!("Failed to process standard arg -qj");
         }
         if let Ok(RunConfig::StandardRun(args)) =
-            parse_args(vec![OsString::from("-jq"), fakefile.clone()].into_iter())
+            parse_args(vec![arg!("-jq"), arg!("f.bf")].into_iter())
         {
             assert_eq!(args.out_mode, OutMode::JSON);
         } else {
