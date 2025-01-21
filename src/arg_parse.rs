@@ -216,6 +216,14 @@ mod tests {
         a.into()
     }
 
+    // extract a standard run config
+    fn parse_standard(args: Vec<OsString>) -> StandardRunConfig {
+        let RunConfig::StandardRun(cfg) = parse_args(args.into_iter()).unwrap() else {
+            panic!("test expected StandardRunConfig")
+        };
+        cfg
+    }
+
     #[test]
     fn combined_args() {
         // ensure that combined arguments are processed properly
@@ -245,11 +253,9 @@ mod tests {
 
     #[test]
     fn options_stop_on_double_dash() {
-        let args_set = vec![arg("--"), arg("-j"), arg("-h"), arg("-e.notbf")].into_iter();
+        let args_set = vec![arg("--"), arg("-j"), arg("-h"), arg("-e.notbf")];
         // ensure that -h, -j and -e.notbf are interpreted as the list of file names
-        let RunConfig::StandardRun(parsed_args) = parse_args(args_set).unwrap() else {
-            panic!("Arguments not parsed into StandardRunConfig!")
-        };
+        let parsed_args = parse_standard(args_set);
         assert_eq!(parsed_args.out_mode, OutMode::Basic);
         assert_eq!(
             parsed_args.source_files,
@@ -259,12 +265,11 @@ mod tests {
 
     #[test]
     fn options_dont_mix_with_files() {
-        let args_set = vec![arg("e.bf"), arg("-h")].into_iter();
         // ensure that -h is interpreted as a file name
-        let RunConfig::StandardRun(parsed_args) = parse_args(args_set).unwrap() else {
-            panic!("Arguments not parsed into StandardRunConfig!")
-        };
-        assert_eq!(parsed_args.source_files, vec![arg("e.bf"), arg("-h"),]);
+        assert_eq!(
+            parse_standard(vec![arg("e.bf"), arg("-h")]).source_files,
+            vec![arg("e.bf"), arg("-h"),]
+        );
     }
 
     #[test]
@@ -332,86 +337,38 @@ mod tests {
 
     #[test]
     fn out_mode_options() {
-        if let Ok(RunConfig::StandardRun(args)) =
-            parse_args(vec![arg("-q"), arg("f.bf")].into_iter())
-        {
-            assert_eq!(args.out_mode, OutMode::Quiet);
-        } else {
-            panic!("Failed to process standard arg -q");
-        }
-        if let Ok(RunConfig::StandardRun(args)) =
-            parse_args(vec![arg("-j"), arg("f.bf")].into_iter())
-        {
-            assert_eq!(args.out_mode, OutMode::JSON);
-        } else {
-            panic!("Failed to process standard arg -j");
-        }
-        if let Ok(RunConfig::StandardRun(args)) =
-            parse_args(vec![arg("-qj"), arg("f.bf")].into_iter())
-        {
-            assert_eq!(args.out_mode, OutMode::JSON);
-        } else {
-            panic!("Failed to process standard arg -qj");
-        }
-        if let Ok(RunConfig::StandardRun(args)) =
-            parse_args(vec![arg("-jq"), arg("f.bf")].into_iter())
-        {
-            assert_eq!(args.out_mode, OutMode::JSON);
-        } else {
-            panic!("Failed to process standard arg -jq");
-        }
+        assert_eq!(
+            parse_standard(vec![arg("-q"), arg("f.bf")]).out_mode,
+            OutMode::Quiet
+        );
+        assert_eq!(
+            parse_standard(vec![arg("-j"), arg("f.bf")]).out_mode,
+            OutMode::JSON
+        );
+        assert_eq!(
+            parse_standard(vec![arg("-qj"), arg("f.bf")]).out_mode,
+            OutMode::JSON
+        );
+        assert_eq!(
+            parse_standard(vec![arg("-jq"), arg("f.bf")]).out_mode,
+            OutMode::JSON
+        );
     }
 
     #[test]
     fn single_args_parsed() {
-        let mut args_vec = vec![arg("-Ok"), arg("foo.bf")];
-        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
-            panic!("failed to parse args: {:?}", args_vec);
-        };
-        assert!(
-            args.keep && args.optimize && !args.cont,
-            "{args:?}, {args_vec:?}"
-        );
-        args_vec.insert(1, arg("-c"));
-        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
-            panic!("failed to parse args: {:?}", args_vec);
-        };
-        assert!(
-            args.keep && args.optimize && args.cont,
-            "{args:?}, {args_vec:?}"
-        );
-        args_vec.drain(..1);
-        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
-            panic!("failed to parse args: {:?}", args_vec);
-        };
-        assert!(
-            args.cont && !args.optimize && !args.keep,
-            "{args:?}, {args_vec:?}"
-        );
-        args_vec.insert(0, arg("-O"));
-        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
-            panic!("failed to parse args: {:?}", args_vec);
-        };
-        assert!(
-            args.cont && args.optimize && !args.keep,
-            "{args:?}, {args_vec:?}"
-        );
-        args_vec[0] = arg("-kOkOk");
-        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
-            panic!("failed to parse args: {:?}", args_vec);
-        };
-        assert!(
-            args.keep && args.optimize && args.cont,
-            "{args:?}, {args_vec:?}"
-        );
-        args_vec = vec![arg("foo.bf")];
-        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
-            panic!("failed to parse args: {:?}", args_vec);
-        };
-        assert!(
-            !args.keep && !args.optimize && !args.cont,
-            "{args:?}, {args_vec:?}"
-        );
+        let args = parse_standard(vec![arg("-Ok"), arg("foo.bf")]);
+        assert!(args.keep && args.optimize && !args.cont,);
+        let args = parse_standard(vec![arg("-Ok"), arg("-c"), arg("foo.bf")]);
+        assert!(args.keep && args.optimize && args.cont,);
+        let args = parse_standard(vec![arg("-c"), arg("foo.bf")]);
+        assert!(args.cont && !args.optimize && !args.keep,);
+        let args = parse_standard(vec![arg("-Oc"), arg("foo.bf")]);
+        assert!(args.cont && args.optimize && !args.keep,);
+        let args = parse_standard(vec![arg("-kOccOk"), arg("foo.bf")]);
+        assert!(args.keep && args.optimize && args.cont,);
+        let args = parse_standard(vec![arg("foo.bf")]);
+        assert!(!args.keep && !args.optimize && !args.cont,);
     }
 
     #[test]
