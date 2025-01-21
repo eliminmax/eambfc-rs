@@ -346,4 +346,37 @@ mod tests {
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
     }
+
+    #[test]
+    fn out_mode_options() {
+        let fakefile = OsString::from("foo.bf");
+        if let Ok(RunConfig::StandardRun(args)) =
+            parse_args(vec![OsString::from("-q"), fakefile.clone()].into_iter())
+        {
+            assert_eq!(args.out_mode, OutMode::Quiet);
+        } else {
+            panic!("Failed to process standard arg -q");
+        }
+        if let Ok(RunConfig::StandardRun(args)) =
+            parse_args(vec![OsString::from("-j"), fakefile.clone()].into_iter())
+        {
+            assert_eq!(args.out_mode, OutMode::JSON);
+        } else {
+            panic!("Failed to process standard arg -j");
+        }
+        if let Ok(RunConfig::StandardRun(args)) =
+            parse_args(vec![OsString::from("-qj"), fakefile.clone()].into_iter())
+        {
+            assert_eq!(args.out_mode, OutMode::JSON);
+        } else {
+            panic!("Failed to process standard arg -qj");
+        }
+        if let Ok(RunConfig::StandardRun(args)) =
+            parse_args(vec![OsString::from("-jq"), fakefile.clone()].into_iter())
+        {
+            assert_eq!(args.out_mode, OutMode::JSON);
+        } else {
+            panic!("Failed to process standard arg -jq");
+        }
+    }
 }
