@@ -2,9 +2,28 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::OutMode;
 use std::borrow::Cow;
 use std::fmt::Write;
+
+#[derive(PartialEq, Debug, Clone, Copy, Default)]
+pub enum OutMode {
+    #[default]
+    Basic,
+    JSON,
+    Quiet,
+}
+
+impl OutMode {
+    pub fn json(&mut self) {
+        *self = OutMode::JSON;
+    }
+    pub fn quiet(&mut self) {
+        // for consistency with original C version, quiet doesn't override JSON mode
+        if *self == OutMode::Basic {
+            *self = OutMode::Quiet;
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[allow(

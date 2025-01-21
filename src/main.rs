@@ -26,6 +26,7 @@ use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
 use std::process::ExitCode;
+pub use err::OutMode;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
@@ -34,26 +35,6 @@ use backend_arm64::Arm64Inter;
 use backend_s390x::S390xInter;
 #[cfg(feature = "x86_64")]
 use backend_x86_64::X86_64Inter;
-
-#[derive(PartialEq, Debug, Clone, Copy, Default)]
-pub enum OutMode {
-    #[default]
-    Basic,
-    JSON,
-    Quiet,
-}
-
-impl OutMode {
-    fn json(&mut self) {
-        *self = OutMode::JSON;
-    }
-    fn quiet(&mut self) {
-        // for consistency with original C version, quiet doesn't override JSON mode
-        if *self == OutMode::Basic {
-            *self = OutMode::Quiet;
-        }
-    }
-}
 
 // if filename ends with extension, return Ok(f), where f is the filename without the extension
 // otherwise, return Err(filename)
