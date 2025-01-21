@@ -411,4 +411,72 @@ mod tests {
             Ok(RunConfig::ListArches)
         );
     }
+
+    #[test]
+    fn arch_selection() {
+        if cfg!(feature = "arm64") {
+            assert_eq!(
+                parse_standard(vec![arg("-aarm64"), arg("foo.bf")]).arch,
+                ELFArch::Arm64
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-aaarch64"), arg("foo.bf")]).arch,
+                ELFArch::Arm64
+            );
+        } else {
+            assert!(parse_args(vec![arg("-aarm64"), arg("foo.bf")].into_iter())
+                .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
+        }
+        if cfg!(feature = "s390x") {
+            assert_eq!(
+                parse_standard(vec![arg("-as390x"), arg("foo.bf")]).arch,
+                ELFArch::S390x
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-as390"), arg("foo.bf")]).arch,
+                ELFArch::S390x
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-az/architecture"), arg("foo.bf")]).arch,
+                ELFArch::S390x
+            );
+        } else {
+            assert!(parse_args(vec![arg("-as390x"), arg("foo.bf")].into_iter())
+                .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
+        }
+        if cfg!(feature = "x86_64") {
+            assert_eq!(
+                parse_standard(vec![arg("-ax86_64"), arg("foo.bf")]).arch,
+                ELFArch::X86_64
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-ax64"), arg("foo.bf")]).arch,
+                ELFArch::X86_64
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-aamd64"), arg("foo.bf")]).arch,
+                ELFArch::X86_64
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-ax86-64"), arg("foo.bf")]).arch,
+                ELFArch::X86_64
+            );
+        } else {
+            assert!(parse_args(vec![arg("-ax86_64"), arg("foo.bf")].into_iter())
+                .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
+        }
+        assert!(parse_args(vec![arg("-apdp11"), arg("foo.bf")].into_iter())
+            .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
+    }
+
+
+    #[test]
+    fn multiple_arches_error() {
+        if cfg!(all(feature = "x86_64", feature = "arm64")) {
+            assert!(
+                parse_args(vec![arg("-ax86_64"), arg("-aarm64"), arg("foo.bf")].into_iter())
+                    .is_err_and(|e| e.0.kind == BFErrorID::MULTIPLE_ARCHES)
+            );
+        }
+    }
 }
