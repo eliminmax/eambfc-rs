@@ -362,4 +362,38 @@ mod tests {
             panic!("Failed to process standard arg -jq");
         }
     }
+
+    #[test]
+    fn single_args_parsed() {
+        let mut args_vec = vec![arg!("-Ok"),  arg!("foo.bf")];
+        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
+            panic!("failed to parse args: {:?}", args_vec);
+        };
+        assert!(args.keep && args.optimize && !args.cont, "{args:?}, {args_vec:?}");
+        args_vec.insert(1, arg!("-c"));
+        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
+            panic!("failed to parse args: {:?}", args_vec);
+        };
+        assert!(args.keep && args.optimize && args.cont, "{args:?}, {args_vec:?}");
+        args_vec.drain(..1);
+        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
+            panic!("failed to parse args: {:?}", args_vec);
+        };
+        assert!(args.cont && !args.optimize && !args.keep, "{args:?}, {args_vec:?}");
+        args_vec.insert(0, arg!("-O"));
+        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
+            panic!("failed to parse args: {:?}", args_vec);
+        };
+        assert!(args.cont && args.optimize && !args.keep, "{args:?}, {args_vec:?}");
+        args_vec[0] = arg!("-kOkOk");
+        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
+            panic!("failed to parse args: {:?}", args_vec);
+        };
+        assert!(args.keep && args.optimize && args.cont, "{args:?}, {args_vec:?}");
+        args_vec = vec![arg!("foo.bf")];
+        let Ok(RunConfig::StandardRun(args)) = parse_args(args_vec.iter().cloned()) else {
+            panic!("failed to parse args: {:?}", args_vec);
+        };
+        assert!(!args.keep && !args.optimize && !args.cont, "{args:?}, {args_vec:?}");
+    }
 }
