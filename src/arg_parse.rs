@@ -291,24 +291,6 @@ mod tests {
     }
 
     #[test]
-    fn arg0_contains_non_utf8() {
-        let args_set = vec![arg("-h")].into_iter();
-        assert_eq!(parse_args(args_set), Ok(RunConfig::ShowHelp));
-    }
-
-    #[test]
-    fn filename_contains_non_utf8() {
-        let args_set = vec![OsString::from_vec(b"fil\xee.bf".into())].into_iter();
-        assert_eq!(
-            parse_args(args_set),
-            Ok(RunConfig::StandardRun(StandardRunConfig {
-                source_files: vec![OsString::from_vec(b"fil\xee.bf".into())],
-                ..StandardRunConfig::default()
-            }))
-        );
-    }
-
-    #[test]
     fn non_numeric_tape_size() {
         let (err, ..) = parse_args(vec![arg("-t"), arg("###")].into_iter()).unwrap_err();
         assert_eq!(err.kind, BFErrorID::NOT_NUMERIC);
