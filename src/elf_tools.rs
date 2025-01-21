@@ -195,3 +195,14 @@ impl From<Phdr> for Vec<u8> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ELFArch;
+    #[test]
+    fn display_elfarch() {
+        assert_eq!(format!("{}", ELFArch::Arm64), String::from("arm64"));
+        assert_eq!(format!("{}", ELFArch::S390x), String::from("s390x"));
+        assert_eq!(format!("{}", ELFArch::X86_64), String::from("x86_64"));
+    }
+}
