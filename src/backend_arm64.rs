@@ -223,7 +223,7 @@ impl ArchInter for Arm64Inter {
     }
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // 3 NOP instructions.
-        const NOP: [u8; 4] = [0x1f, 0x20, 0x30, 0xd5];
+        const NOP: [u8; 4] = [0x1f, 0x20, 0x03, 0xd5];
         code_buf.extend(NOP.repeat(3));
     }
 
