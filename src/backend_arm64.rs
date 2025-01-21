@@ -571,4 +571,33 @@ mod tests {
         Arm64Inter::nop_loop_open(&mut v);
         assert_eq!(v, NOP.repeat(3));
     }
+
+    #[test]
+    #[should_panic(expected = "offset 31 is invalid for architecture (offset % 4 != 0)")]
+    fn invalid_offset_panics() {
+        Arm64Inter::jump_zero(&mut Vec::new(), Arm64Register::X0, 31).unwrap();
+    }
+
+    #[test]
+    fn out_of_bounds_jumps_test() {
+        assert!(
+            Arm64Inter::jump_zero(&mut Vec::new(), Arm64Register::X0, i64::MAX ^ 0b11)
+                .is_err_and(|e| e.kind == BFErrorID::JUMP_TOO_LONG)
+        );
+    }
+
+    #[test]
+    fn successfull_jumps_test() {
+        let mut v = Vec::with_capacity(24);
+        Arm64Inter::jump_zero(&mut v, Arm64Register::X0, 32).unwrap();
+        Arm64Inter::jump_not_zero(&mut v, Arm64Register::X0, -32).unwrap();
+        assert_eq!(v, vec![
+            0x11, 0x04, 0x40, 0x38, // LRDB w17, [x0], 0
+            0x3f, 0x1e, 0x40, 0xf2, // ANDS xzr, x0, 0xff (dissassembles to TST x17, 0xff)
+            0x20, 0x01, 0x00, 0x54, // B.eq 32+4
+            0x11, 0x04, 0x40, 0x38, // LRDB w17, [x0], 0
+            0x3f, 0x1e, 0x40, 0xf2, // ANDS xzr, x0, 0xff (dissassembles to TST x17, 0xff)
+            0x21, 0xff, 0xff, 0x54, // B.ne -32+4
+        ]);
+    }
 }
