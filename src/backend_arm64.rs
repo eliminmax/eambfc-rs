@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn test_add_sub_reg() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(24);
         // Handling of 24-bit values
         add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add).unwrap();
         assert_eq!(
@@ -461,6 +461,23 @@ mod tests {
             v,
             vec![
                 0x10, 0xf2, 0x6a, 0xd1, // SUB x16, x16, 0xabc, lsl 12
+            ],
+        );
+
+        v.clear();
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+        Arm64Inter::add_reg(&mut v, Arm64Register::X16, 0xdeadbeef).unwrap();
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+        Arm64Inter::sub_reg(&mut v, Arm64Register::X16, 0xdeadbeef).unwrap();
+        assert_eq!(
+            v,
+            vec![
+                0xf1, 0xdd, 0x97, 0xd2, // MOVZ x17, 0xbeef
+                0xb1, 0xd5, 0xbb, 0xf2, // MOVK x17, 0xdead, lsl #16
+                0x10, 0x02, 0x11, 0x8b, // ADD x16, x16, x17
+                0xf1, 0xdd, 0x97, 0xd2, // MOVZ x17, 0xbeef
+                0xb1, 0xd5, 0xbb, 0xf2, // MOVK x17, 0xdead, lsl #16
+                0x10, 0x02, 0x11, 0xcb, // SUB x16, x16, x17
             ],
         );
     }
