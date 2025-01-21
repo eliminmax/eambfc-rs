@@ -499,4 +499,66 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn test_aux_reg() {
+        let aux_regs: Vec<_> = [
+            Arm64Register::X0,
+            Arm64Register::X1,
+            Arm64Register::X2,
+            Arm64Register::X8,
+            Arm64Register::X16,
+            Arm64Register::X17,
+            Arm64Register::X19,
+        ]
+        .into_iter()
+        .map(|r| aux_reg(r))
+        .collect();
+        let mut expected = vec![Arm64Register::X17; 7];
+        expected[5] = Arm64Register::X16;
+        assert_eq!(expected, aux_regs);
+    }
+
+    #[test]
+    fn test_inc_dec_wrapper() {
+        let mut v: Vec<u8> = Vec::with_capacity(24);
+        Arm64Inter::inc_byte(&mut v, Arm64Register::X1);
+        Arm64Inter::dec_byte(&mut v, Arm64Register::X17);
+        // instruction byte sequences from the Radare2 dis/assembler tool rasm2
+        assert_eq!(
+            v,
+            vec![
+                0x31, 0x04, 0x40, 0x38, // LDRB w17, [x1], 0
+                0x31, 0x06, 0x00, 0x91, // ADD x17, x17, 1
+                0x31, 0x04, 0x00, 0x38, // STRB w17, [x1], 0
+                0x30, 0x06, 0x40, 0x38, // LDRB w16, x17, 0
+                0x10, 0x06, 0x00, 0xd1, // SUB x16, x16, 1
+                0x30, 0x06, 0x00, 0x38, // STRB w16, [x17], 0
+            ]
+        );
+    }
+
+    #[test]
+    fn test_reg_copy() {
+        let mut v: Vec<u8> = Vec::with_capacity(12);
+        Arm64Inter::reg_copy(&mut v, Arm64Register::X1, Arm64Register::X19);
+        Arm64Inter::reg_copy(&mut v, Arm64Register::X2, Arm64Register::X17);
+        Arm64Inter::reg_copy(&mut v, Arm64Register::X8, Arm64Register::X16);
+        assert_eq!(
+            v,
+            vec![
+                0xe1, 0x03, 0x13, 0xaa, // MOV x1, x19
+                0xe2, 0x03, 0x11, 0xaa, // MOV x2, x17
+                0xe8, 0x03, 0x10, 0xaa, // MOV x8, x16
+            ]
+        );
+    }
+
+    #[test]
+    fn test_syscall() {
+        let mut v: Vec<u8> = Vec::with_capacity(4);
+        Arm64Inter::syscall(&mut v);
+        // svc 0
+        assert_eq!(v, vec![0x01, 0x00, 0x00, 0xd4]);
+    }
 }
