@@ -120,10 +120,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                         (
                             BFCompileError::basic(
                                 BFErrorID::MISSING_OPERAND,
-                                format!(
-                                    "-{} requires an additional argument",
-                                    $flag.escape_ascii()
-                                ),
+                                concat!("-", $flag, " requires an additional argument"),
                             ),
                             pcfg.out_mode,
                         )
@@ -153,11 +150,11 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                 b'h' => return Ok(RunConfig::ShowHelp),
                 b'V' => return Ok(RunConfig::ShowVersion),
                 b'A' => return Ok(RunConfig::ListArches),
-                b'e' => param_arg!(extension, MULTIPLE_EXTENSIONS, Some(parameter_instr!(b'e'))),
+                b'e' => param_arg!(extension, MULTIPLE_EXTENSIONS, Some(parameter_instr!('e'))),
                 b'a' => param_arg!(
                     arch,
                     MULTIPLE_ARCHES,
-                    match parameter_instr!(b'a').as_bytes() {
+                    match parameter_instr!('a').as_bytes() {
                         #[cfg(feature = "x86_64")]
                         b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(ELFArch::X86_64),
                         #[cfg(feature = "arm64")]
@@ -173,7 +170,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                 b't' => param_arg!(
                     tape_blocks,
                     MULTIPLE_TAPE_BLOCK_COUNTS,
-                    match parameter_instr!(b't').to_string_lossy().parse::<u64>() {
+                    match parameter_instr!('t').to_string_lossy().parse::<u64>() {
                         Ok(0) => error_out!(NO_TAPE, "Tape value for -t must be at least 1"),
                         Ok(i) if i >= u64::MAX >> 12 =>
                             error_out!(TAPE_TOO_LARGE, "tape size exceeds 64-bit integer limit"),
