@@ -396,4 +396,10 @@ mod tests {
         };
         assert!(!args.keep && !args.optimize && !args.cont, "{args:?}, {args_vec:?}");
     }
+
+    #[test]
+    fn bad_args_error_out() {
+        assert!(parse_args(vec![arg!("-u")].into_iter())
+            .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARG));
+    }
 }
