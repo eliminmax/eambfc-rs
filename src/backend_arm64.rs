@@ -287,12 +287,7 @@ fn add_sub_imm(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp
     ]);
 }
 
-fn add_sub(
-    code_buf: &mut Vec<u8>,
-    reg: Arm64Register,
-    imm: i64,
-    op: ArithOp,
-) {
+fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp) {
     match imm {
         i if i < 0x1_000 => add_sub_imm(code_buf, reg, imm, op, false),
         i if i < 0x1_000_000 => {
@@ -591,13 +586,16 @@ mod tests {
         let mut v = Vec::with_capacity(24);
         Arm64Inter::jump_zero(&mut v, Arm64Register::X0, 32).unwrap();
         Arm64Inter::jump_not_zero(&mut v, Arm64Register::X0, -32).unwrap();
-        assert_eq!(v, vec![
-            0x11, 0x04, 0x40, 0x38, // LRDB w17, [x0], 0
-            0x3f, 0x1e, 0x40, 0xf2, // ANDS xzr, x0, 0xff (dissassembles to TST x17, 0xff)
-            0x20, 0x01, 0x00, 0x54, // B.eq 32+4
-            0x11, 0x04, 0x40, 0x38, // LRDB w17, [x0], 0
-            0x3f, 0x1e, 0x40, 0xf2, // ANDS xzr, x0, 0xff (dissassembles to TST x17, 0xff)
-            0x21, 0xff, 0xff, 0x54, // B.ne -32+4
-        ]);
+        assert_eq!(
+            v,
+            vec![
+                0x11, 0x04, 0x40, 0x38, // LRDB w17, [x0], 0
+                0x3f, 0x1e, 0x40, 0xf2, // ANDS xzr, x0, 0xff (dissassembles to TST x17, 0xff)
+                0x20, 0x01, 0x00, 0x54, // B.eq 32+4
+                0x11, 0x04, 0x40, 0x38, // LRDB w17, [x0], 0
+                0x3f, 0x1e, 0x40, 0xf2, // ANDS xzr, x0, 0xff (dissassembles to TST x17, 0xff)
+                0x21, 0xff, 0xff, 0x54, // B.ne -32+4
+            ]
+        );
     }
 }
