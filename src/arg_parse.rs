@@ -338,8 +338,14 @@ mod tests {
     }
 
     #[test]
-    fn missing_tape_size() {
+    fn missing_operand() {
         let args_set = vec![arg("-t")].into_iter();
+        let (err, ..) = parse_args(args_set).unwrap_err();
+        assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
+        let args_set = vec![arg("-e")].into_iter();
+        let (err, ..) = parse_args(args_set).unwrap_err();
+        assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
+        let args_set = vec![arg("-a")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
         assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
     }
