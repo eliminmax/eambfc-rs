@@ -561,4 +561,13 @@ mod tests {
         // svc 0
         assert_eq!(v, vec![0x01, 0x00, 0x00, 0xd4]);
     }
+
+    #[test]
+    fn test_nops() {
+        // NOP instruction per rasm2
+        const NOP: [u8; 4] = [0x1f, 0x20, 0x03, 0xd5];
+        let mut v = Vec::with_capacity(12);
+        Arm64Inter::nop_loop_open(&mut v);
+        assert_eq!(v, NOP.repeat(3));
+    }
 }
