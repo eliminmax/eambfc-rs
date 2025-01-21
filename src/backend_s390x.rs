@@ -398,8 +398,7 @@ impl ArchInter for S390xInter {
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        S390xInter::add_reg(code_buf, reg, 1)
-            .expect("S390xInter::add_reg doesn't return Err variant");
+        S390xInter::add_reg(code_buf, reg, 1);
     }
 
     fn inc_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
@@ -407,15 +406,14 @@ impl ArchInter for S390xInter {
     }
 
     fn dec_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        S390xInter::add_reg(code_buf, reg, -1)
-            .expect("S390xInter::add_reg doesn't return Err variant");
+        S390xInter::add_reg(code_buf, reg, -1);
     }
 
     fn dec_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
         S390xInter::add_byte(code_buf, reg, -1);
     }
 
-    fn add_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) -> FailableInstrEncoding {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         match imm {
             i if (i64::from(i16::MIN)..=i64::from(i16::MAX)).contains(&i) => {
                 // AGHI reg, imm {RI-a}
@@ -428,39 +426,34 @@ impl ArchInter for S390xInter {
             _ => {
                 let (imm_h, imm_l) = (imm >> 32, imm as i32);
                 if imm_l != 0 {
-                    S390xInter::add_reg(code_buf, reg, i64::from(imm_l))
-                        .expect("S390xInter::add_reg doesn't return Err variant");
+                    S390xInter::add_reg(code_buf, reg, i64::from(imm_l));
                 }
                 // AIX reg, imm {RIL-a}
                 encode_ri_op!(code_buf, 0xcc8, reg, i32, imm_h);
             }
         }
-        Ok(())
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
         code_buf.extend(load_from_byte(reg));
-        S390xInter::add_reg(code_buf, TMP_REG, i64::from(imm))
-            .expect("S390xInter::add_reg doesn't return Err variant");
+        S390xInter::add_reg(code_buf, TMP_REG, i64::from(imm));
         code_buf.extend(store_to_byte(reg, TMP_REG));
     }
 
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) -> FailableInstrEncoding {
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         // there are not equivalent sub instructions to any of the add instructions used, so just
         // check that "-imm" won't cause problems, then call add_reg with negative imm.
         if imm == i64::MIN {
-            S390xInter::add_reg(code_buf, reg, -i64::MAX)?;
-            S390xInter::add_reg(code_buf, reg, -1)?;
+            S390xInter::add_reg(code_buf, reg, -i64::MAX);
+            S390xInter::add_reg(code_buf, reg, -1);
         } else {
-            S390xInter::add_reg(code_buf, reg, -imm)?;
+            S390xInter::add_reg(code_buf, reg, -imm);
         }
-        Ok(())
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
         code_buf.extend(load_from_byte(reg));
-        S390xInter::add_reg(code_buf, TMP_REG, i64::from(-imm))
-            .expect("S390xInter::add_reg doesn't return Err variant");
+        S390xInter::add_reg(code_buf, TMP_REG, i64::from(-imm));
         code_buf.extend(store_to_byte(reg, TMP_REG));
     }
 

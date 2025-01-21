@@ -28,9 +28,9 @@ pub trait ArchInter {
     fn inc_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
     fn dec_reg(code_buf: &mut Vec<u8>, reg: Self::RegType);
     fn dec_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
-    fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) -> FailableInstrEncoding;
+    fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
     fn add_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i8);
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) -> FailableInstrEncoding;
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i8);
     fn zero_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
 }

@@ -246,11 +246,11 @@ impl ArchInter for Arm64Inter {
         ]); // SUB reg, reg, 1
     }
 
-    fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) -> FailableInstrEncoding {
-        add_sub(code_buf, reg, imm, ArithOp::Add)
+    fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
+        add_sub(code_buf, reg, imm, ArithOp::Add);
     }
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) -> FailableInstrEncoding {
-        add_sub(code_buf, reg, imm, ArithOp::Sub)
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
+        add_sub(code_buf, reg, imm, ArithOp::Sub);
     }
 
     fn zero_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
@@ -274,13 +274,7 @@ enum ArithOp {
     Sub = 0xd1,
 }
 
-fn add_sub_imm(
-    code_buf: &mut Vec<u8>,
-    reg: Arm64Register,
-    imm: i64,
-    op: ArithOp,
-    shift: bool,
-) -> FailableInstrEncoding {
+fn add_sub_imm(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp, shift: bool) {
     assert!((shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0));
     let reg = reg as u8; // helpful as it's used multiple times.
     let imm = if shift { imm >> 12 } else { imm };
@@ -291,7 +285,6 @@ fn add_sub_imm(
         (imm >> 6) as u8 | if shift { 0x40 } else { 0 },
         op as u8,
     ]);
-    Ok(())
 }
 
 fn add_sub(
@@ -299,13 +292,13 @@ fn add_sub(
     reg: Arm64Register,
     imm: i64,
     op: ArithOp,
-) -> FailableInstrEncoding {
+) {
     match imm {
-        i if i < 0x1_000 => add_sub_imm(code_buf, reg, imm, op, false)?,
+        i if i < 0x1_000 => add_sub_imm(code_buf, reg, imm, op, false),
         i if i < 0x1_000_000 => {
-            add_sub_imm(code_buf, reg, imm & 0xfff_000, op, true)?;
+            add_sub_imm(code_buf, reg, imm & 0xfff_000, op, true);
             if i & 0xfff != 0 {
-                add_sub_imm(code_buf, reg, imm & 0xfff, op, false)?;
+                add_sub_imm(code_buf, reg, imm & 0xfff, op, false);
             }
         }
         i => {
@@ -319,7 +312,6 @@ fn add_sub(
             code_buf.extend(inject_reg_operands(reg, reg, [0, 0, aux as u8, op_byte]));
         }
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -444,7 +436,7 @@ mod tests {
     fn test_add_sub_reg() {
         let mut v: Vec<u8> = Vec::with_capacity(24);
         // Handling of 24-bit values
-        add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add).unwrap();
+        add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add);
         assert_eq!(
             v,
             vec![
@@ -456,7 +448,7 @@ mod tests {
         // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
         // included
         v.clear();
-        add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub).unwrap();
+        add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub);
         assert_eq!(
             v,
             vec![
@@ -466,9 +458,9 @@ mod tests {
 
         v.clear();
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        Arm64Inter::add_reg(&mut v, Arm64Register::X16, 0xdeadbeef).unwrap();
+        Arm64Inter::add_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        Arm64Inter::sub_reg(&mut v, Arm64Register::X16, 0xdeadbeef).unwrap();
+        Arm64Inter::sub_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
         assert_eq!(
             v,
             vec![

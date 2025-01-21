@@ -207,7 +207,7 @@ impl ArchInter for X86_64Inter {
         // DEC byte [reg]
         x86_offset(code_buf, OffsetOp::Dec, OffsetMode::BytePtr, reg);
     }
-    fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) -> FailableInstrEncoding {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) {
         match imm {
             i if (i64::from(i8::MIN)..=i64::from(i8::MAX)).contains(&i) => {
                 add_reg_imm8(code_buf, reg, imm as i8);
@@ -217,13 +217,12 @@ impl ArchInter for X86_64Inter {
             }
             _ => add_reg_imm64(code_buf, reg, imm),
         }
-        Ok(())
     }
     fn add_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
         // ADD byte [reg], imm8
         code_buf.extend([0x80, reg as u8, imm as u8]);
     }
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) -> FailableInstrEncoding {
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) {
         match imm {
             i if (i64::from(i8::MIN)..=i64::from(i8::MAX)).contains(&i) => {
                 sub_reg_imm8(code_buf, reg, imm as i8);
@@ -233,7 +232,6 @@ impl ArchInter for X86_64Inter {
             }
             _ => sub_reg_imm64(code_buf, reg, imm),
         }
-        Ok(())
     }
     fn sub_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
         // SUB byte [reg], imm8

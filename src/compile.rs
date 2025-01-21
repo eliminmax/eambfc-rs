@@ -193,10 +193,10 @@ trait BFCompileHelper: ArchInter {
             CI::RepeatAdd(count) => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count.get() as i8),
             CI::RepeatSub(count) => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count.get() as i8),
             CI::RepeatMoveR(count) => {
-                Self::add_reg(dst, Self::REGISTERS.bf_ptr, count.get() as i64)?;
+                Self::add_reg(dst, Self::REGISTERS.bf_ptr, count.get() as i64);
             }
             CI::RepeatMoveL(count) => {
-                Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count.get() as i64)?;
+                Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count.get() as i64);
             }
             CI::BFInstruction(i) => {
                 Self::compile_instr(
