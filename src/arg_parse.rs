@@ -420,4 +420,16 @@ mod tests {
         assert!(parse_args(vec![arg!("-u")].into_iter())
             .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARG));
     }
+
+    #[test]
+    fn list_arch_processed() {
+        assert_eq!(
+            parse_args(vec![arg!("-A")].into_iter()),
+            Ok(RunConfig::ListArches)
+        );
+        assert_eq!(
+            parse_args(vec![arg!("-e"), arg!(".b"), arg!("-A")].into_iter()),
+            Ok(RunConfig::ListArches)
+        );
+    }
 }
