@@ -18,6 +18,7 @@ pub mod optimize;
 use arg_parse::RunConfig;
 use compile::BFCompile;
 use elf_tools::ELFArch;
+pub use err::OutMode;
 use err::{BFCompileError, BFErrorID};
 use std::borrow::Cow;
 use std::env::args_os;
@@ -26,7 +27,6 @@ use std::fs::{remove_file, File, OpenOptions};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::OpenOptionsExt;
 use std::process::ExitCode;
-pub use err::OutMode;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
