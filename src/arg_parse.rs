@@ -75,6 +75,79 @@ impl PartialRunConfig {
         }
         Ok(())
     }
+
+    fn gen_err(
+        &self,
+        kind: BFErrorID,
+        msg: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> (BFCompileError, OutMode) {
+        (BFCompileError::basic(kind, msg), self.out_mode)
+    }
+
+    fn set_arch(&mut self, param: &[u8]) -> Result<(), (BFCompileError, OutMode)> {
+        if self.arch.is_some() {
+            return Err(self.gen_err(BFErrorID::MULTIPLE_ARCHES, "passed -a multiple times"));
+        }
+        self.arch = match param {
+            #[cfg(feature = "x86_64")]
+            b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(ELFArch::X86_64),
+            #[cfg(feature = "arm64")]
+            b"arm64" | b"aarch64" => Some(ELFArch::Arm64),
+            #[cfg(feature = "s390x")]
+            b"s390x" | b"s390" | b"z/architecture" => Some(ELFArch::S390x),
+            f => {
+                return Err((
+                    BFCompileError::basic(
+                        BFErrorID::UNKNOWN_ARCH,
+                        format!("{} is not a recognized architecture", f.escape_ascii()),
+                    ),
+                    self.out_mode,
+                ))
+            }
+        };
+        Ok(())
+    }
+
+    fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
+        if self.extension.is_some() {
+            return Err(self.gen_err(BFErrorID::MULTIPLE_EXTENSIONS, "passed -e multiple times"));
+        }
+        self.extension = Some(OsString::from_vec(param));
+        Ok(())
+    }
+
+    fn set_tape_size(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
+        if self.tape_blocks.is_some() {
+            return Err(self.gen_err(
+                BFErrorID::MULTIPLE_TAPE_BLOCK_COUNTS,
+                "passed -t multiple times",
+            ));
+        }
+        match OsString::from_vec(param).to_string_lossy().parse::<u64>() {
+            Ok(0) => Err((
+                BFCompileError::basic(BFErrorID::NO_TAPE, "Tape value for -t must be at least 1"),
+                self.out_mode,
+            )),
+            Ok(i) if i >= u64::MAX >> 12 => Err((
+                BFCompileError::basic(
+                    BFErrorID::TAPE_TOO_LARGE,
+                    "tape size exceeds 64-bit integer limit",
+                ),
+                self.out_mode,
+            )),
+            Ok(i) => {
+                self.tape_blocks = Some(i);
+                Ok(())
+            }
+            Err(_) => Err((
+                BFCompileError::basic(
+                    BFErrorID::NOT_NUMERIC,
+                    "tape size could not be parsed as a numeric value",
+                ),
+                self.out_mode,
+            )),
+        }
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -89,13 +162,6 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
     mut args: T,
 ) -> Result<RunConfig, (BFCompileError, OutMode)> {
     let mut pcfg = PartialRunConfig::default();
-
-    macro_rules! error_out {
-        ($error_type: ident, $msg: expr) => {{
-            let err = BFCompileError::basic(BFErrorID::$error_type, $msg);
-            return Err((err, pcfg.out_mode));
-        }};
-    }
 
     while let Some(arg) = args.next() {
         // handle non-flag values
@@ -112,75 +178,32 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
         }
 
         let mut arg_byte_iter = arg_bytes.into_iter().skip(1);
-        macro_rules! parameter_instr {
-            ($flag: literal) => {{
-                let remainder: Vec<_> = arg_byte_iter.collect();
-                if remainder.is_empty() {
-                    args.next().ok_or_else(|| {
-                        (
-                            BFCompileError::basic(
-                                BFErrorID::MISSING_OPERAND,
-                                concat!("-", $flag, " requires an additional argument"),
-                            ),
-                            pcfg.out_mode,
-                        )
-                    })?
-                } else {
-                    OsString::from_vec(remainder)
-                }
-            }};
-        }
 
         while let Some(b) = arg_byte_iter.next() {
-            // if cfg.$var is none, set it to the result of evaluating $body, otherwise, error out
-            // with error id BFErrorID::$error_id
-            macro_rules! param_arg {
-                ($var: ident, $error_id: ident, $body: expr) => {{
-                    if pcfg.$var.is_some() {
-                        error_out!(
-                            $error_id,
-                            format!("passed -{} multiple times", b.escape_ascii())
-                        );
-                    }
-                    pcfg.$var = $body;
-                    break;
-                }};
-            }
             match b {
                 b'h' => return Ok(RunConfig::ShowHelp),
                 b'V' => return Ok(RunConfig::ShowVersion),
                 b'A' => return Ok(RunConfig::ListArches),
-                b'e' => param_arg!(extension, MULTIPLE_EXTENSIONS, Some(parameter_instr!('e'))),
-                b'a' => param_arg!(
-                    arch,
-                    MULTIPLE_ARCHES,
-                    match parameter_instr!('a').as_bytes() {
-                        #[cfg(feature = "x86_64")]
-                        b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(ELFArch::X86_64),
-                        #[cfg(feature = "arm64")]
-                        b"arm64" | b"aarch64" => Some(ELFArch::Arm64),
-                        #[cfg(feature = "s390x")]
-                        b"s390x" | b"s390" | b"z/architecture" => Some(ELFArch::S390x),
-                        f => error_out!(
-                            UNKNOWN_ARCH,
-                            format!("{} is not a recognized architecture", f.escape_ascii())
-                        ),
+                p if b"aet".contains(&p) => {
+                    let mut remainder: Vec<u8> = arg_byte_iter.collect();
+                    if remainder.is_empty() {
+                        if let Some(next_arg) = args.next() {
+                            remainder.extend_from_slice(next_arg.as_bytes());
+                        } else {
+                            return Err(pcfg.gen_err(
+                                BFErrorID::MISSING_OPERAND,
+                                format!("-{} requires an additional argument", p.escape_ascii()),
+                            ));
+                        }
                     }
-                ),
-                b't' => param_arg!(
-                    tape_blocks,
-                    MULTIPLE_TAPE_BLOCK_COUNTS,
-                    match parameter_instr!('t').to_string_lossy().parse::<u64>() {
-                        Ok(0) => error_out!(NO_TAPE, "Tape value for -t must be at least 1"),
-                        Ok(i) if i >= u64::MAX >> 12 =>
-                            error_out!(TAPE_TOO_LARGE, "tape size exceeds 64-bit integer limit"),
-                        Ok(i) => Some(i),
-                        Err(_) => error_out!(
-                            NOT_NUMERIC,
-                            "tape size could not be parsed as a numeric value"
-                        ),
+                    match p {
+                        b'a' => pcfg.set_arch(&remainder)?,
+                        b'e' => pcfg.set_ext(remainder)?,
+                        b't' => pcfg.set_tape_size(remainder)?,
+                        _ => unreachable!(),
                     }
-                ),
+                    break;
+                }
                 flag => pcfg.parse_standalone_flag(flag)?,
             };
         }
