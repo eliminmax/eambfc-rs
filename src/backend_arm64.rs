@@ -281,15 +281,7 @@ fn add_sub_imm(
     op: ArithOp,
     shift: bool,
 ) -> FailableInstrEncoding {
-    if (shift && (imm & !0xfff_000) != 0) || (!shift && (imm & !0xfff) != 0) {
-        return Err(BFCompileError::basic(
-            BFErrorID::IMMEDIATE_TOO_LARGE,
-            format!(
-                "0x{imm:x} is invalid for shift level {}",
-                12 * u8::from(shift)
-            ),
-        ));
-    }
+    assert!((shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0));
     let reg = reg as u8; // helpful as it's used multiple times.
     let imm = if shift { imm >> 12 } else { imm };
     // either ADD reg, reg, imm or SUB reg, reg, imm, depending on op
