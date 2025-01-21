@@ -331,6 +331,13 @@ mod tests {
     }
 
     #[test]
+    fn tape_too_large() {
+        let args_set = vec![arg("-t9223372036854775807")].into_iter();
+        let (err, ..) = parse_args(args_set).unwrap_err();
+        assert_eq!(err.kind, BFErrorID::TAPE_TOO_LARGE);
+    }
+
+    #[test]
     fn missing_tape_size() {
         let args_set = vec![arg("-t")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
@@ -371,6 +378,14 @@ mod tests {
         assert!(args.keep && args.optimize && args.cont,);
         let args = parse_standard(vec![arg("foo.bf")]);
         assert!(!args.keep && !args.optimize && !args.cont,);
+    }
+
+    #[test]
+    fn multiple_extensions_err() {
+        assert!(
+            parse_args(vec![arg("-e.brainfuck"), arg("-e"), arg(".bf")].into_iter())
+                .is_err_and(|e| e.0.kind == BFErrorID::MULTIPLE_EXTENSIONS)
+        );
     }
 
     #[test]
