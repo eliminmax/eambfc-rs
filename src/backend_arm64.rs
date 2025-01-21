@@ -215,7 +215,7 @@ impl ArchInter for Arm64Inter {
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Arm64Register, src: Arm64Register) {
         // MOV dst, src
         // technically an alias for ORR dst, XZR, src (XZR is a read-only zero register)
-        code_buf.extend([0xe0 | dst as u8, 0x01, src as u8, 0xaa]);
+        code_buf.extend([0xe0 | dst as u8, 0x03, src as u8, 0xaa]);
     }
     fn syscall(code_buf: &mut Vec<u8>) {
         // SVC 0
