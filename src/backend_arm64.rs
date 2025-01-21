@@ -512,7 +512,7 @@ mod tests {
             Arm64Register::X19,
         ]
         .into_iter()
-        .map(|r| aux_reg(r))
+        .map(aux_reg)
         .collect();
         let mut expected = vec![Arm64Register::X17; 7];
         expected[5] = Arm64Register::X16;
