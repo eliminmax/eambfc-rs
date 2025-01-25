@@ -2,10 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-pub trait SerializePhdr {
-    fn serialize(&self) -> &[u8];
-}
-
 #[derive(Debug)]
 pub enum EIClass {
     ELFClass64 = 2,
