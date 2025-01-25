@@ -39,7 +39,7 @@ use super::elf_tools::{ByteOrdering, ElfArch};
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
-pub enum X86_64Register {
+pub (in super::super) enum X86_64Register {
     Rax = 0b000,
     Rdi = 0b111,
     Rsi = 0b110,
@@ -126,7 +126,7 @@ fn conditional_jump(
     Ok(())
 }
 
-pub struct X86_64Inter;
+pub (crate) struct X86_64Inter;
 impl ArchInter for X86_64Inter {
     type RegType = X86_64Register;
     const JUMP_SIZE: usize = 9;

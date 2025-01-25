@@ -8,7 +8,7 @@ use std::io::Read;
 use std::num::NonZeroUsize;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub enum CondensedInstruction {
+pub (super) enum CondensedInstruction {
     BFInstruction(u8),
     RepeatMoveR(NonZeroUsize),
     RepeatMoveL(NonZeroUsize),
@@ -111,7 +111,7 @@ impl Iterator for CondensedInstructions {
     }
 }
 
-pub fn to_condensed(
+pub (super) fn to_condensed(
     mut file: impl Read,
 ) -> Result<impl Iterator<Item = CondensedInstruction>, BFCompileError> {
     let mut code_buf = Vec::<u8>::new();

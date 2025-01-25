@@ -5,8 +5,8 @@
 use crate::compile::elf_tools::{ByteOrdering, ElfArch};
 use crate::err::BFCompileError;
 
-pub type FailableInstrEncoding = Result<(), BFCompileError>;
-pub trait ArchInter {
+pub (super) type FailableInstrEncoding = Result<(), BFCompileError>;
+pub (super) trait ArchInter {
     type RegType: Copy;
     const JUMP_SIZE: usize;
     const REGISTERS: Registers<Self::RegType>;
@@ -36,7 +36,7 @@ pub trait ArchInter {
 }
 
 #[derive(Debug)]
-pub struct Registers<R: Copy> {
+pub (super) struct Registers<R: Copy> {
     pub sc_num: R,
     pub arg1: R,
     pub arg2: R,
@@ -45,7 +45,7 @@ pub struct Registers<R: Copy> {
 }
 
 #[derive(Debug)]
-pub struct SyscallNums {
+pub (super) struct SyscallNums {
     pub read: i64,
     pub write: i64,
     pub exit: i64,

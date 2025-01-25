@@ -8,8 +8,8 @@ use optimize::{to_condensed, CondensedInstruction};
 mod arch_inter;
 use arch_inter::ArchInter;
 
-pub mod backends;
-pub mod elf_tools;
+pub (crate) mod backends;
+pub (crate) mod elf_tools;
 
 use elf_tools::{
     ByteOrdering, EIdent, Ehdr, ElfArch, ElfClass, ElfOsAbi, ElfType, ElfVersion, PType, Phdr,
@@ -20,7 +20,7 @@ use crate::err::{BFCompileError, BFErrorID, CodePosition};
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
 
-pub struct JumpLocation {
+struct JumpLocation {
     loc: CodePosition,
     index: usize,
 }
@@ -108,7 +108,7 @@ fn write_headers(
     }
 }
 
-pub trait BFCompile {
+pub (crate) trait BFCompile {
     // compile the contents of in_f, writing the output to out_f
     fn compile(
         in_f: impl Read,

@@ -10,7 +10,7 @@ use std::ffi::OsString;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
 #[derive(PartialEq, Debug)]
-pub struct StandardRunConfig {
+pub (crate) struct StandardRunConfig {
     pub out_mode: OutMode,
     pub optimize: bool,
     pub keep: bool,
@@ -151,14 +151,14 @@ impl PartialRunConfig {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum RunConfig {
+pub (crate) enum RunConfig {
     StandardRun(StandardRunConfig),
     ShowHelp,
     ShowVersion,
     ListArches,
 }
 
-pub fn parse_args<T: Iterator<Item = OsString>>(
+pub (crate) fn parse_args<T: Iterator<Item = OsString>>(
     mut args: T,
 ) -> Result<RunConfig, (BFCompileError, OutMode)> {
     let mut pcfg = PartialRunConfig::default();
