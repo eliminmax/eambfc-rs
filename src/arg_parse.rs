@@ -212,22 +212,6 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
 }
 
 #[cfg(test)]
-impl Default for StandardRunConfig {
-    fn default() -> Self {
-        StandardRunConfig {
-            out_mode: OutMode::Basic,
-            optimize: false,
-            keep: false,
-            cont: false,
-            tape_blocks: 8,
-            extension: OsString::from(".bf"),
-            source_files: Vec::<OsString>::new(),
-            arch: ElfArch::default(),
-        }
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
