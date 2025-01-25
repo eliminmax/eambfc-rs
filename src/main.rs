@@ -14,6 +14,7 @@ pub mod compile;
 pub mod elf_tools;
 pub mod err;
 pub mod optimize;
+pub mod fsutil;
 
 use arg_parse::RunConfig;
 use compile::BFCompile;

@@ -6,11 +6,11 @@ use super::elf_tools::{
     EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, EHDR_SIZE, ELFOSABI,
     PHDR_SIZE,
 };
+use super::fsutil::rm_ext;
 use super::err::{BFCompileError, BFErrorID, CodePosition};
 use super::optimize::{to_condensed, CondensedInstruction};
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
-use std::path::Path;
 
 pub struct JumpLocation {
     loc: CodePosition,
@@ -111,24 +111,13 @@ pub trait BFCompile {
 
     // handle opening file_name, and writing the executable
     fn compile_file(
-        file_name: &Path,
+        file_name: &OsStr,
         extension: &OsStr,
         optimize: bool,
         keep: bool,
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>> {
         use std::fs::{remove_file, File, OpenOptions};
-
-        if file_name.extension() != Some(extension) {
-            return Err(vec![BFCompileError::basic(
-                BFErrorID::BAD_EXTENSION,
-                format!(
-                    "Filename \"{}\" does not end with expected extension \"{}\"",
-                    file_name.to_string_lossy(),
-                    extension.to_string_lossy(),
-                ),
-            )]);
-        }
 
         let mut open_options = OpenOptions::new();
         open_options.write(true).create(true).truncate(true);
@@ -138,7 +127,8 @@ pub trait BFCompile {
             open_options.mode(0o755);
         };
 
-        let outfile_name = file_name.with_extension("");
+        let outfile_name = rm_ext(file_name, extension)?;
+
         let infile = File::open(file_name).map_err(|_| {
             vec![BFCompileError::basic(
                 BFErrorID::OPEN_R_FAILED,
@@ -157,19 +147,16 @@ pub trait BFCompile {
                 ),
             )]
         })?;
-        if let Err(e) = Self::compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks) {
-            if !keep {
-                // try to delete the file
-                #[allow(
-                    clippy::let_underscore_must_use,
-                    reason = "if file can't be deleted, there's nothing to do"
-                )]
-                let _ = remove_file(outfile_name);
-            }
-            Err(e)
-        } else {
-            Ok(())
+        let ret = Self::compile(infile, outfile, optimize, tape_blocks);
+        if ret.is_err() && !keep {
+            // try to delete the file
+            #[allow(
+                clippy::let_underscore_must_use,
+                reason = "if file can't be deleted, there's nothing to do"
+            )]
+            let _ = remove_file(outfile_name);
         }
+        ret
     }
 }
 
