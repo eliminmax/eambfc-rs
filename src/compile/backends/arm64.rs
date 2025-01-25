@@ -124,7 +124,7 @@ fn branch_cond(
             format!("{offset} is outside the range of possible 21-bit signed values"),
         ));
     }
-    let offset = 1 + ((offset as u32) >> 2) & 0x7ffff;
+    let offset = (1 + ((offset as u32) >> 2)) & 0x7ffff;
     let aux = aux_reg(reg);
     code_buf.extend(load_from_byte(reg, aux));
     code_buf.extend([
