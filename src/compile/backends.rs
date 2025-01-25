@@ -11,6 +11,7 @@ pub(crate) use arm64::Arm64Inter;
 mod s390x;
 #[cfg(feature = "s390x")]
 pub(crate) use s390x::S390xInter;
+
 #[cfg(feature = "x86_64")]
 mod x86_64;
 #[cfg(feature = "x86_64")]
