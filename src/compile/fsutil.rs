@@ -4,7 +4,7 @@
 
 // if filename ends with extension, return Ok(f), where f is the filename without the extension
 // otherwise, return Err(filename)
-use super::err::{BFCompileError, BFErrorID};
+use crate::err::{BFCompileError, BFErrorID};
 use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 pub fn rm_ext(filename: &OsStr, extension: &OsStr) -> Result<OsString, BFCompileError> {

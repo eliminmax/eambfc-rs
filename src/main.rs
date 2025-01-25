@@ -13,7 +13,6 @@ pub mod backend_x86_64;
 pub mod compile;
 pub mod elf_tools;
 pub mod err;
-pub mod fsutil;
 pub mod optimize;
 
 use arg_parse::RunConfig;
