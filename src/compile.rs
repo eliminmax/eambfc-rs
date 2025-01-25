@@ -42,7 +42,7 @@ fn write_headers(
         e_ident: EIdent {
             ei_class: EIClass::ELFClass64,
             ei_data,
-            ei_osabi: ELFOSABI::SYSV,
+            ei_osabi: ELFOSABI::None,
         },
         e_type: ELFType::Exec,
         e_machine: elf_arch,

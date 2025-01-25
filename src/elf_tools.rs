@@ -57,7 +57,6 @@ pub enum ELFVersion {
 #[derive(Debug)]
 pub enum ELFOSABI {
     None,
-    SYSV,
 }
 
 #[derive(Debug)]
@@ -75,7 +74,7 @@ pub struct EIdent {
 impl From<EIdent> for [u8; 16] {
     fn from(e_ident: EIdent) -> [u8; 16] {
         let (osabi, abi_version) = match e_ident.ei_osabi {
-            ELFOSABI::None | ELFOSABI::SYSV => (0, 0),
+            ELFOSABI::None => (0, 0),
         };
         #[rustfmt::skip]
         let arr: [u8; 16] = [
