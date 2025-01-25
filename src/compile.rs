@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod fsutil;
 use fsutil::rm_ext;
+mod optimize;
+use optimize::{to_condensed, CondensedInstruction};
 
 use crate::arch_inter::ArchInter;
 use crate::elf_tools::{
@@ -10,7 +12,6 @@ use crate::elf_tools::{
     EHDR_SIZE, PHDR_SIZE,
 };
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
-use crate::optimize::{to_condensed, CondensedInstruction};
 
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};

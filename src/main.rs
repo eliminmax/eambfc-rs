@@ -8,7 +8,6 @@ mod backends;
 mod compile;
 mod elf_tools;
 mod err;
-mod optimize;
 
 use std::borrow::Cow;
 use std::env::args_os;
