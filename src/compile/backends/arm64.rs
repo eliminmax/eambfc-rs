@@ -239,14 +239,14 @@ impl ArchInter for Arm64Inter {
     fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i8) {
         let aux = aux_reg(reg);
         code_buf.extend(load_from_byte(reg, aux));
-        Self::add_reg(code_buf, aux, i64::from(imm));
+        add_sub(code_buf, aux, (imm as u8).into(), ArithOp::Add);
         code_buf.extend(store_to_byte(reg, aux));
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i8) {
         let aux = aux_reg(reg);
         code_buf.extend(load_from_byte(reg, aux));
-        Self::sub_reg(code_buf, aux, i64::from(imm));
+        add_sub(code_buf, aux, (imm as u8).into(), ArithOp::Sub);
         code_buf.extend(store_to_byte(reg, aux));
     }
 
