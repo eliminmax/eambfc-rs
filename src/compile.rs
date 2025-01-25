@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 mod fsutil;
+use fsutil::rm_ext;
 
 use crate::arch_inter::ArchInter;
 use crate::elf_tools::{
@@ -9,8 +10,8 @@ use crate::elf_tools::{
     PHDR_SIZE,
 };
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
-use fsutil::rm_ext;
 use crate::optimize::{to_condensed, CondensedInstruction};
+
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
 
@@ -365,8 +366,8 @@ impl<B: BFCompileHelper> BFCompile for B {
 #[cfg(feature = "x86_64")]
 #[cfg(test)]
 mod tests {
-    use crate::backends::x86_64::X86_64Inter;
     use super::*;
+    use crate::backends::x86_64::X86_64Inter;
 
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
