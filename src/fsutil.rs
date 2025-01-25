@@ -34,26 +34,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rmext_success_ascii() {
+    fn rmext_success() {
         assert_eq!(
-            rm_ext(OsStr::from_bytes(b"foobar"), OsStr::from_bytes(b"bar")),
+            rm_ext("foobar".as_ref(), "bar".as_ref()),
             Ok(OsString::from("foo"))
         );
     }
 
     #[test]
-    fn rmext_success_non_ascii() {
-        assert_eq!(
-            rm_ext(OsStr::from_bytes(b"\xee.e"), OsStr::from_bytes(b".e")),
-            Ok(OsString::from_vec(vec![0xee]))
-        );
-    }
-
-    #[test]
-    fn rmext_fail_non_ascii() {
-        assert!(
-            rm_ext(OsStr::from_bytes(b"\xee.e"), OsStr::from_bytes(b".bf"))
-                .is_err_and(|e| e.kind == BFErrorID::BAD_EXTENSION)
-        );
+    fn rmext_fail() {
+        assert!(rm_ext("ee.e".as_ref(), ".bf".as_ref())
+            .is_err_and(|e| e.kind == BFErrorID::BAD_EXTENSION));
     }
 }
