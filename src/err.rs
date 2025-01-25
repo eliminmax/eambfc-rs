@@ -97,15 +97,6 @@ impl BFCompileError {
         }
     }
     #[must_use]
-    pub fn instruction<M: Into<ErrMsg>>(kind: BFErrorID, msg: M, instr: u8) -> Self {
-        Self {
-            kind,
-            msg: msg.into(),
-            instr: Some(instr),
-            loc: None,
-        }
-    }
-    #[must_use]
     pub fn positional<M: Into<ErrMsg>>(
         kind: BFErrorID,
         msg: M,
