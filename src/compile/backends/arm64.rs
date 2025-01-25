@@ -98,6 +98,50 @@ fn store_to_byte(addr: Arm64Register, src: Arm64Register) -> [u8; 4] {
     inject_reg_operands(src, addr, [0x00, 0x04, 0x00, 0x38])
 }
 
+#[derive(PartialEq)]
+enum ConditionCode {
+    Eq = 0,
+    Ne = 1,
+}
+
+fn branch_cond(
+    code_buf: &mut Vec<u8>,
+    reg: Arm64Register,
+    offset: i64,
+    cond: ConditionCode,
+) -> FailableInstrEncoding {
+    // as A64 uses fixed-size 32-bit instructions, offset must be a multiple of 4.
+    assert!(
+        offset.trailing_zeros() >= 2,
+        "offset {offset} is invalid for architecture (offset % 4 != 0)"
+    );
+    // Encoding uses 19 immediate bits, and treats it as having an implicit 0b00 at the
+    // end, as it needs to be a multiple of 4 anyway. The result is that it must be a
+    // 21-bit value. Make sure that it fits within that value.
+    if std::cmp::max(offset.leading_ones(), offset.leading_zeros()) < 44 {
+        return Err(BFCompileError::basic(
+            BFErrorID::JumpTooLong,
+            format!("{offset} is outside the range of possible 21-bit signed values"),
+        ));
+    }
+    let offset = 1 + ((offset as u32) >> 2) & 0x7ffff;
+    let aux = aux_reg(reg);
+    code_buf.extend(load_from_byte(reg, aux));
+    code_buf.extend([
+        // TST reg, 0xff (technically an alias for ANDS xzr, reg, 0xff)
+        0x1f | (aux as u8) << 5,
+        (aux as u8) >> 3 | 0x1c,
+        0x40,
+        0xf2,
+        // B.cond {offset}
+        (cond as u8) | (offset << 5) as u8,
+        (offset >> 3) as u8,
+        (offset >> 11) as u8,
+        0x54,
+    ]);
+    Ok(())
+}
+
 macro_rules! fn_byte_arith_wrapper {
     ($fn_name:ident, $inner:ident, internal_fn) => {
         fn $fn_name(code_buf: &mut Vec<u8>, reg: Arm64Register) {
@@ -119,49 +163,6 @@ macro_rules! fn_byte_arith_wrapper {
                 ArithOp::$op as u8,
             ]);
             code_buf.extend(store_to_byte(reg, aux));
-        }
-    };
-}
-
-macro_rules! fn_branch_cond {
-    ($fn_name:ident, $cond:literal) => {
-        fn $fn_name(
-            code_buf: &mut Vec<u8>,
-            reg: Arm64Register,
-            offset: i64,
-        ) -> FailableInstrEncoding {
-            // Ensure only lower 4 bits of cond are used
-            const { assert!($cond & 0xf0 == 0) };
-            // as A64 uses fixed-size 32-bit instructions, offset must be a multiple of 4.
-            assert!(
-                offset.trailing_zeros() >= 2,
-                "offset {offset} is invalid for architecture (offset % 4 != 0)"
-            );
-            // Encoding uses 19 immediate bits, and treats it as having an implicit 0b00 at the
-            // end, as it needs to be a multiple of 4 anyway. The result is that it must be a
-            // 21-bit value. Make sure that it fits within that value.
-            if std::cmp::max(offset.leading_ones(), offset.leading_zeros()) < 44 {
-                return Err(BFCompileError::basic(
-                    BFErrorID::JumpTooLong,
-                    format!("{offset} is outside the range of possible 21-bit signed values"),
-                ));
-            }
-            let offset = 1 + ((offset as u32) >> 2) & 0x7ffff;
-            let aux = aux_reg(reg);
-            code_buf.extend(load_from_byte(reg, aux));
-            code_buf.extend([
-                // TST reg, 0xff (technically an alias for ANDS xzr, reg, 0xff)
-                0x1f | (aux as u8) << 5,
-                (aux as u8) >> 3 | 0x1c,
-                0x40,
-                0xf2,
-                // B.$cond {offset}
-                $cond | (offset << 5) as u8,
-                (offset >> 3) as u8,
-                (offset >> 11) as u8,
-                0x54,
-            ]);
-            Ok(())
         }
     };
 }
@@ -263,8 +264,16 @@ impl ArchInter for Arm64Inter {
     fn_byte_arith_wrapper!(sub_byte, Sub, arith_op);
     fn_byte_arith_wrapper!(inc_byte, inc_reg, internal_fn);
     fn_byte_arith_wrapper!(dec_byte, dec_reg, internal_fn);
-    fn_branch_cond!(jump_not_zero, 0x1);
-    fn_branch_cond!(jump_zero, 0x0);
+    fn jump_not_zero(
+        code_buf: &mut Vec<u8>,
+        reg: Self::RegType,
+        offset: i64,
+    ) -> FailableInstrEncoding {
+        branch_cond(code_buf, reg, offset, ConditionCode::Ne)
+    }
+    fn jump_zero(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64) -> FailableInstrEncoding {
+        branch_cond(code_buf, reg, offset, ConditionCode::Eq)
+    }
 }
 
 // discriminants used here are often, but not always, the last byte in an ADD or SUB instructions
