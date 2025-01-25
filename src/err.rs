@@ -9,13 +9,13 @@ use std::fmt::Write;
 pub enum OutMode {
     #[default]
     Basic,
-    JSON,
+    Json,
     Quiet,
 }
 
 impl OutMode {
     pub fn json(&mut self) {
-        *self = OutMode::JSON;
+        *self = OutMode::Json;
     }
     pub fn quiet(&mut self) {
         // for consistency with original C version, quiet doesn't override JSON mode
@@ -145,7 +145,7 @@ impl BFCompileError {
         match out_mode {
             OutMode::Quiet => (),
             OutMode::Basic => self.report_basic(),
-            OutMode::JSON => self.report_json(),
+            OutMode::Json => self.report_json(),
         }
     }
 }

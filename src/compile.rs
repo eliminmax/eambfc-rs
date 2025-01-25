@@ -6,7 +6,7 @@ use fsutil::rm_ext;
 
 use crate::arch_inter::ArchInter;
 use crate::elf_tools::{
-    EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, EHDR_SIZE, ELFOSABI,
+    ElfClass, ByteOrdering, EIdent, ElfArch, ElfType, ElfVersion, Ehdr, PType, Phdr, EHDR_SIZE, ElfOsAbi,
     PHDR_SIZE,
 };
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
@@ -29,8 +29,8 @@ fn write_headers(
     output: &mut impl Write,
     codesize: usize,
     tape_blocks: u64,
-    ei_data: EIData,
-    elf_arch: ELFArch,
+    ei_data: ByteOrdering,
+    elf_arch: ElfArch,
     e_flags: u32,
 ) -> Result<(), BFCompileError> {
     // ELF addressing stuff that depends on tape_blocks, so can't be constant
@@ -39,46 +39,46 @@ fn write_headers(
     let start_addr: u64 = ((u64::from(EHDR_SIZE) + PHTB_SIZE) & (!0xff)) + 0x100;
     let start_virt_addr: u64 = start_addr + load_vaddr;
     let ehdr = Ehdr {
-        e_ident: EIdent {
-            ei_class: EIClass::ELFClass64,
-            ei_data,
-            ei_osabi: ELFOSABI::None,
+        ident: EIdent {
+            class: ElfClass::ELFClass64,
+            data: ei_data,
+            osabi: ElfOsAbi::None,
         },
-        e_type: ELFType::Exec,
-        e_machine: elf_arch,
-        e_version: ELFVersion::EvCurrent, // The only valid version number
-        e_phnum: PHNUM,
-        e_shnum: 0,
-        e_phoff: u64::from(EHDR_SIZE),
-        e_shoff: 0, // no section header table, must be 0
-        e_ehsize: EHDR_SIZE,
-        e_phentsize: PHDR_SIZE,
-        e_shentsize: 0, // no section header table, must be 0
-        e_shstrndx: 0,  // no section header table, must be 0
-        e_entry: start_virt_addr,
-        e_flags,
+        elf_type: ElfType::Exec,
+        machine: elf_arch,
+        version: ElfVersion::EvCurrent, // The only valid version number
+        phnum: PHNUM,
+        shnum: 0,
+        phoff: u64::from(EHDR_SIZE),
+        shoff: 0, // no section header table, must be 0
+        ehsize: EHDR_SIZE,
+        phentsize: PHDR_SIZE,
+        shentsize: 0, // no section header table, must be 0
+        shstrndx: 0,  // no section header table, must be 0
+        entry: start_virt_addr,
+        flags: e_flags,
     };
     let tape_segment = Phdr {
-        e_data: ei_data,
-        p_type: PType::Load, // loadable segment
-        p_flags: 4 | 2,      // PF_R | PF_W (readable and writable)
-        p_offset: 0,         // load bytes from this index in the file
-        p_vaddr: TAPE_ADDR,  // load segment into this section of memory
-        p_paddr: 0,          // load from this physical address
-        p_filesz: 0,         // don't load anything from file, just zero-initialize it
-        p_memsz: tape_size,  // allocate this many bytes of memory for this segment
-        p_align: 0x1000,     // align with this power of 2
+        byte_order: ei_data,
+        header_type: PType::Load, // loadable segment
+        flags: 4 | 2,      // PF_R | PF_W (readable and writable)
+        offset: 0,         // load bytes from this index in the file
+        vaddr: TAPE_ADDR,  // load segment into this section of memory
+        paddr: 0,          // load from this physical address
+        filesz: 0,         // don't load anything from file, just zero-initialize it
+        memsz: tape_size,  // allocate this many bytes of memory for this segment
+        align: 0x1000,     // align with this power of 2
     };
     let code_segment = Phdr {
-        e_data: ei_data,
-        p_type: PType::Load,                    // loadable segment
-        p_flags: 4 | 1,                         // PF_R | PF_X (readable and executable)
-        p_offset: 0,                            // load bytes from this index in the file
-        p_vaddr: load_vaddr,                    // load segment into this section of memory
-        p_paddr: 0,                             // load from this physical address
-        p_filesz: start_addr + codesize as u64, // load this many bytes from file…
-        p_memsz: start_addr + codesize as u64,  // allocate this many bytes of memory…
-        p_align: 1,                             // align with this power of 2
+        byte_order: ei_data,
+        header_type: PType::Load,                    // loadable segment
+        flags: 4 | 1,                         // PF_R | PF_X (readable and executable)
+        offset: 0,                            // load bytes from this index in the file
+        vaddr: load_vaddr,                    // load segment into this section of memory
+        paddr: 0,                             // load from this physical address
+        filesz: start_addr + codesize as u64, // load this many bytes from file…
+        memsz: start_addr + codesize as u64,  // allocate this many bytes of memory…
+        align: 1,                             // align with this power of 2
     };
     let mut to_write = Vec::<u8>::from(ehdr);
     to_write.extend(Vec::<u8>::from(tape_segment));

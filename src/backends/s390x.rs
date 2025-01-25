@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use crate::elf_tools::{EIData, ELFArch};
+use crate::elf_tools::{ByteOrdering, ElfArch};
 use crate::err::{BFCompileError, BFErrorID};
 
 // The z/Architecture Principles of Operation comprehensively documents the
@@ -322,8 +322,8 @@ impl ArchInter for S390xInter {
         exit: 1,
     };
 
-    const ARCH: ELFArch = ELFArch::S390x;
-    const EI_DATA: EIData = EIData::ELFDATA2MSB;
+    const ARCH: ElfArch = ElfArch::S390x;
+    const EI_DATA: ByteOrdering = ByteOrdering::BigEndian;
 
     fn set_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         if imm == 0 {

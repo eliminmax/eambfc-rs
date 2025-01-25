@@ -33,17 +33,17 @@
 // * RBX is 011b
 
 use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use crate::elf_tools::{EIData, ELFArch};
+use crate::elf_tools::{ByteOrdering, ElfArch};
 use crate::err::{BFCompileError, BFErrorID};
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
 pub enum X86_64Register {
-    RAX = 0b000,
-    RDI = 0b111,
-    RSI = 0b110,
-    RDX = 0b010,
-    RBX = 0b011,
+    Rax = 0b000,
+    Rdi = 0b111,
+    Rsi = 0b110,
+    Rdx = 0b010,
+    Rbx = 0b011,
 }
 
 // many add/subtract instructions use these bit values for the upper five bits and the target
@@ -132,19 +132,19 @@ impl ArchInter for X86_64Inter {
     const E_FLAGS: u32 = 0;
 
     const REGISTERS: Registers<X86_64Register> = Registers {
-        sc_num: X86_64Register::RAX,
-        arg1: X86_64Register::RDI,
-        arg2: X86_64Register::RSI,
-        arg3: X86_64Register::RDX,
-        bf_ptr: X86_64Register::RBX,
+        sc_num: X86_64Register::Rax,
+        arg1: X86_64Register::Rdi,
+        arg2: X86_64Register::Rsi,
+        arg3: X86_64Register::Rdx,
+        bf_ptr: X86_64Register::Rbx,
     };
     const SC_NUMS: SyscallNums = SyscallNums {
         read: 0,
         write: 1,
         exit: 60,
     };
-    const ARCH: ELFArch = ELFArch::X86_64;
-    const EI_DATA: EIData = EIData::ELFDATA2LSB;
+    const ARCH: ElfArch = ElfArch::X86_64;
+    const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
     // XOR reg, reg
     // MOV reg, imm32
@@ -301,14 +301,14 @@ mod tests {
     fn test_set_reg() {
         // test that appropriate encodings are used for different immediates
         let mut v: Vec<u8> = Vec::new();
-        X86_64Inter::set_reg(&mut v, X86_64Register::RBX, 0);
+        X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 0);
         assert_eq!(
             v,
             // XOR EBX, EBX
             vec![0x31, 0xc0 | (0b011 << 3) | 0b011]
         );
         v.clear();
-        X86_64Inter::set_reg(&mut v, X86_64Register::RBX, 128);
+        X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 128);
         assert_eq!(
             v,
             // MOV EBX, 128
@@ -316,7 +316,7 @@ mod tests {
         );
 
         v.clear();
-        X86_64Inter::set_reg(&mut v, X86_64Register::RBX, i64::MAX - 0xffff);
+        X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, i64::MAX - 0xffff);
 
         #[rustfmt::skip]
         assert_eq!(

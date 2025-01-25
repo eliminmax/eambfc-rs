@@ -16,7 +16,7 @@ use std::process::ExitCode;
 
 use crate::arg_parse::RunConfig;
 use crate::compile::BFCompile;
-use crate::elf_tools::ELFArch;
+use crate::elf_tools::ElfArch;
 use crate::err::OutMode;
 
 // architecture interfaces
@@ -45,14 +45,14 @@ fn main() -> ExitCode {
             println!("- s390x (aliases: s390, z/architecure)");
             println!(
                 "\nIf no architecure is specified, it defaults to {}.",
-                ELFArch::default()
+                ElfArch::default()
             );
         }
         Ok(RunConfig::ShowHelp) => {
             println!(
                 include_str!("text_assets/help_template.txt"),
                 progname,
-                ELFArch::default()
+                ElfArch::default()
             );
         }
         Ok(RunConfig::StandardRun(rc)) => {
@@ -63,7 +63,7 @@ fn main() -> ExitCode {
                 )]
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]
-                    ELFArch::Arm64 => Arm64Inter::compile_file(
+                    ElfArch::Arm64 => Arm64Inter::compile_file(
                         f.as_ref(),
                         &rc.extension,
                         rc.optimize,
@@ -71,7 +71,7 @@ fn main() -> ExitCode {
                         rc.tape_blocks,
                     ),
                     #[cfg(feature = "s390x")]
-                    ELFArch::S390x => S390xInter::compile_file(
+                    ElfArch::S390x => S390xInter::compile_file(
                         f.as_ref(),
                         &rc.extension,
                         rc.optimize,
@@ -79,7 +79,7 @@ fn main() -> ExitCode {
                         rc.tape_blocks,
                     ),
                     #[cfg(feature = "x86_64")]
-                    ELFArch::X86_64 => X86_64Inter::compile_file(
+                    ElfArch::X86_64 => X86_64Inter::compile_file(
                         f.as_ref(),
                         &rc.extension,
                         rc.optimize,
@@ -112,7 +112,7 @@ fn main() -> ExitCode {
                 eprintln!(
                     include_str!("text_assets/help_template.txt"),
                     progname,
-                    ELFArch::default()
+                    ElfArch::default()
                 );
             }
         }

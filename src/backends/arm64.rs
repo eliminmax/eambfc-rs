@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use crate::elf_tools::{EIData, ELFArch};
+use crate::elf_tools::{ByteOrdering, ElfArch};
 use crate::err::{BFCompileError, BFErrorID};
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit
@@ -186,8 +186,8 @@ impl ArchInter for Arm64Inter {
         exit: 93,
     };
 
-    const ARCH: ELFArch = ELFArch::Arm64;
-    const EI_DATA: EIData = EIData::ELFDATA2LSB;
+    const ARCH: ElfArch = ElfArch::Arm64;
+    const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
     fn set_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
         // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
         let parts: [(u16, ShiftLevel); 4] = [

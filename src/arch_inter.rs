@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::elf_tools::{EIData, ELFArch};
+use crate::elf_tools::{ByteOrdering, ElfArch};
 use crate::err::BFCompileError;
 
 pub type FailableInstrEncoding = Result<(), BFCompileError>;
@@ -11,9 +11,9 @@ pub trait ArchInter {
     const JUMP_SIZE: usize;
     const REGISTERS: Registers<Self::RegType>;
     const SC_NUMS: SyscallNums;
-    const ARCH: ELFArch;
+    const ARCH: ElfArch;
     const E_FLAGS: u32;
-    const EI_DATA: EIData;
+    const EI_DATA: ByteOrdering;
     fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType);
     fn syscall(code_buf: &mut Vec<u8>);
