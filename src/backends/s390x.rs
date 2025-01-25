@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{EIData, ELFArch};
-use super::err::{BFCompileError, BFErrorID};
+use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
+use crate::elf_tools::{EIData, ELFArch};
+use crate::err::{BFCompileError, BFErrorID};
 
 // The z/Architecture Principles of Operation comprehensively documents the
 // z/Architecture ISA, and its 14th edition was the main source for information

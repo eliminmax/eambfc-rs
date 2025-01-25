@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{EIData, ELFArch};
-use super::err::{BFCompileError, BFErrorID};
+use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
+use crate::elf_tools::{EIData, ELFArch};
+use crate::err::{BFCompileError, BFErrorID};
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit
 // forms. w8 is the 32-bit form for register #8, and x0 is the 64-bit form for register #0.

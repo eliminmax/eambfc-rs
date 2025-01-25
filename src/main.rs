@@ -4,12 +4,7 @@
 
 pub mod arch_inter;
 pub mod arg_parse;
-#[cfg(feature = "arm64")]
-pub mod backend_arm64;
-#[cfg(feature = "s390x")]
-pub mod backend_s390x;
-#[cfg(feature = "x86_64")]
-pub mod backend_x86_64;
+pub mod backends;
 pub mod compile;
 pub mod elf_tools;
 pub mod err;
@@ -25,11 +20,11 @@ use std::process::ExitCode;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
-use backend_arm64::Arm64Inter;
+use backends::arm64::Arm64Inter;
 #[cfg(feature = "s390x")]
-use backend_s390x::S390xInter;
+use backends::s390x::S390xInter;
 #[cfg(feature = "x86_64")]
-use backend_x86_64::X86_64Inter;
+use backends::x86_64::X86_64Inter;
 
 fn main() -> ExitCode {
     let mut exit_code = ExitCode::SUCCESS;
