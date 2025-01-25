@@ -9,7 +9,9 @@ pub(super) enum ElfClass {
 
 #[derive(Debug, Copy, Clone)]
 pub(super) enum ByteOrdering {
+    #[cfg(any(feature = "x86_64", feature = "arm64"))]
     LittleEndian = 1,
+    #[cfg(feature = "s390x")]
     BigEndian = 2,
 }
 
@@ -172,7 +174,9 @@ macro_rules! serialize_phdr {
 impl From<Ehdr> for Vec<u8> {
     fn from(item: Ehdr) -> Self {
         match item.ident.data {
+            #[cfg(any(feature = "arm64", feature = "x86_64"))]
             ByteOrdering::LittleEndian => serialize_ehdr!(item, to_le_bytes),
+            #[cfg(feature = "s390x")]
             ByteOrdering::BigEndian => serialize_ehdr!(item, to_be_bytes),
         }
     }
@@ -183,7 +187,9 @@ impl From<Ehdr> for Vec<u8> {
 impl From<Phdr> for Vec<u8> {
     fn from(item: Phdr) -> Self {
         match item.byte_order {
+            #[cfg(any(feature = "arm64", feature = "x86_64"))]
             ByteOrdering::LittleEndian => serialize_phdr!(item, to_le_bytes),
+            #[cfg(feature = "s390x")]
             ByteOrdering::BigEndian => serialize_phdr!(item, to_be_bytes),
         }
     }
