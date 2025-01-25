@@ -20,7 +20,7 @@ pub fn rm_ext(filename: &OsStr, extension: &OsStr) -> Result<OsString, BFCompile
         Ok(OsString::from_vec(noext))
     } else {
         Err(BFCompileError::basic(
-            BFErrorID::BAD_EXTENSION,
+            BFErrorID::BadExtension,
             format!(
                 "{} does not end with expected extension",
                 filename.to_string_lossy()
@@ -44,6 +44,6 @@ mod tests {
     #[test]
     fn rmext_fail() {
         assert!(rm_ext("ee.e".as_ref(), ".bf".as_ref())
-            .is_err_and(|e| e.kind == BFErrorID::BAD_EXTENSION));
+            .is_err_and(|e| e.kind == BFErrorID::BadExtension));
     }
 }

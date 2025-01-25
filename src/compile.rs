@@ -89,7 +89,7 @@ fn write_headers(
     match output.write(to_write.as_slice()) {
         Ok(count) if count == to_write.len() => Ok(()),
         Ok(count) => Err(BFCompileError::basic(
-            BFErrorID::FAILED_WRITE,
+            BFErrorID::FailedWrite,
             format!(
                 "Expected to write {} bytes of ELF header and program header table, wrote {}",
                 to_write.len(),
@@ -97,7 +97,7 @@ fn write_headers(
             ),
         )),
         Err(_) => Err(BFCompileError::basic(
-            BFErrorID::FAILED_WRITE,
+            BFErrorID::FailedWrite,
             "Failed to write ELF header and program header table",
         )),
     }
@@ -134,7 +134,7 @@ pub trait BFCompile {
 
         let infile = File::open(file_name).map_err(|_| {
             vec![BFCompileError::basic(
-                BFErrorID::OPEN_R_FAILED,
+                BFErrorID::OpenReadFailed,
                 format!(
                     "Failed to open {} for reading.",
                     file_name.to_string_lossy()
@@ -143,7 +143,7 @@ pub trait BFCompile {
         })?;
         let outfile = open_options.open(&outfile_name).map_err(|_| {
             vec![BFCompileError::basic(
-                BFErrorID::OPEN_W_FAILED,
+                BFErrorID::OpenWriteFailed,
                 format!(
                     "Failed to open {} for writing.",
                     outfile_name.to_string_lossy()
@@ -215,7 +215,7 @@ trait BFCompileHelper: ArchInter {
                     jump_stack
                         .pop()
                         .ok_or::<BFCompileError>(BFCompileError::positional(
-                            BFErrorID::UNMATCHED_CLOSE,
+                            BFErrorID::UnmatchedClose,
                             "Found ']' without matching '['.",
                             b']',
                             *loc,
@@ -310,7 +310,7 @@ impl<B: BFCompileHelper> BFCompile for B {
                 }
                 Err(_) => {
                     errs.push(BFCompileError::positional(
-                        BFErrorID::FAILED_READ,
+                        BFErrorID::FailedRead,
                         String::from("Failed to read byte after current position"),
                         b'\0',
                         loc,
@@ -322,7 +322,7 @@ impl<B: BFCompileHelper> BFCompile for B {
         // quick check to make sure that there are no unterminated loops
         if let Some(jl) = jump_stack.pop() {
             errs.push(BFCompileError::positional(
-                BFErrorID::UNMATCHED_OPEN,
+                BFErrorID::UnmatchedOpen,
                 String::from("Reached the end of the file with an unmatched '['"),
                 b'[',
                 jl.loc,
@@ -347,11 +347,11 @@ impl<B: BFCompileHelper> BFCompile for B {
         match out_f.write(code_buf.as_slice()) {
             Ok(count) if count == code_sz => (),
             Ok(count) => errs.push(BFCompileError::basic(
-                BFErrorID::FAILED_WRITE,
+                BFErrorID::FailedWrite,
                 format!("Only wrote {count} out of expected {code_sz} machine code bytes"),
             )),
             Err(_) => errs.push(BFCompileError::basic(
-                BFErrorID::FAILED_WRITE,
+                BFErrorID::FailedWrite,
                 "Failed to write internal code buffer to output file",
             )),
         };
@@ -401,7 +401,7 @@ mod tests {
             false,
             8,
         )
-        .is_err_and(|e| e[0].kind == BFErrorID::UNMATCHED_OPEN));
+        .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedOpen));
     }
 
     #[test]
@@ -412,6 +412,6 @@ mod tests {
             false,
             8,
         )
-        .is_err_and(|e| e[0].kind == BFErrorID::UNMATCHED_CLOSE));
+        .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedClose));
     }
 }

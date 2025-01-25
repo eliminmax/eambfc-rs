@@ -47,7 +47,7 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
             arch,
         } = pcfg;
         let source_files = source_files.ok_or((
-            BFCompileError::basic(BFErrorID::NO_SOURCE_FILES, "No source files provided"),
+            BFCompileError::basic(BFErrorID::NoSourceFiles, "No source files provided"),
             out_mode,
         ))?;
         Ok(StandardRunConfig {
@@ -86,7 +86,7 @@ impl PartialRunConfig {
 
     fn set_arch(&mut self, param: &[u8]) -> Result<(), (BFCompileError, OutMode)> {
         if self.arch.is_some() {
-            return Err(self.gen_err(BFErrorID::MULTIPLE_ARCHES, "passed -a multiple times"));
+            return Err(self.gen_err(BFErrorID::MultipleArches, "passed -a multiple times"));
         }
         self.arch = match param {
             #[cfg(feature = "x86_64")]
@@ -98,7 +98,7 @@ impl PartialRunConfig {
             f => {
                 return Err((
                     BFCompileError::basic(
-                        BFErrorID::UNKNOWN_ARCH,
+                        BFErrorID::UnknownArch,
                         format!("{} is not a recognized architecture", f.escape_ascii()),
                     ),
                     self.out_mode,
@@ -110,7 +110,7 @@ impl PartialRunConfig {
 
     fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.extension.is_some() {
-            return Err(self.gen_err(BFErrorID::MULTIPLE_EXTENSIONS, "passed -e multiple times"));
+            return Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"));
         }
         self.extension = Some(OsString::from_vec(param));
         Ok(())
@@ -119,18 +119,18 @@ impl PartialRunConfig {
     fn set_tape_size(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.tape_blocks.is_some() {
             return Err(self.gen_err(
-                BFErrorID::MULTIPLE_TAPE_BLOCK_COUNTS,
+                BFErrorID::MultipleTapeBlockCounts,
                 "passed -t multiple times",
             ));
         }
         match OsString::from_vec(param).to_string_lossy().parse::<u64>() {
             Ok(0) => Err((
-                BFCompileError::basic(BFErrorID::NO_TAPE, "Tape value for -t must be at least 1"),
+                BFCompileError::basic(BFErrorID::NoTape, "Tape value for -t must be at least 1"),
                 self.out_mode,
             )),
             Ok(i) if i >= u64::MAX >> 12 => Err((
                 BFCompileError::basic(
-                    BFErrorID::TAPE_TOO_LARGE,
+                    BFErrorID::TapeTooLarge,
                     "tape size exceeds 64-bit integer limit",
                 ),
                 self.out_mode,
@@ -141,7 +141,7 @@ impl PartialRunConfig {
             }
             Err(_) => Err((
                 BFCompileError::basic(
-                    BFErrorID::NOT_NUMERIC,
+                    BFErrorID::NotNumeric,
                     "tape size could not be parsed as a numeric value",
                 ),
                 self.out_mode,
@@ -191,7 +191,7 @@ pub fn parse_args<T: Iterator<Item = OsString>>(
                             remainder.extend_from_slice(next_arg.as_bytes());
                         } else {
                             return Err(pcfg.gen_err(
-                                BFErrorID::MISSING_OPERAND,
+                                BFErrorID::MissingOperand,
                                 format!("-{} requires an additional argument", p.escape_ascii()),
                             ));
                         }
@@ -307,47 +307,47 @@ mod tests {
     #[test]
     fn handle_empty_args() {
         let (bf_err, _) = parse_args(vec![].into_iter()).unwrap_err();
-        assert_eq!(bf_err.kind, BFErrorID::NO_SOURCE_FILES);
+        assert_eq!(bf_err.kind, BFErrorID::NoSourceFiles);
     }
 
     #[test]
     fn non_numeric_tape_size() {
         let (err, ..) = parse_args(vec![arg("-t"), arg("###")].into_iter()).unwrap_err();
-        assert_eq!(err.kind, BFErrorID::NOT_NUMERIC);
+        assert_eq!(err.kind, BFErrorID::NotNumeric);
     }
 
     #[test]
     fn multiple_tape_size() {
         let args_set = vec![arg("-t1"), arg("-t1024")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.kind, BFErrorID::MULTIPLE_TAPE_BLOCK_COUNTS);
+        assert_eq!(err.kind, BFErrorID::MultipleTapeBlockCounts);
     }
 
     #[test]
     fn tape_size_zero() {
         let args_set = vec![arg("-t0")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.kind, BFErrorID::NO_TAPE);
+        assert_eq!(err.kind, BFErrorID::NoTape);
     }
 
     #[test]
     fn tape_too_large() {
         let args_set = vec![arg("-t9223372036854775807")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.kind, BFErrorID::TAPE_TOO_LARGE);
+        assert_eq!(err.kind, BFErrorID::TapeTooLarge);
     }
 
     #[test]
     fn missing_operand() {
         let args_set = vec![arg("-t")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
+        assert_eq!(err.kind, BFErrorID::MissingOperand);
         let args_set = vec![arg("-e")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
+        assert_eq!(err.kind, BFErrorID::MissingOperand);
         let args_set = vec![arg("-a")].into_iter();
         let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.kind, BFErrorID::MISSING_OPERAND);
+        assert_eq!(err.kind, BFErrorID::MissingOperand);
     }
 
     #[test]
@@ -390,14 +390,14 @@ mod tests {
     fn multiple_extensions_err() {
         assert!(
             parse_args(vec![arg("-e.brainfuck"), arg("-e"), arg(".bf")].into_iter())
-                .is_err_and(|e| e.0.kind == BFErrorID::MULTIPLE_EXTENSIONS)
+                .is_err_and(|e| e.0.kind == BFErrorID::MultipleExtensions)
         );
     }
 
     #[test]
     fn bad_args_error_out() {
         assert!(parse_args(vec![arg("-u")].into_iter())
-            .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARG));
+            .is_err_and(|e| e.0.kind == BFErrorID::UnknownArg));
     }
 
     #[test]
@@ -425,7 +425,7 @@ mod tests {
             );
         } else {
             assert!(parse_args(vec![arg("-aarm64"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
+                .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
         }
         if cfg!(feature = "s390x") {
             assert_eq!(
@@ -442,7 +442,7 @@ mod tests {
             );
         } else {
             assert!(parse_args(vec![arg("-as390x"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
+                .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
         }
         if cfg!(feature = "x86_64") {
             assert_eq!(
@@ -463,10 +463,10 @@ mod tests {
             );
         } else {
             assert!(parse_args(vec![arg("-ax86_64"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
+                .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
         }
         assert!(parse_args(vec![arg("-apdp11"), arg("foo.bf")].into_iter())
-            .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
+            .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
     }
 
     #[test]
@@ -474,7 +474,7 @@ mod tests {
         if cfg!(all(feature = "x86_64", feature = "arm64")) {
             assert!(
                 parse_args(vec![arg("-ax86_64"), arg("-aarm64"), arg("foo.bf")].into_iter())
-                    .is_err_and(|e| e.0.kind == BFErrorID::MULTIPLE_ARCHES)
+                    .is_err_and(|e| e.0.kind == BFErrorID::MultipleArches)
             );
         }
     }

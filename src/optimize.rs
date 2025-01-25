@@ -116,7 +116,7 @@ pub fn to_condensed(
 ) -> Result<impl Iterator<Item = CondensedInstruction>, BFCompileError> {
     let mut code_buf = Vec::<u8>::new();
     let _ = file.read_to_end(&mut code_buf).map_err(|_| {
-        BFCompileError::basic(BFErrorID::FAILED_READ, "Failed to read file into buffer")
+        BFCompileError::basic(BFErrorID::FailedRead, "Failed to read file into buffer")
     })?;
     code_buf.retain(|b| b"+-<>,.[]".contains(b));
     loops_match(code_buf.as_slice())?;
@@ -140,14 +140,14 @@ fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
     });
     if nest_level > 0 {
         Err(BFCompileError::basic(
-            BFErrorID::UNMATCHED_OPEN,
+            BFErrorID::UnmatchedOpen,
             "Found an unmatched '[' while preparing for optimization. \
                     Compile without -O for more information.",
         ))
     } else {
         ret.map_err(|()| {
             BFCompileError::basic(
-                BFErrorID::UNMATCHED_CLOSE,
+                BFErrorID::UnmatchedClose,
                 "Found an unmatched ']' while preparing for optimization. \
                     Compile without -O for more information.",
             )
@@ -293,7 +293,7 @@ mod tests {
     fn read_failure_handled() {
         let unreadable = Box::new(Unreadable {});
 
-        assert!(to_condensed(unreadable).is_err_and(|e| e.kind == BFErrorID::FAILED_READ));
+        assert!(to_condensed(unreadable).is_err_and(|e| e.kind == BFErrorID::FailedRead));
     }
 
     #[test]
@@ -359,11 +359,11 @@ mod tests {
     fn unmatched_loops_detected() {
         assert_eq!(
             loops_match(b"[").unwrap_err().kind,
-            BFErrorID::UNMATCHED_OPEN,
+            BFErrorID::UnmatchedOpen,
         );
         assert_eq!(
             loops_match(b"]").unwrap_err().kind,
-            BFErrorID::UNMATCHED_CLOSE,
+            BFErrorID::UnmatchedClose,
         );
     }
 }

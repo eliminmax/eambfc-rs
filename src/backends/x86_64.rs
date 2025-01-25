@@ -109,7 +109,7 @@ fn conditional_jump(
     let offset_bytes = i32::try_from(offset)
         .map_err(|_| {
             BFCompileError::basic(
-                BFErrorID::JUMP_TOO_LONG,
+                BFErrorID::JumpTooLong,
                 format!("{offset} is outside the range of possible 32-bit signed values"),
             )
         })?

@@ -289,7 +289,7 @@ fn branch_cond(
     let offset: i32 = i16::try_from(offset >> 1)
         .map_err(|_| {
             BFCompileError::basic(
-                BFErrorID::JUMP_TOO_LONG,
+                BFErrorID::JumpTooLong,
                 "offset out of range for this architecture",
             )
         })?

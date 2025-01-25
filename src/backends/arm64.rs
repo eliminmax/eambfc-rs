@@ -141,7 +141,7 @@ macro_rules! fn_branch_cond {
             // 21-bit value. Make sure that it fits within that value.
             if std::cmp::max(offset.leading_ones(), offset.leading_zeros()) < 44 {
                 return Err(BFCompileError::basic(
-                    BFErrorID::JUMP_TOO_LONG,
+                    BFErrorID::JumpTooLong,
                     format!("{offset} is outside the range of possible 21-bit signed values"),
                 ));
             }
@@ -577,7 +577,7 @@ mod tests {
     fn out_of_bounds_jumps_test() {
         assert!(
             Arm64Inter::jump_zero(&mut Vec::new(), Arm64Register::X0, i64::MAX ^ 0b11)
-                .is_err_and(|e| e.kind == BFErrorID::JUMP_TOO_LONG)
+                .is_err_and(|e| e.kind == BFErrorID::JumpTooLong)
         );
     }
 
