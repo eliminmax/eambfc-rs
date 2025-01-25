@@ -10,21 +10,22 @@ mod elf_tools;
 mod err;
 mod optimize;
 
-use arg_parse::RunConfig;
-use compile::BFCompile;
-use elf_tools::ELFArch;
-use err::OutMode;
 use std::borrow::Cow;
 use std::env::args_os;
 use std::process::ExitCode;
 
+use crate::arg_parse::RunConfig;
+use crate::compile::BFCompile;
+use crate::elf_tools::ELFArch;
+use crate::err::OutMode;
+
 // architecture interfaces
 #[cfg(feature = "arm64")]
-use backends::arm64::Arm64Inter;
+use crate::backends::arm64::Arm64Inter;
 #[cfg(feature = "s390x")]
-use backends::s390x::S390xInter;
+use crate::backends::s390x::S390xInter;
 #[cfg(feature = "x86_64")]
-use backends::x86_64::X86_64Inter;
+use crate::backends::x86_64::X86_64Inter;
 
 fn main() -> ExitCode {
     let mut exit_code = ExitCode::SUCCESS;
