@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use crate::err::{BFCompileError, BFErrorID};
 
+use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit

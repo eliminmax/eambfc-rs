@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-mod arch_inter;
 mod arg_parse;
 mod compile;
 mod err;

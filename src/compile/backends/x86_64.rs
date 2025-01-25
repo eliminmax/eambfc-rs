@@ -32,9 +32,9 @@
 // * RDX is 010b
 // * RBX is 011b
 
-use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use crate::err::{BFCompileError, BFErrorID};
 
+use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
 
 #[derive(Debug, Copy, Clone)]
