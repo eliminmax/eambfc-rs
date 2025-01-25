@@ -33,8 +33,9 @@
 // * RBX is 011b
 
 use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use crate::elf_tools::{ByteOrdering, ElfArch};
 use crate::err::{BFCompileError, BFErrorID};
+
+use super::elf_tools::{ByteOrdering, ElfArch};
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]

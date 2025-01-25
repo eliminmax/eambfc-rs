@@ -8,3 +8,5 @@ pub mod arm64;
 pub mod s390x;
 #[cfg(feature = "x86_64")]
 pub mod x86_64;
+
+use super::elf_tools;

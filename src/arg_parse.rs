@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::elf_tools::ElfArch;
+use crate::compile::elf_tools::ElfArch;
 use crate::err::{BFCompileError, BFErrorID};
 use crate::OutMode;
 use std::convert::{TryFrom, TryInto};

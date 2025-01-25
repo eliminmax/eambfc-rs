@@ -7,9 +7,10 @@ mod optimize;
 use optimize::{to_condensed, CondensedInstruction};
 
 pub mod backends;
+pub mod elf_tools;
 
 use crate::arch_inter::ArchInter;
-use crate::elf_tools::{
+use elf_tools::{
     ByteOrdering, EIdent, Ehdr, ElfArch, ElfClass, ElfOsAbi, ElfType, ElfVersion, PType, Phdr,
     EHDR_SIZE, PHDR_SIZE,
 };

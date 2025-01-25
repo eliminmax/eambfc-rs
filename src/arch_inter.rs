@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::elf_tools::{ByteOrdering, ElfArch};
+use crate::compile::elf_tools::{ByteOrdering, ElfArch};
 use crate::err::BFCompileError;
 
 pub type FailableInstrEncoding = Result<(), BFCompileError>;

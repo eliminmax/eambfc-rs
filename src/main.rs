@@ -5,7 +5,6 @@
 mod arch_inter;
 mod arg_parse;
 mod compile;
-mod elf_tools;
 mod err;
 
 use std::borrow::Cow;
@@ -14,7 +13,7 @@ use std::process::ExitCode;
 
 use crate::arg_parse::RunConfig;
 use crate::compile::BFCompile;
-use crate::elf_tools::ElfArch;
+use crate::compile::elf_tools::ElfArch;
 use crate::err::OutMode;
 
 // architecture interfaces

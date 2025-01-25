@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use crate::elf_tools::{ByteOrdering, ElfArch};
 use crate::err::{BFCompileError, BFErrorID};
+
+use super::elf_tools::{ByteOrdering, ElfArch};
 
 // The z/Architecture Principles of Operation comprehensively documents the
 // z/Architecture ISA, and its 14th edition was the main source for information
