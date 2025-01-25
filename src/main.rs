@@ -27,7 +27,7 @@ fn main() -> ExitCode {
     let mut exit_code = ExitCode::SUCCESS;
     let mut args = args_os();
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
-    let progname = args.next().map_or("eambfc-rs".into(), |c| {
+    let progname: Cow<'static, str> = args.next().map_or("eambfc-rs".into(), |c| {
         c.to_string_lossy().to_string().into()
     });
     match arg_parse::parse_args(args) {
