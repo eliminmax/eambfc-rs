@@ -25,11 +25,7 @@ impl OutMode {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-#[allow(
-    non_camel_case_types,
-    reason = "matches error IDs from C version, and allows derived Debug to be sufficient"
-)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum BFErrorID {
     BAD_EXTENSION,
     FAILED_READ,
@@ -49,6 +45,35 @@ pub enum BFErrorID {
     UNKNOWN_ARG,
     UNMATCHED_CLOSE,
     UNMATCHED_OPEN,
+}
+
+impl std::fmt::Debug for BFErrorID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BFErrorID::BAD_EXTENSION => "BAD_EXTENSION",
+                BFErrorID::FAILED_READ => "FAILED_READ",
+                BFErrorID::FAILED_WRITE => "FAILED_WRITE",
+                BFErrorID::JUMP_TOO_LONG => "JUMP_TOO_LONG",
+                BFErrorID::MISSING_OPERAND => "MISSING_OPERAND",
+                BFErrorID::MULTIPLE_ARCHES => "MULTIPLE_ARCHES",
+                BFErrorID::MULTIPLE_EXTENSIONS => "MULTIPLE_EXTENSIONS",
+                BFErrorID::MULTIPLE_TAPE_BLOCK_COUNTS => "MULTIPLE_TAPE_BLOCK_COUNTS",
+                BFErrorID::NO_SOURCE_FILES => "NO_SOURCE_FILES",
+                BFErrorID::NO_TAPE => "NO_TAPE",
+                BFErrorID::NOT_NUMERIC => "NOT_NUMERIC",
+                BFErrorID::OPEN_R_FAILED => "OPEN_R_FAILED",
+                BFErrorID::OPEN_W_FAILED => "OPEN_W_FAILED",
+                BFErrorID::TAPE_TOO_LARGE => "TAPE_TOO_LARGE",
+                BFErrorID::UNKNOWN_ARCH => "UNKNOWN_ARCH",
+                BFErrorID::UNKNOWN_ARG => "UNKNOWN_ARG",
+                BFErrorID::UNMATCHED_CLOSE => "UNMATCHED_CLOSE",
+                BFErrorID::UNMATCHED_OPEN => "UNMATCHED_OPEN",
+            }
+        )
+    }
 }
 
 #[derive(Debug, PartialEq)]
