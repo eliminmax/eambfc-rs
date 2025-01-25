@@ -17,11 +17,11 @@ use crate::err::OutMode;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
-use crate::compile::backends::arm64::Arm64Inter;
+use crate::compile::backends::Arm64Inter;
 #[cfg(feature = "s390x")]
-use crate::compile::backends::s390x::S390xInter;
+use crate::compile::backends::S390xInter;
 #[cfg(feature = "x86_64")]
-use crate::compile::backends::x86_64::X86_64Inter;
+use crate::compile::backends::X86_64Inter;
 
 fn main() -> ExitCode {
     let mut exit_code = ExitCode::SUCCESS;

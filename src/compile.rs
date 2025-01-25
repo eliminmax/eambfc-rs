@@ -372,7 +372,7 @@ impl<B: BFCompileHelper> BFCompile for B {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use backends::x86_64::X86_64Inter;
+    use backends::X86_64Inter;
 
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
