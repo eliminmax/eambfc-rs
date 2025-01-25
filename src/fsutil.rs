@@ -7,7 +7,7 @@
 use super::err::{BFCompileError, BFErrorID};
 use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
-pub fn rm_ext<'a>(filename: &'a OsStr, extension: &OsStr) -> Result<OsString, BFCompileError> {
+pub fn rm_ext(filename: &OsStr, extension: &OsStr) -> Result<OsString, BFCompileError> {
     let name_len: usize = filename.as_bytes().len();
     let ext_len: usize = extension.as_bytes().len();
     if filename
