@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod fsutil;
 
-use super::arch_inter::ArchInter;
-use super::elf_tools::{
+use crate::arch_inter::ArchInter;
+use crate::elf_tools::{
     EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, EHDR_SIZE, ELFOSABI,
     PHDR_SIZE,
 };
-use super::err::{BFCompileError, BFErrorID, CodePosition};
+use crate::err::{BFCompileError, BFErrorID, CodePosition};
 use fsutil::rm_ext;
-use super::optimize::{to_condensed, CondensedInstruction};
+use crate::optimize::{to_condensed, CondensedInstruction};
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
 

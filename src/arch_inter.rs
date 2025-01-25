@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::elf_tools::{EIData, ELFArch};
-use super::err::BFCompileError;
+use crate::elf_tools::{EIData, ELFArch};
+use crate::err::BFCompileError;
 
 pub type FailableInstrEncoding = Result<(), BFCompileError>;
 pub trait ArchInter {

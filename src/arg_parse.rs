@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::elf_tools::ELFArch;
-use super::err::{BFCompileError, BFErrorID};
-use super::OutMode;
+use crate::elf_tools::ELFArch;
+use crate::err::{BFCompileError, BFErrorID};
+use crate::OutMode;
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};

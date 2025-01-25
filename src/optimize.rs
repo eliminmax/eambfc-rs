@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::err::{BFCompileError, BFErrorID};
+use crate::err::{BFCompileError, BFErrorID};
 use std::collections::VecDeque;
 use std::io::Read;
 use std::num::NonZeroUsize;

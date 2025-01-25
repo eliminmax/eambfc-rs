@@ -2,18 +2,18 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-pub mod arch_inter;
-pub mod arg_parse;
-pub mod backends;
-pub mod compile;
-pub mod elf_tools;
-pub mod err;
-pub mod optimize;
+mod arch_inter;
+mod arg_parse;
+mod backends;
+mod compile;
+mod elf_tools;
+mod err;
+mod optimize;
 
 use arg_parse::RunConfig;
 use compile::BFCompile;
 use elf_tools::ELFArch;
-pub use err::OutMode;
+use err::OutMode;
 use std::borrow::Cow;
 use std::env::args_os;
 use std::process::ExitCode;
