@@ -469,7 +469,6 @@ mod tests {
             .is_err_and(|e| e.0.kind == BFErrorID::UNKNOWN_ARCH));
     }
 
-
     #[test]
     fn multiple_arches_error() {
         if cfg!(all(feature = "x86_64", feature = "arm64")) {

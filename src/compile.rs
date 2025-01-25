@@ -6,8 +6,8 @@ use super::elf_tools::{
     EIClass, EIData, EIdent, ELFArch, ELFType, ELFVersion, Ehdr, PType, Phdr, EHDR_SIZE, ELFOSABI,
     PHDR_SIZE,
 };
-use super::fsutil::rm_ext;
 use super::err::{BFCompileError, BFErrorID, CodePosition};
+use super::fsutil::rm_ext;
 use super::optimize::{to_condensed, CondensedInstruction};
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
