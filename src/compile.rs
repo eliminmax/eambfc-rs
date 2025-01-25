@@ -8,7 +8,9 @@ use super::elf_tools::{
 };
 use super::err::{BFCompileError, BFErrorID, CodePosition};
 use super::optimize::{to_condensed, CondensedInstruction};
+use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
+use std::path::Path;
 
 pub struct JumpLocation {
     loc: CodePosition,
@@ -99,12 +101,76 @@ fn write_headers(
 }
 
 pub trait BFCompile {
+    // compile the contents of in_f, writing the output to out_f
     fn compile(
         in_f: impl Read,
         out_f: impl Write,
         optimize: bool,
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>>;
+
+    // handle opening file_name, and writing the executable
+    fn compile_file(
+        file_name: &Path,
+        extension: &OsStr,
+        optimize: bool,
+        keep: bool,
+        tape_blocks: u64,
+    ) -> Result<(), Vec<BFCompileError>> {
+        use std::fs::{remove_file, File, OpenOptions};
+
+        if file_name.extension() != Some(extension) {
+            return Err(vec![BFCompileError::basic(
+                BFErrorID::BAD_EXTENSION,
+                format!(
+                    "Filename \"{}\" does not end with expected extension \"{}\"",
+                    file_name.to_string_lossy(),
+                    extension.to_string_lossy(),
+                ),
+            )]);
+        }
+
+        let mut open_options = OpenOptions::new();
+        open_options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            open_options.mode(0o755);
+        };
+
+        let outfile_name = file_name.with_extension("");
+        let infile = File::open(file_name).map_err(|_| {
+            vec![BFCompileError::basic(
+                BFErrorID::OPEN_R_FAILED,
+                format!(
+                    "Failed to open {} for reading.",
+                    file_name.to_string_lossy()
+                ),
+            )]
+        })?;
+        let outfile = open_options.open(&outfile_name).map_err(|_| {
+            vec![BFCompileError::basic(
+                BFErrorID::OPEN_W_FAILED,
+                format!(
+                    "Failed to open {} for writing.",
+                    outfile_name.to_string_lossy()
+                ),
+            )]
+        })?;
+        if let Err(e) = Self::compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks) {
+            if !keep {
+                // try to delete the file
+                #[allow(
+                    clippy::let_underscore_must_use,
+                    reason = "if file can't be deleted, there's nothing to do"
+                )]
+                let _ = remove_file(outfile_name);
+            }
+            Err(e)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 trait BFCompileHelper: ArchInter {
