@@ -142,31 +142,6 @@ fn branch_cond(
     Ok(())
 }
 
-macro_rules! fn_byte_arith_wrapper {
-    ($fn_name:ident, $inner:ident, internal_fn) => {
-        fn $fn_name(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-            let aux = aux_reg(reg);
-            code_buf.extend(load_from_byte(reg, aux));
-            Self::$inner(code_buf, aux);
-            code_buf.extend(store_to_byte(reg, aux));
-        }
-    };
-    ($fn_name:ident, $op:ident, arith_op) => {
-        fn $fn_name(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i8) {
-            let aux = aux_reg(reg);
-            code_buf.extend(load_from_byte(reg, aux));
-            // Either ADD aux, aux, imm or SUB aux, aux, imm depending on op_code
-            code_buf.extend([
-                aux as u8 | (aux as u8) << 5,
-                (imm as u8) << 2 | (aux as u8) >> 3,
-                (imm as u8) >> 6,
-                ArithOp::$op as u8,
-            ]);
-            code_buf.extend(store_to_byte(reg, aux));
-        }
-    };
-}
-
 pub(crate) struct Arm64Inter;
 impl ArchInter for Arm64Inter {
     type RegType = Arm64Register;
@@ -260,10 +235,35 @@ impl ArchInter for Arm64Inter {
         Arm64Inter::set_reg(code_buf, aux, 0);
         code_buf.extend(store_to_byte(reg, aux));
     }
-    fn_byte_arith_wrapper!(add_byte, Add, arith_op);
-    fn_byte_arith_wrapper!(sub_byte, Sub, arith_op);
-    fn_byte_arith_wrapper!(inc_byte, inc_reg, internal_fn);
-    fn_byte_arith_wrapper!(dec_byte, dec_reg, internal_fn);
+
+    fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i8) {
+        let aux = aux_reg(reg);
+        code_buf.extend(load_from_byte(reg, aux));
+        Self::add_reg(code_buf, aux, i64::from(imm));
+        code_buf.extend(store_to_byte(reg, aux));
+    }
+
+    fn sub_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i8) {
+        let aux = aux_reg(reg);
+        code_buf.extend(load_from_byte(reg, aux));
+        Self::sub_reg(code_buf, aux, i64::from(imm));
+        code_buf.extend(store_to_byte(reg, aux));
+    }
+
+    fn inc_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
+        let aux = aux_reg(reg);
+        code_buf.extend(load_from_byte(reg, aux));
+        Self::inc_reg(code_buf, aux);
+        code_buf.extend(store_to_byte(reg, aux));
+    }
+
+    fn dec_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
+        let aux = aux_reg(reg);
+        code_buf.extend(load_from_byte(reg, aux));
+        Self::dec_reg(code_buf, aux);
+        code_buf.extend(store_to_byte(reg, aux));
+    }
+
     fn jump_not_zero(
         code_buf: &mut Vec<u8>,
         reg: Self::RegType,
@@ -271,6 +271,7 @@ impl ArchInter for Arm64Inter {
     ) -> FailableInstrEncoding {
         branch_cond(code_buf, reg, offset, ConditionCode::Ne)
     }
+
     fn jump_zero(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64) -> FailableInstrEncoding {
         branch_cond(code_buf, reg, offset, ConditionCode::Eq)
     }
