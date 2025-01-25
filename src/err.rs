@@ -150,6 +150,12 @@ impl BFCompileError {
     }
 }
 
+impl From<BFCompileError> for Vec<BFCompileError> {
+    fn from(err: BFCompileError) -> Self {
+        vec![err]
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct CodePosition {
     pub line: usize,
