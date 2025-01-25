@@ -3,18 +3,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #[derive(Debug)]
-pub (super) enum ElfClass {
+pub(super) enum ElfClass {
     ELFClass64 = 2,
 }
 
 #[derive(Debug, Copy, Clone)]
-pub (super) enum ByteOrdering {
+pub(super) enum ByteOrdering {
     LittleEndian = 1,
     BigEndian = 2,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub (crate) enum ElfArch {
+pub(crate) enum ElfArch {
     Arm64 = 183, // EM_AARCH64
     S390x = 22,  // EM_S390
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
@@ -34,7 +34,7 @@ impl std::fmt::Display for ElfArch {
     }
 }
 
-pub (super) const DEFAULT_ARCH: ElfArch =
+pub(super) const DEFAULT_ARCH: ElfArch =
     if cfg!(feature = "arm64") && (cfg!(target_arch = "aarch64") || !cfg!(feature = "x86_64")) {
         ElfArch::Arm64
     } else if cfg!(feature = "x86_64") {
@@ -50,22 +50,22 @@ impl Default for ElfArch {
 }
 
 #[derive(Debug)]
-pub (super) enum ElfVersion {
+pub(super) enum ElfVersion {
     EvCurrent = 1,
 }
 
 #[derive(Debug)]
-pub (super) enum ElfOsAbi {
+pub(super) enum ElfOsAbi {
     None,
 }
 
 #[derive(Debug)]
-pub (super) enum ElfType {
+pub(super) enum ElfType {
     Exec = 2,
 }
 
 #[derive(Debug)]
-pub (super) struct EIdent {
+pub(super) struct EIdent {
     pub class: ElfClass,
     pub data: ByteOrdering,
     pub osabi: ElfOsAbi,
@@ -95,7 +95,7 @@ impl From<EIdent> for [u8; 16] {
     }
 }
 
-pub (super) struct Ehdr {
+pub(super) struct Ehdr {
     pub ident: EIdent,
     pub elf_type: ElfType,
     pub machine: ElfArch,
@@ -113,11 +113,11 @@ pub (super) struct Ehdr {
 }
 
 #[derive(Debug)]
-pub (super) enum PType {
+pub(super) enum PType {
     Load = 1,
 }
 
-pub (super) struct Phdr {
+pub(super) struct Phdr {
     pub byte_order: ByteOrdering,
     pub header_type: PType,
     pub flags: u32,
@@ -129,8 +129,8 @@ pub (super) struct Phdr {
     pub align: u64,
 }
 
-pub (super) const EHDR_SIZE: u16 = 64;
-pub (super) const PHDR_SIZE: u16 = 56;
+pub(super) const EHDR_SIZE: u16 = 64;
+pub(super) const PHDR_SIZE: u16 = 56;
 // better this than having identical implementations, differing only in whether to_le_bytes or
 // to_be_bytes are called.
 macro_rules! serialize_ehdr {

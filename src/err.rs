@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::fmt::Write;
 
 #[derive(PartialEq, Debug, Clone, Copy, Default)]
-pub (crate) enum OutMode {
+pub(crate) enum OutMode {
     #[default]
     Basic,
     Json,
@@ -26,7 +26,7 @@ impl OutMode {
 }
 
 #[derive(PartialEq, Clone, Copy)]
-pub (crate) enum BFErrorID {
+pub(crate) enum BFErrorID {
     BadExtension,
     FailedRead,
     FailedWrite,
@@ -77,7 +77,7 @@ impl std::fmt::Debug for BFErrorID {
 }
 
 #[derive(Debug, PartialEq)]
-pub (crate) struct BFCompileError {
+pub(crate) struct BFCompileError {
     pub kind: BFErrorID,
     msg: Cow<'static, str>,
     instr: Option<u8>,
@@ -173,7 +173,7 @@ impl From<BFCompileError> for Vec<BFCompileError> {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub (crate) struct CodePosition {
+pub(crate) struct CodePosition {
     pub line: usize,
     pub col: usize,
 }

@@ -7,7 +7,7 @@
 use crate::err::{BFCompileError, BFErrorID};
 use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
-pub (super) fn rm_ext(filename: &OsStr, extension: &OsStr) -> Result<OsString, BFCompileError> {
+pub(super) fn rm_ext(filename: &OsStr, extension: &OsStr) -> Result<OsString, BFCompileError> {
     let name_len: usize = filename.as_bytes().len();
     let ext_len: usize = extension.as_bytes().len();
     if filename

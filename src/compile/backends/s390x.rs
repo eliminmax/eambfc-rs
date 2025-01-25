@@ -218,7 +218,7 @@ use super::elf_tools::{ByteOrdering, ElfArch};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
-pub (in super::super) enum S390xRegister {
+pub(in super::super) enum S390xRegister {
     R0 = 0, // zero register
     R1 = 1, // syscall register
     R2 = 2, // arg1 register
@@ -304,7 +304,7 @@ fn branch_cond(
     Ok(())
 }
 
-pub (crate) struct S390xInter;
+pub(crate) struct S390xInter;
 impl ArchInter for S390xInter {
     type RegType = S390xRegister;
     const JUMP_SIZE: usize = 18;

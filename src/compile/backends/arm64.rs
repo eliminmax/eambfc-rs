@@ -16,7 +16,7 @@ use super::elf_tools::{ByteOrdering, ElfArch};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
-pub (in super::super) enum Arm64Register {
+pub(in super::super) enum Arm64Register {
     X0 = 0,   // arg1 register
     X1 = 1,   // arg2 register
     X2 = 2,   // arg3 register
@@ -166,7 +166,7 @@ macro_rules! fn_branch_cond {
     };
 }
 
-pub (crate) struct Arm64Inter;
+pub(crate) struct Arm64Inter;
 impl ArchInter for Arm64Inter {
     type RegType = Arm64Register;
     const JUMP_SIZE: usize = 12;

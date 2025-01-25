@@ -8,14 +8,14 @@ use optimize::{to_condensed, CondensedInstruction};
 mod arch_inter;
 use arch_inter::ArchInter;
 
-pub (crate) mod backends;
-pub (crate) mod elf_tools;
+pub(crate) mod backends;
+pub(crate) mod elf_tools;
 
+use crate::err::{BFCompileError, BFErrorID, CodePosition};
 use elf_tools::{
     ByteOrdering, EIdent, Ehdr, ElfArch, ElfClass, ElfOsAbi, ElfType, ElfVersion, PType, Phdr,
     EHDR_SIZE, PHDR_SIZE,
 };
-use crate::err::{BFCompileError, BFErrorID, CodePosition};
 
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
@@ -108,7 +108,7 @@ fn write_headers(
     }
 }
 
-pub (crate) trait BFCompile {
+pub(crate) trait BFCompile {
     // compile the contents of in_f, writing the output to out_f
     fn compile(
         in_f: impl Read,

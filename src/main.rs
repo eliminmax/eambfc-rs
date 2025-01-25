@@ -11,8 +11,8 @@ use std::env::args_os;
 use std::process::ExitCode;
 
 use crate::arg_parse::RunConfig;
-use crate::compile::BFCompile;
 use crate::compile::elf_tools::ElfArch;
+use crate::compile::BFCompile;
 use crate::err::OutMode;
 
 // architecture interfaces
