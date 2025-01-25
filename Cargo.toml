@@ -13,6 +13,10 @@ arm64 = []
 s390x = []
 x86_64 = []
 
+[lints.rust]
+# don't warn on tarpaulin code coverage cfg conditions
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
+
 [lints.clippy]
 # enable these categories with a negative priority, so that individual lints can
 # be overridden

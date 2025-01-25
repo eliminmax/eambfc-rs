@@ -5,11 +5,13 @@
 use super::*;
 
 // a more consice way to write OsString::from(a)
+#[cfg(not(tarpaulin_include))]
 fn arg(a: impl Into<OsString>) -> OsString {
     a.into()
 }
 
 // extract a standard run config
+#[cfg(not(tarpaulin_include))]
 fn parse_standard(args: Vec<OsString>) -> StandardRunConfig {
     let RunConfig::StandardRun(cfg) = parse_args(args.into_iter()).unwrap() else {
         panic!("test expected StandardRunConfig")
