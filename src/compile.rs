@@ -6,8 +6,8 @@ use fsutil::rm_ext;
 
 use crate::arch_inter::ArchInter;
 use crate::elf_tools::{
-    ElfClass, ByteOrdering, EIdent, ElfArch, ElfType, ElfVersion, Ehdr, PType, Phdr, EHDR_SIZE, ElfOsAbi,
-    PHDR_SIZE,
+    ByteOrdering, EIdent, Ehdr, ElfArch, ElfClass, ElfOsAbi, ElfType, ElfVersion, PType, Phdr,
+    EHDR_SIZE, PHDR_SIZE,
 };
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
 use crate::optimize::{to_condensed, CondensedInstruction};
@@ -61,17 +61,17 @@ fn write_headers(
     let tape_segment = Phdr {
         byte_order: ei_data,
         header_type: PType::Load, // loadable segment
-        flags: 4 | 2,      // PF_R | PF_W (readable and writable)
-        offset: 0,         // load bytes from this index in the file
-        vaddr: TAPE_ADDR,  // load segment into this section of memory
-        paddr: 0,          // load from this physical address
-        filesz: 0,         // don't load anything from file, just zero-initialize it
-        memsz: tape_size,  // allocate this many bytes of memory for this segment
-        align: 0x1000,     // align with this power of 2
+        flags: 4 | 2,             // PF_R | PF_W (readable and writable)
+        offset: 0,                // load bytes from this index in the file
+        vaddr: TAPE_ADDR,         // load segment into this section of memory
+        paddr: 0,                 // load from this physical address
+        filesz: 0,                // don't load anything from file, just zero-initialize it
+        memsz: tape_size,         // allocate this many bytes of memory for this segment
+        align: 0x1000,            // align with this power of 2
     };
     let code_segment = Phdr {
         byte_order: ei_data,
-        header_type: PType::Load,                    // loadable segment
+        header_type: PType::Load,             // loadable segment
         flags: 4 | 1,                         // PF_R | PF_X (readable and executable)
         offset: 0,                            // load bytes from this index in the file
         vaddr: load_vaddr,                    // load segment into this section of memory
