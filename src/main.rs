@@ -4,7 +4,6 @@
 
 mod arch_inter;
 mod arg_parse;
-mod backends;
 mod compile;
 mod elf_tools;
 mod err;
@@ -20,11 +19,11 @@ use crate::err::OutMode;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
-use crate::backends::arm64::Arm64Inter;
+use crate::compile::backends::arm64::Arm64Inter;
 #[cfg(feature = "s390x")]
-use crate::backends::s390x::S390xInter;
+use crate::compile::backends::s390x::S390xInter;
 #[cfg(feature = "x86_64")]
-use crate::backends::x86_64::X86_64Inter;
+use crate::compile::backends::x86_64::X86_64Inter;
 
 fn main() -> ExitCode {
     let mut exit_code = ExitCode::SUCCESS;

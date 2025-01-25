@@ -6,6 +6,8 @@ use fsutil::rm_ext;
 mod optimize;
 use optimize::{to_condensed, CondensedInstruction};
 
+pub mod backends;
+
 use crate::arch_inter::ArchInter;
 use crate::elf_tools::{
     ByteOrdering, EIdent, Ehdr, ElfArch, ElfClass, ElfOsAbi, ElfType, ElfVersion, PType, Phdr,
@@ -368,7 +370,7 @@ impl<B: BFCompileHelper> BFCompile for B {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backends::x86_64::X86_64Inter;
+    use backends::x86_64::X86_64Inter;
 
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
