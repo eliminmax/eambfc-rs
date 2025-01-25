@@ -296,34 +296,37 @@ fn sub_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::disassemble;
     use super::*;
+    use capstone::prelude::*;
+
+    fn engine() -> Capstone {
+        Capstone::new()
+            .x86()
+            .mode(arch::x86::ArchMode::Mode64)
+            .syntax(arch::x86::ArchSyntax::Intel)
+            .build()
+            .expect("Failed to build Capstone inteface")
+    }
 
     #[test]
     fn test_set_reg() {
         // test that appropriate encodings are used for different immediates
         let mut v: Vec<u8> = Vec::new();
+        let cs = engine();
         X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 0);
-        assert_eq!(
-            v,
-            // XOR EBX, EBX
-            vec![0x31, 0xc0 | (0b011 << 3) | 0b011]
-        );
+        assert_eq!(disassemble(&v, &cs), vec![String::from("xor ebx, ebx")]);
         v.clear();
         X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 128);
-        assert_eq!(
-            v,
-            // MOV EBX, 128
-            vec![0xb8 | 0b011, 128, 0, 0, 0]
-        );
+        assert_eq!(disassemble(&v, &cs), vec![String::from("mov ebx, 0x80")]);
 
         v.clear();
         X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, i64::MAX - 0xffff);
-
-        #[rustfmt::skip]
         assert_eq!(
-            v,
-            // MOV RBX, 0x7fffffffffff0000
-            vec![0x48, 0xb8 | 0b011, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]
+            disassemble(&v, &cs),
+            // movabs is an internal term some dis/assemblers have for MOV variant for large
+            // immediates.
+            vec![String::from("movabs rbx, 0x7fffffffffff0000")]
         );
     }
 }

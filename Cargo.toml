@@ -50,3 +50,6 @@ separated_literal_suffix = "warn"
 lto = "thin"
 codegen-units = 1
 strip="symbols"
+
+[dev-dependencies]
+capstone = "0.12.0"

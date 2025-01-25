@@ -19,3 +19,13 @@ pub(crate) use x86_64::X86_64Inter;
 
 use super::arch_inter;
 use super::elf_tools;
+
+#[cfg(not(tarpaulin_include))]
+#[cfg(test)]
+fn disassemble(code: &[u8], engine: &capstone::Capstone) -> Vec<String> {
+    let disassembled = engine.disasm_all(code, 0).expect("Failed to disassemble");
+    disassembled
+        .iter()
+        .map(|insn| format!("{} {}", insn.mnemonic().unwrap(), insn.op_str().unwrap()))
+        .collect()
+}
