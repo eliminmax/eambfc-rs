@@ -329,4 +329,16 @@ mod tests {
             vec![String::from("movabs rbx, 0x7fffffffffff0000")]
         );
     }
+
+    #[test]
+    fn test_jump_too_large_error() {
+        let err = conditional_jump(
+            &mut Vec::new(),
+            X86_64Register::Rdx,
+            i64::from(i32::MAX) + 1,
+            ConditionCode::Zero,
+        )
+        .unwrap_err();
+        assert_eq!(err.kind, BFErrorID::JumpTooLong);
+    }
 }
