@@ -10,11 +10,7 @@ use std::os::unix::ffi::{OsStrExt, OsStringExt};
 pub(super) fn rm_ext(filename: &OsStr, extension: &OsStr) -> Result<OsString, BFCompileError> {
     let name_len: usize = filename.as_bytes().len();
     let ext_len: usize = extension.as_bytes().len();
-    if filename
-        .to_os_string()
-        .into_vec()
-        .ends_with(extension.as_bytes())
-    {
+    if filename.as_bytes().ends_with(extension.as_bytes()) {
         let mut noext = filename.to_os_string().into_vec();
         noext.truncate(name_len - ext_len);
         Ok(OsString::from_vec(noext))
