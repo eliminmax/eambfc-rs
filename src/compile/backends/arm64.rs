@@ -478,13 +478,18 @@ mod tests {
 
     #[test]
     fn test_add_sub_byte() {
+        let cs = engine();
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::add_byte(&mut v, Arm64Register::X19, i8::from_le_bytes([0xa5]));
+        Arm64Inter::sub_byte(&mut v, Arm64Register::X19, i8::from_le_bytes([0xa5]));
         assert_eq!(
-            disassemble(&v, &engine()),
+            disassemble(&v, &cs),
             vec![
                 String::from("ldrb w17, [x19], #0"),
                 String::from("add x17, x17, #0xa5"),
+                String::from("strb w17, [x19], #0"),
+                String::from("ldrb w17, [x19], #0"),
+                String::from("sub x17, x17, #0xa5"),
                 String::from("strb w17, [x19], #0"),
             ],
         );
