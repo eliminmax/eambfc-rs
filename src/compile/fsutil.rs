@@ -15,12 +15,12 @@ pub(super) fn rm_ext(filename: &OsStr, extension: &OsStr) -> Result<OsString, BF
         noext.truncate(name_len - ext_len);
         Ok(OsString::from_vec(noext))
     } else {
+        // somehow doing this results in 100% code coverage, but having filename.to_string_lossy as
+        // an argument to format doesn't. Can change if tarpaulin is fixed.
+        let filename = filename.to_string_lossy();
         Err(BFCompileError::basic(
             BFErrorID::BadExtension,
-            format!(
-                "{} does not end with expected extension",
-                filename.to_string_lossy()
-            ),
+            format!("{filename} does not end with expected extension"),
         ))
     }
 }
