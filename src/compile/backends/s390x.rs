@@ -338,7 +338,7 @@ impl ArchInter for S390xInter {
             // LGFI r.reg, imm {RIL-a}
             encode_ri_op!(code_buf, 0xc01, reg, imm32);
         } else {
-            Self::set_reg(code_buf, reg, ((imm as u64) & 0xffff_ffff) as i64);
+            Self::set_reg(code_buf, reg, i64::from(imm as i32));
 
             let default_val: i16 = if imm.is_negative() { -1 } else { 0 };
 
@@ -358,7 +358,7 @@ impl ArchInter for S390xInter {
                 _ => {
                     // need to set the full upper word, with Insert Immediate (high)
                     // IIHF reg, imm {RIL-a}
-                    encode_ri_op!(code_buf, 0xc09, reg, imm_high);
+                    encode_ri_op!(code_buf, 0xc08, reg, imm_high);
                 }
             }
         }
