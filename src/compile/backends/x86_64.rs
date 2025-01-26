@@ -337,6 +337,31 @@ mod tests {
     }
 
     #[test]
+    fn test_jump_instructions() {
+        let mut v: Vec<u8> = Vec::new();
+        X86_64Inter::jump_zero(&mut v, X86_64Register::Rdi, 9).unwrap();
+        X86_64Inter::jump_not_zero(&mut v, X86_64Register::Rdi, -18).unwrap();
+        X86_64Inter::nop_loop_open(&mut v);
+        let mut disasm_lines = disassemble(&v, &engine()).into_iter();
+        // NOTE: the disassembly uses absolute addresses, not relative addresses.
+        assert_eq!(disasm_lines.next().unwrap(), "test byte ptr [rdi], 0xff");
+        // the 9 jump_zero instruction bytes + an offset of 9 is 18, or 0x12.
+        assert_eq!(disasm_lines.next().unwrap(), "je 0x12");
+        assert_eq!(disasm_lines.next().unwrap(), "test byte ptr [rdi], 0xff");
+        // the two instructions are 18 bytes, so jump_not_zero -18 takes things back to address 0.
+        assert_eq!(disasm_lines.next().unwrap(), "jne 0");
+        // ensure that there are 9 1-byte NOP instructions remaining.
+        for i in 0..9 {
+            assert_eq!(
+                disasm_lines.next().unwrap(),
+                "nop",
+                "only {i}/9 nop bytes were matched"
+            );
+        }
+        assert!(disasm_lines.next().is_none());
+    }
+
+    #[test]
     fn add_sub_small_imm() {
         let mut v: Vec<u8> = Vec::new();
         let cs = engine();
