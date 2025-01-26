@@ -387,4 +387,25 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn test_add_sub_byte() {
+        let mut v: Vec<u8> = Vec::new();
+        X86_64Inter::add_byte(&mut v, X86_64Register::Rdi, 0x23);
+        X86_64Inter::sub_byte(&mut v, X86_64Register::Rdi, 0x23);
+        assert_eq!(
+            disassemble(&v, &engine()),
+            &["add byte ptr [rdi], 0x23", "sub byte ptr [rdi], 0x23"]
+        );
+    }
+
+    #[test]
+    fn test_zero_byte() {
+        let mut v: Vec<u8> = Vec::new();
+        X86_64Inter::zero_byte(&mut v, X86_64Register::Rdx);
+        assert_eq!(
+            disassemble(&v, &engine()),
+            &["mov byte ptr [rdx], 0"]
+        );
+    }
 }
