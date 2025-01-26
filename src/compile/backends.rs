@@ -26,6 +26,14 @@ fn disassemble(code: &[u8], engine: &capstone::Capstone) -> Vec<String> {
     let disassembled = engine.disasm_all(code, 0).expect("Failed to disassemble");
     disassembled
         .iter()
-        .map(|insn| format!("{} {}", insn.mnemonic().unwrap(), insn.op_str().unwrap()))
+        .map(|insn| {
+            let mut ret = insn.mnemonic().unwrap().to_string();
+            let op_str = insn.op_str().unwrap();
+            if !op_str.is_empty() {
+                ret.push(' ');
+                ret.push_str(op_str);
+            }
+            ret
+        })
         .collect()
 }
