@@ -234,7 +234,7 @@ impl ArchInter for X86_64Inter {
     }
     fn zero_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // MOV byte [reg], 0
-        code_buf.extend([0x67, 0xc6, reg as u8, 0x00]);
+        code_buf.extend([0xc6, reg as u8, 0x00]);
     }
 }
 
