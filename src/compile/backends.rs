@@ -37,3 +37,129 @@ fn disassemble(code: &[u8], engine: &capstone::Capstone) -> Vec<String> {
         })
         .collect()
 }
+
+#[cfg(not(tarpaulin_include))]
+#[cfg(test)]
+mod test_utils {
+
+    use super::elf_tools::ElfArch;
+    use llvm_sys::disassembler;
+    use std::ffi::CStr;
+    use std::sync::OnceLock;
+
+    static LLVM_TARGET_INIT: OnceLock<()> = OnceLock::new();
+
+    fn init_llvm() {
+        use llvm_sys::target;
+        LLVM_TARGET_INIT.get_or_init(|| unsafe {
+            target::LLVM_InitializeAllAsmPrinters();
+            target::LLVM_InitializeAllTargets();
+            target::LLVM_InitializeAllTargetInfos();
+            target::LLVM_InitializeAllTargetMCs();
+            target::LLVM_InitializeAllDisassemblers();
+        });
+    }
+
+    impl ElfArch {
+        fn triple(&self) -> &'static CStr {
+            match self {
+                #[cfg(feature = "arm64")]
+                ElfArch::Arm64 => c"aarch64-unknown-linux-gnu",
+                #[cfg(feature = "s390x")]
+                ElfArch::S390x => c"systemz-unknown-linux-gnu",
+                #[cfg(feature = "x86_64")]
+                ElfArch::X86_64 => c"x86_64-unknown-linux-gnu",
+            }
+        }
+
+        pub(super) fn disassemble(&self, bytes: &[u8]) -> Vec<String> {
+            Disassembler::new(*self)
+                .disassemble(bytes.to_vec())
+                .expect("Failed to decompile")
+        }
+    }
+
+    /// A safe abstraction over llvm_sys::disassembler::LLVMDisasmContextRef
+    #[derive(Debug)]
+    pub struct Disassembler(disassembler::LLVMDisasmContextRef);
+
+    impl Disassembler {
+        /// Create a new Disassembler for the target architecture
+        pub fn new(isa: ElfArch) -> Self {
+            init_llvm();
+            unsafe {
+                let p = disassembler::LLVMCreateDisasm(
+                    isa.triple().as_ptr(),
+                    core::ptr::null_mut(),
+                    0,
+                    None,
+                    None,
+                );
+                assert!(!p.is_null());
+                // for x86_64, use Intel syntax.
+                // If this were after the PrintImmHex call or bitmasked in with it, it would
+                // override it, resulting in decimal immediates, so it needs to be a separate call.
+                #[cfg(feature = "x86_64")]
+                if isa == ElfArch::X86_64 {
+                    disassembler::LLVMSetDisasmOptions(
+                        p,
+                        disassembler::LLVMDisassembler_Option_AsmPrinterVariant,
+                    );
+                }
+                disassembler::LLVMSetDisasmOptions(
+                    p,
+                    disassembler::LLVMDisassembler_Option_PrintImmHex,
+                );
+                Self(p)
+            }
+        }
+
+        pub fn disassemble(&mut self, mut bytes: Vec<u8>) -> Option<Vec<String>> {
+            let mut disasm: Vec<String> = Vec::with_capacity(64);
+
+            while !bytes.is_empty() {
+                let mut output: [std::ffi::c_char; 128] = [0; 128];
+                let old_len = bytes.len();
+                let len = u64::try_from(old_len).unwrap();
+                let disassembly_size = unsafe {
+                    disassembler::LLVMDisasmInstruction(
+                        self.0,
+                        bytes.as_mut_ptr(),
+                        len,
+                        0,
+                        output.as_mut_ptr(),
+                        128,
+                    )
+                };
+
+                bytes.drain(..disassembly_size);
+                if old_len == bytes.len() {
+                    return None;
+                }
+
+                disasm.push(
+                    String::from_utf8(
+                        output
+                            .into_iter()
+                            .filter_map(|c| if c != 0 { Some(c as u8) } else { None })
+                            .collect(),
+                    )
+                    .unwrap()
+                    .split('\t')
+                    .filter(|snippet| !snippet.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                );
+            }
+            Some(disasm)
+        }
+    }
+
+    impl Drop for Disassembler {
+        fn drop(&mut self) {
+            unsafe {
+                disassembler::LLVMDisasmDispose(self.0);
+            }
+        }
+    }
+}
