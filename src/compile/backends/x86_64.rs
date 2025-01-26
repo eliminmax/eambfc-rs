@@ -209,14 +209,12 @@ impl ArchInter for X86_64Inter {
         x86_offset(code_buf, OffsetOp::Dec, OffsetMode::BytePtr, reg);
     }
     fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) {
-        match imm {
-            i if (i64::from(i8::MIN)..=i64::from(i8::MAX)).contains(&i) => {
-                add_reg_imm8(code_buf, reg, imm as i8);
-            }
-            i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
-                add_reg_imm32(code_buf, reg, imm as i32);
-            }
-            _ => add_reg_imm64(code_buf, reg, imm),
+        if let Ok(imm8) = i8::try_from(imm) {
+            add_reg_imm8(code_buf, reg, imm8);
+        } else if let Ok(imm32) = i32::try_from(imm) {
+            add_reg_imm32(code_buf, reg, imm32);
+        } else {
+            add_reg_imm64(code_buf, reg, imm);
         }
     }
     fn add_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
