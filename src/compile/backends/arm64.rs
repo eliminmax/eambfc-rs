@@ -322,35 +322,40 @@ fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::disassemble;
     use super::*;
+    use capstone::prelude::*;
+
+    fn engine() -> Capstone {
+        Capstone::new()
+            .arm64()
+            .mode(arch::arm64::ArchMode::Arm)
+            .build()
+            .expect("Failed to build Capstone inteface")
+    }
+
     #[test]
     fn test_set_reg_simple() {
+        let cs = engine();
         // the following can be set with 1 instruction each.
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
-        assert_eq!(
-            v,
-            vec![0x00, 0x00, 0x80, 0xd2] // MOVN x0, 0
-        );
-
+        assert_eq!(disassemble(&v, &cs), vec![String::from("mov x0, #0")],);
         v.clear();
+
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, -1);
-        assert_eq!(
-            v,
-            vec![0x00, 0x00, 0x80, 0x92] // MOVN X0, -1
-        );
-
+        assert_eq!(disassemble(&v, &cs), vec![String::from("mov x0, #-1")],);
         v.clear();
-        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001);
-        assert_eq!(v, vec![0x00, 0x02, 0xa0, 0x92]);
 
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001);
+        assert_eq!(
+            disassemble(&v, &cs),
+            vec![String::from("mov x0, #-0x100001")]
+        );
         v.clear();
 
         Arm64Inter::set_reg(&mut v, Arm64Register::X1, 0xbeef);
-        assert_eq!(
-            v,
-            vec![0xe1, 0xdd, 0x97, 0xd2], // MOVZ x1, 0xbeef
-        );
+        assert_eq!(disassemble(&v, &cs), vec![String::from("mov x1, #0xbeef")]);
     }
 
     #[test]
@@ -359,10 +364,10 @@ mod tests {
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
         assert_eq!(
-            v,
+            disassemble(&v, &engine()),
             vec![
-                0xe0, 0xdd, 0x97, 0xd2, // MOVZ x0, 0xbeef
-                0xa0, 0xd5, 0xbb, 0xf2, // MOVK x0, 0xdead, lsl #16
+                String::from("mov x0, #0xbeef"),
+                String::from("movk x0, #0xdead, lsl #16"),
             ],
         );
     }
@@ -372,10 +377,10 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead_0000_beef);
         assert_eq!(
-            v,
+            disassemble(&v, &engine()),
             vec![
-                0xf3, 0xdd, 0x97, 0xd2, // MOVZ x19, 0xbeef
-                0xb3, 0xd5, 0xdb, 0xf2, // MOVK x19, 0xdead, lsl #32
+                String::from("mov x19, #0xbeef"),
+                String::from("movk x19, #0xdead, lsl #32"),
             ],
         );
     }
@@ -386,10 +391,11 @@ mod tests {
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
         assert_eq!(
-            v,
+            disassemble(&v, &engine()),
             vec![
-                0xd3, 0xdd, 0x97, 0x92, // MOVN x19, 0xbeee
-                0x53, 0x2a, 0xa4, 0xf2, // MOVK x19, ~0xdead, lsl #16
+                String::from("mov x19, #-0xbeef"),
+                // the bitwise negation of 0xdead is 0x2152
+                String::from("movk x19, #0x2152, lsl #16"),
             ],
         );
     }
@@ -397,85 +403,75 @@ mod tests {
     #[test]
     fn test_inc_dec_reg() {
         let mut v: Vec<u8> = Vec::new();
+        let cs = engine();
         Arm64Inter::inc_reg(&mut v, Arm64Register::X0);
-        assert_eq!(
-            v,
-            vec![0x00, 0x04, 0x00, 0x91], // ADD x0, x0, 1
-        );
-
+        assert_eq!(disassemble(&v, &cs), vec![String::from("add x0, x0, #1")]);
         v.clear();
+
         Arm64Inter::inc_reg(&mut v, Arm64Register::X19);
-        assert_eq!(
-            v,
-            vec![0x73, 0x06, 0x00, 0x91], // ADD x19, x19, 1
-        );
-
+        assert_eq!(disassemble(&v, &cs), vec![String::from("add x19, x19, #1")]);
         v.clear();
+
         Arm64Inter::dec_reg(&mut v, Arm64Register::X1);
-        assert_eq!(
-            v,
-            vec![0x21, 0x04, 0x00, 0xd1], // SUB x1, x1, 1
-        );
-
+        assert_eq!(disassemble(&v, &cs), vec![String::from("sub x1, x1, #1")]);
         v.clear();
+
         Arm64Inter::dec_reg(&mut v, Arm64Register::X19);
-        assert_eq!(
-            v,
-            vec![0x73, 0x06, 0x00, 0xd1], // SUB x19, x19, 1
-        );
+        assert_eq!(disassemble(&v, &cs), vec![String::from("sub x19, x19, #1")]);
     }
 
     #[test]
     fn test_load_store() {
+        let cs = engine();
         assert_eq!(
-            load_from_byte(Arm64Register::X19, Arm64Register::X16),
-            [0x70, 0x06, 0x40, 0x38], // LRDB w16, [x19], 0
+            disassemble(&load_from_byte(Arm64Register::X19, Arm64Register::X16), &cs),
+            vec![String::from("ldrb w16, [x19], #0")],
         );
 
         assert_eq!(
-            store_to_byte(Arm64Register::X19, Arm64Register::X16),
-            [0x70, 0x06, 0x00, 0x38], // STDB w16, [x19], 0
+            disassemble(&store_to_byte(Arm64Register::X19, Arm64Register::X16), &cs),
+            vec![String::from("strb w16, [x19], #0")],
         );
     }
 
     #[test]
     fn test_add_sub_reg() {
         let mut v: Vec<u8> = Vec::with_capacity(24);
+        let cs = engine();
+
         // Handling of 24-bit values
         add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add);
         assert_eq!(
-            v,
+            disassemble(&v, &cs),
             vec![
-                0x10, 0xf2, 0x6a, 0x91, // ADD x16, x16, 0xabc, lsl 12
-                0x10, 0xbe, 0x37, 0x91, // ADD x16, x16, 0xdef
-            ],
+                String::from("add x16, x16, #0xabc, lsl #12"),
+                String::from("add x16, x16, #0xdef")
+            ]
         );
+        v.clear();
 
         // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
         // included
-        v.clear();
         add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub);
         assert_eq!(
-            v,
-            vec![
-                0x10, 0xf2, 0x6a, 0xd1, // SUB x16, x16, 0xabc, lsl 12
-            ],
+            disassemble(&v, &cs),
+            vec![String::from("sub x16, x16, #0xabc, lsl #12")]
         );
-
         v.clear();
+
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::add_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::sub_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
         assert_eq!(
-            v,
+            disassemble(&v, &cs),
             vec![
-                0xf1, 0xdd, 0x97, 0xd2, // MOVZ x17, 0xbeef
-                0xb1, 0xd5, 0xbb, 0xf2, // MOVK x17, 0xdead, lsl #16
-                0x10, 0x02, 0x11, 0x8b, // ADD x16, x16, x17
-                0xf1, 0xdd, 0x97, 0xd2, // MOVZ x17, 0xbeef
-                0xb1, 0xd5, 0xbb, 0xf2, // MOVK x17, 0xdead, lsl #16
-                0x10, 0x02, 0x11, 0xcb, // SUB x16, x16, x17
+                String::from("mov x17, #0xbeef"),
+                String::from("movk x17, #0xdead, lsl #16"),
+                String::from("add x16, x16, x17"),
+                String::from("mov x17, #0xbeef"),
+                String::from("movk x17, #0xdead, lsl #16"),
+                String::from("sub x16, x16, x17"),
             ],
         );
     }
@@ -485,11 +481,11 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::add_byte(&mut v, Arm64Register::X19, i8::from_le_bytes([0xa5]));
         assert_eq!(
-            v,
+            disassemble(&v, &engine()),
             vec![
-                0x71, 0x06, 0x40, 0x38, // LRDB w17, [x19], 0
-                0x31, 0x96, 0x02, 0x91, // ADD x17, x17, 0xa5
-                0x71, 0x06, 0x00, 0x38, // STDB w17, [x19], 0
+                String::from("ldrb w17, [x19], #0"),
+                String::from("add x17, x17, #0xa5"),
+                String::from("strb w17, [x19], #0"),
             ],
         );
     }
@@ -499,10 +495,10 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
         assert_eq!(
-            v,
+            disassemble(&v, &engine()),
             vec![
-                0x11, 0x00, 0x80, 0xd2, // MOVZ x17, 0
-                0x71, 0x06, 0x00, 0x38, // STRB w17, [X19], 0
+                String::from("mov x17, #0"),
+                String::from("strb w17, [x19], #0"),
             ]
         );
     }
@@ -531,16 +527,15 @@ mod tests {
         let mut v: Vec<u8> = Vec::with_capacity(24);
         Arm64Inter::inc_byte(&mut v, Arm64Register::X1);
         Arm64Inter::dec_byte(&mut v, Arm64Register::X17);
-        // instruction byte sequences from the Radare2 dis/assembler tool rasm2
         assert_eq!(
-            v,
+            disassemble(&v, &engine()),
             vec![
-                0x31, 0x04, 0x40, 0x38, // LDRB w17, [x1], 0
-                0x31, 0x06, 0x00, 0x91, // ADD x17, x17, 1
-                0x31, 0x04, 0x00, 0x38, // STRB w17, [x1], 0
-                0x30, 0x06, 0x40, 0x38, // LDRB w16, x17, 0
-                0x10, 0x06, 0x00, 0xd1, // SUB x16, x16, 1
-                0x30, 0x06, 0x00, 0x38, // STRB w16, [x17], 0
+                String::from("ldrb w17, [x1], #0"),
+                String::from("add x17, x17, #1"),
+                String::from("strb w17, [x1], #0"),
+                String::from("ldrb w16, [x17], #0"),
+                String::from("sub x16, x16, #1"),
+                String::from("strb w16, [x17], #0"),
             ]
         );
     }
@@ -552,11 +547,11 @@ mod tests {
         Arm64Inter::reg_copy(&mut v, Arm64Register::X2, Arm64Register::X17);
         Arm64Inter::reg_copy(&mut v, Arm64Register::X8, Arm64Register::X16);
         assert_eq!(
-            v,
+            disassemble(&v, &engine()),
             vec![
-                0xe1, 0x03, 0x13, 0xaa, // MOV x1, x19
-                0xe2, 0x03, 0x11, 0xaa, // MOV x2, x17
-                0xe8, 0x03, 0x10, 0xaa, // MOV x8, x16
+                String::from("mov x1, x19"),
+                String::from("mov x2, x17"),
+                String::from("mov x8, x16"),
             ]
         );
     }
@@ -565,17 +560,21 @@ mod tests {
     fn test_syscall() {
         let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::syscall(&mut v);
-        // svc 0
-        assert_eq!(v, vec![0x01, 0x00, 0x00, 0xd4]);
+        assert_eq!(disassemble(&v, &engine()), vec![String::from("svc #0")]);
     }
 
     #[test]
     fn test_nops() {
-        // NOP instruction per rasm2
-        const NOP: [u8; 4] = [0x1f, 0x20, 0x03, 0xd5];
         let mut v = Vec::with_capacity(12);
         Arm64Inter::nop_loop_open(&mut v);
-        assert_eq!(v, NOP.repeat(3));
+        assert_eq!(
+            disassemble(&v, &engine()),
+            vec![
+                String::from("nop"),
+                String::from("nop"),
+                String::from("nop")
+            ]
+        );
     }
 
     #[test]
@@ -598,14 +597,14 @@ mod tests {
         Arm64Inter::jump_zero(&mut v, Arm64Register::X0, 32).unwrap();
         Arm64Inter::jump_not_zero(&mut v, Arm64Register::X0, -32).unwrap();
         assert_eq!(
-            v,
+            disassemble(&v, &engine()),
             vec![
-                0x11, 0x04, 0x40, 0x38, // LRDB w17, [x0], 0
-                0x3f, 0x1e, 0x40, 0xf2, // ANDS xzr, x0, 0xff (dissassembles to TST x17, 0xff)
-                0x20, 0x01, 0x00, 0x54, // B.eq 32+4
-                0x11, 0x04, 0x40, 0x38, // LRDB w17, [x0], 0
-                0x3f, 0x1e, 0x40, 0xf2, // ANDS xzr, x0, 0xff (dissassembles to TST x17, 0xff)
-                0x21, 0xff, 0xff, 0x54, // B.ne -32+4
+                String::from("ldrb w17, [x0], #0"),
+                String::from("tst x17, #0xff"),
+                String::from("b.eq #0x2c"),
+                String::from("ldrb w17, [x0], #0"),
+                String::from("tst x17, #0xff"),
+                String::from("b.ne #0xfffffffffffffff8"),
             ]
         );
     }
