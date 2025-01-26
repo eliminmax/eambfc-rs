@@ -339,4 +339,56 @@ mod tests {
         .unwrap_err();
         assert_eq!(err.kind, BFErrorID::JumpTooLong);
     }
+
+    #[test]
+    fn add_sub_small_imm() {
+        let mut v: Vec<u8> = Vec::new();
+        let cs = engine();
+        X86_64Inter::add_reg(&mut v, X86_64Register::Rsi, 0x20);
+        assert_eq!(disassemble(&v, &cs), vec!["add esi, 0x20"]);
+        v.clear();
+
+        X86_64Inter::sub_reg(&mut v, X86_64Register::Rsi, 0x20);
+        assert_eq!(disassemble(&v, &cs), vec!["sub esi, 0x20"]);
+    }
+
+    #[test]
+    fn add_sub_medium_imm() {
+        let mut v: Vec<u8> = Vec::new();
+        let cs = engine();
+        X86_64Inter::add_reg(&mut v, X86_64Register::Rdx, 0xdead);
+        assert_eq!(disassemble(&v, &cs), vec!["add edx, 0xdead"]);
+        v.clear();
+
+        X86_64Inter::sub_reg(&mut v, X86_64Register::Rdx, 0xbeef);
+        assert_eq!(disassemble(&v, &cs), vec!["sub edx, 0xbeef"]);
+    }
+
+    #[test]
+    fn add_sub_large_imm() {
+        let mut v: Vec<u8> = Vec::new();
+        let cs = engine();
+
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+        X86_64Inter::add_reg(&mut v, X86_64Register::Rbx, 0xdeadbeef);
+        assert_eq!(
+            disassemble(&v, &cs),
+            vec![
+                String::from("movabs rcx, 0xdeadbeef"),
+                String::from("add rbx, rcx"),
+            ],
+            "{v:?}"
+        );
+        v.clear();
+
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+        X86_64Inter::sub_reg(&mut v, X86_64Register::Rbx, 0xdeadbeef);
+        assert_eq!(
+            disassemble(&v, &cs),
+            vec![
+                String::from("movabs rcx, 0xdeadbeef"),
+                String::from("sub rbx, rcx"),
+            ]
+        );
+    }
 }
