@@ -462,3 +462,109 @@ impl ArchInter for S390xInter {
         code_buf.extend(store_to_byte(reg, S390xRegister::R0));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::disassemble;
+    use super::*;
+    use capstone::prelude::*;
+
+    fn engine() -> Capstone {
+        Capstone::new()
+            .sysz()
+            .mode(arch::sysz::ArchMode::Default)
+            .build()
+            .expect("Failed to build Capstone inteface")
+    }
+
+    #[test]
+    fn test_store_load() {
+        let cs = engine();
+        assert_eq!(
+            disassemble(&load_from_byte(S390xRegister::R8), &cs),
+            ["llgc %r5, 0(%r8)"]
+        );
+        assert_eq!(
+            disassemble(&store_to_byte(S390xRegister::R8, S390xRegister::R5), &cs),
+            ["stc %r5, 0(%r8)"]
+        );
+        assert_eq!(
+            disassemble(&store_to_byte(S390xRegister::R5, S390xRegister::R8), &cs),
+            ["stc %r8, 0(%r5)"]
+        );
+    }
+
+    #[test]
+    fn test_reg_copy() {
+        let mut v: Vec<u8> = Vec::new();
+        S390xInter::reg_copy(&mut v, S390xRegister::R2, S390xRegister::R1);
+        assert_eq!(disassemble(&v, &engine()), ["lgr %r2, %r1"]);
+    }
+
+    #[test]
+    fn test_set_reg_zero() {
+        let (mut a, mut b): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+        S390xInter::set_reg(&mut a, S390xRegister::R2, 0);
+        S390xInter::reg_copy(&mut b, S390xRegister::R2, S390xRegister::R0);
+        assert_eq!(disassemble(&a, &engine()), ["lgr %r2, %r0"]);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_reg_set_small_imm() {
+        let mut v: Vec<u8> = Vec::new();
+        let cs = engine();
+        S390xInter::set_reg(&mut v, S390xRegister::R5, 0xabc);
+        assert_eq!(disassemble(&v, &cs), ["lghi %r5, 0xabc"]);
+        v.clear();
+
+        S390xInter::set_reg(&mut v, S390xRegister::R8, -0xabc);
+        assert_eq!(disassemble(&v, &cs), ["lghi %r8, -0xabc"]);
+    }
+
+    #[test]
+    fn test_set_medium_imm() {
+        let mut v: Vec<u8> = Vec::new();
+        S390xInter::set_reg(&mut v, S390xRegister::R4, 0x1234_abcd);
+        S390xInter::set_reg(&mut v, S390xRegister::R4, -0x1234_abcd);
+        assert_eq!(
+            disassemble(&v, &engine()),
+            ["lgfi %r4, 0x1234abcd", "lgfi %r4, -0x1234abcd"]
+        );
+    }
+
+    #[test]
+    fn test_set_large_imm() {
+        // this one's messy, due to the number of possible combinations
+        let mut v: Vec<u8> = Vec::new();
+        let cs = engine();
+        S390xInter::set_reg(&mut v, S390xRegister::R1, 0xdead_0000_beef);
+        assert_eq!(disassemble(&v, &cs), ["lgfi %r1, 0xbeef", "iihl %r1, 0xdead"]);
+        v.clear();
+
+        S390xInter::set_reg(&mut v, S390xRegister::R2, -0xdead_0000_beef);
+        // 2's complement of 0xdead is 0x2152
+        assert_eq!(disassemble(&v, &cs), ["lgfi %r2, -0xbeef", "iihl %r2, 0x2152"]);
+        v.clear();
+
+        S390xInter::set_reg(&mut v, S390xRegister::R3, 0xdead_0000_0000);
+        assert_eq!(disassemble(&v, &cs), ["lgr %r3, %r0", "iihl %r3, 0xdead"]);
+        v.clear();
+
+        S390xInter::set_reg(&mut v, S390xRegister::R4, i64::MAX ^ (0xffff << 32));
+        assert_eq!(disassemble(&v, &cs), ["lghi %r4, -1", "iihh %r4, 0x7fff"]);
+        v.clear();
+
+        S390xInter::set_reg(&mut v, S390xRegister::R5, i64::MIN ^ (0xffff << 32));
+        assert_eq!(disassemble(&v, &cs), ["lgr %r5, %r0", "iihh %r5, 0x8000"]);
+        v.clear();
+
+        S390xInter::set_reg(&mut v, S390xRegister::R8, 0x1234_5678_9abc_def0);
+        // 0x9abcdef0_u32 has the same bit representation as -0x65432110_i32
+        assert_eq!(disassemble(&v, &cs), ["lgfi %r8, -0x65432110", "iihf %r8, 0x12345678"]);
+        v.clear();
+
+        S390xInter::set_reg(&mut v, S390xRegister::R8, -0x1234_5678_9abc_def0);
+        assert_eq!(disassemble(&v, &cs), ["lgfi %r8, 0x65432110", "iihf %r8, 0xedcba987"]);
+    }
+}
