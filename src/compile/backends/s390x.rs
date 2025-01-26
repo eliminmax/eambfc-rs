@@ -539,12 +539,18 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         let cs = engine();
         S390xInter::set_reg(&mut v, S390xRegister::R1, 0xdead_0000_beef);
-        assert_eq!(disassemble(&v, &cs), ["lgfi %r1, 0xbeef", "iihl %r1, 0xdead"]);
+        assert_eq!(
+            disassemble(&v, &cs),
+            ["lgfi %r1, 0xbeef", "iihl %r1, 0xdead"]
+        );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R2, -0xdead_0000_beef);
         // 2's complement of 0xdead is 0x2152
-        assert_eq!(disassemble(&v, &cs), ["lgfi %r2, -0xbeef", "iihl %r2, 0x2152"]);
+        assert_eq!(
+            disassemble(&v, &cs),
+            ["lgfi %r2, -0xbeef", "iihl %r2, 0x2152"]
+        );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R3, 0xdead_0000_0000);
@@ -561,10 +567,16 @@ mod tests {
 
         S390xInter::set_reg(&mut v, S390xRegister::R8, 0x1234_5678_9abc_def0);
         // 0x9abcdef0_u32 has the same bit representation as -0x65432110_i32
-        assert_eq!(disassemble(&v, &cs), ["lgfi %r8, -0x65432110", "iihf %r8, 0x12345678"]);
+        assert_eq!(
+            disassemble(&v, &cs),
+            ["lgfi %r8, -0x65432110", "iihf %r8, 0x12345678"]
+        );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R8, -0x1234_5678_9abc_def0);
-        assert_eq!(disassemble(&v, &cs), ["lgfi %r8, 0x65432110", "iihf %r8, 0xedcba987"]);
+        assert_eq!(
+            disassemble(&v, &cs),
+            ["lgfi %r8, 0x65432110", "iihf %r8, 0xedcba987"]
+        );
     }
 }
