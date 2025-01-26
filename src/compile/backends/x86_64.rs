@@ -2,17 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-// This file contains functions that return x86_64 machine code in Vec<u8> form.
+// This file contains functions that append x86_64 machine code to buffers
 
 // Throughout this file, "Intel® 64 and IA-32 Architectures Software Developer Manuals" or x86_64
 // machine code in general may be referenced in comments.
 // For context or clarification, see the manual, which is available at no cost as of 2024-07-11.
 //
 // https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
-
-// This file uses debug_assert! statements to ensure that any time an unexpected value is passed to
-// certain functions, it causes the debug builds to panic, so that they are theoretically known to
-// be used safely
 
 // the Linux kernel reads system call numbers from RAX on x86_64 systems, and reads arguments from
 // RDI, RSI, RDX, R10, R8, and R9.
@@ -49,7 +45,7 @@ pub(in super::super) enum X86_64Register {
 
 // many add/subtract instructions use these bit values for the upper five bits and the target
 // register for the lower 3 bits to encode instructions.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 enum ArithOp {
     Add = 0xc0,
@@ -271,15 +267,15 @@ fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64, op: Arith
     // register not used anywhere else in eambfc, encoded as 0b001.
     const TMP_REG: u8 = 0b001;
     code_buf.extend([
-        // MOV tmp_reg, (imm64 to be appended)
+        // MOV RCX, (imm64 to be appended)
         0x48,
         0xb8 | TMP_REG,
     ]);
     code_buf.extend(imm64.to_le_bytes());
     code_buf.extend([
-        // (ADD||SUB) reg, tmp_reg
+        // (ADD||SUB) reg, rcx
         0x48,
-        0x01 | op as u8,
+        (op as u8) - 0xbf,
         0xc0 + (TMP_REG << 3) + (reg as u8),
     ]);
 }
