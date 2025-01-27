@@ -467,13 +467,23 @@ impl ArchInter for S390xInter {
 #[cfg(test)]
 #[expect(
     clippy::separated_literal_suffix,
-    clippy::unreadable_literal,
     overflowing_literals,
     reason = "needed to demonstrate bitwise equivalence"
 )]
 mod tests {
     use super::super::test_utils::Disassembler;
     use super::*;
+
+    /// Given that even though it is set to use hex immediates, the LLVM disassembler for this
+    /// architecture often uses decimal immediates it's sometimes necessary to explain why a given
+    /// immediate is expeced in the disassembly, so this macro can be used as a compiler-checked
+    /// way to explain the reasoning
+    macro_rules! given_that {
+        ($expr: expr) => {
+            #[allow(clippy::unreadable_literal, reason = "disasm doesn't have _ in literals")]
+            const { assert!($expr); }
+        };
+    }
 
     fn disassembler() -> Disassembler {
         Disassembler::new(ElfArch::S390x)
@@ -576,9 +586,8 @@ mod tests {
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R8, 0x1234_5678_9abc_def0);
-        // 0x9abcdef0_u32 has the same bit representation as -0x65432110_i32, which is -1698898192
-        // in decimal
-        // 0x12345678 is 305419896 in decimal
+        given_that!(0x1234_5678 == 305419896);
+        given_that!(0x9abc_def0_u32 as i32 == -1698898192);
         assert_eq!(
             ds.disassemble(v.clone()),
             ["lgfi %r8, -1698898192", "iihf %r8, 305419896"]
@@ -622,7 +631,7 @@ mod tests {
         // lh for low | high (i.e. not equal).
         // For some reason, treats operand as an unsigned immediate after sign extending it to the
         // full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
-        debug_assert_eq!(-0x24_i32 as u64, 0xffffffffffffffdc);
+        given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
         assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
         // LLVM apparently also flips the nop and nopr mnemonics, and requires that they have
         // arguments. I double-checked the IBM docs on this one after seeing this, and I got it the
@@ -701,7 +710,7 @@ mod tests {
 
         let mut v: Vec<u8> = Vec::new();
         S390xInter::add_reg(&mut v, S390xRegister::R8, 0x123_456);
-        debug_assert_eq!(0x123_456, 1193046);
+        given_that!(0x123_456 == 1193046);
         assert_eq!(ds.disassemble(v), ["agfi %r8, 1193046"]);
 
         let mut a: Vec<u8> = Vec::new();
@@ -718,24 +727,24 @@ mod tests {
     fn reg_arith_large_imms() {
         let mut ds = disassembler();
         let mut v: Vec<u8> = Vec::new();
-        S390xInter::add_reg(&mut v, S390xRegister::R8, 9876543210);
-        debug_assert_eq!(9876543210_i32, 1286608618);
-        debug_assert_eq!((9876543210_i64 >> 32), 2);
+        S390xInter::add_reg(&mut v, S390xRegister::R8, 9_876_543_210);
+        given_that!(9_876_543_210_i64 as i32 == 1286608618);
+        given_that!((9_876_543_210_i64 >> 32) == 2);
         assert_eq!(ds.disassemble(v), ["agfi %r8, 1286608618", "aih %r8, 2"]);
 
         let mut a: Vec<u8> = Vec::new();
         let mut b: Vec<u8> = Vec::new();
-        S390xInter::sub_reg(&mut a, S390xRegister::R8, 9876543210);
-        S390xInter::add_reg(&mut b, S390xRegister::R8, -9876543210);
+        S390xInter::sub_reg(&mut a, S390xRegister::R8, 9_876_543_210);
+        S390xInter::add_reg(&mut b, S390xRegister::R8, -9_876_543_210);
         assert_eq!(a, b);
-        debug_assert_eq!(-9876543210_i32, -1286608618);
-        debug_assert_eq!((-9876543210_i64 >> 32), -3);
+        given_that!(-9_876_543_210_i32 == -1286608618);
+        given_that!((-9_876_543_210_i64 >> 32) == -3);
         assert_eq!(ds.disassemble(b), ["agfi %r8, -1286608618", "aih %r8, -3"]);
 
         // make sure that if the lower bits are zero, the `agfi` instruction is skipped
         a.clear();
         S390xInter::add_reg(&mut a, S390xRegister::R8, 0x1234_abcd_0000_0000);
-        debug_assert_eq!(0x1234_abcd_0000_0000_i64 >> 32, 305441741);
+        given_that!(0x1234_abcd_0000_0000_i64 >> 32 == 305441741);
         assert_eq!(ds.disassemble(a), ["aih %r8, 305441741"]);
     }
 
