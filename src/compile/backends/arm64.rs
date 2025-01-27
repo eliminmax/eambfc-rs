@@ -61,7 +61,7 @@ fn inject_imm16_operands(
 ) -> [u8; 4] {
     [
         template[0] | reg as u8 | ((imm16 & 0b111) << 5) as u8,
-        // why doesn't ARM's A64 align immediate bits with byte boundries?
+        // why doesn't ARM's A64 align immediate bits with byte boundaries?
         template[1] | (imm16 >> 3) as u8,
         // need to combine the highest 5 bits of imm16 with the shift
         template[2] | shift as u8 | (imm16 >> 11) as u8,

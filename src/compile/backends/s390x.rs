@@ -476,7 +476,7 @@ mod tests {
 
     /// Given that even though it is set to use hex immediates, the LLVM disassembler for this
     /// architecture often uses decimal immediates it's sometimes necessary to explain why a given
-    /// immediate is expeced in the disassembly, so this macro can be used as a compiler-checked
+    /// immediate is expected in the disassembly, so this macro can be used as a compiler-checked
     /// way to explain the reasoning
     macro_rules! given_that {
         ($expr: expr) => {
