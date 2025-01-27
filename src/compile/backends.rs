@@ -73,9 +73,7 @@ mod test_utils {
         }
 
         pub(super) fn disassemble(&self, bytes: &[u8]) -> Vec<String> {
-            Disassembler::new(*self)
-                .disassemble(bytes.to_vec())
-                .expect("Failed to decompile")
+            Disassembler::new(*self).disassemble(bytes.to_vec())
         }
     }
 
@@ -114,7 +112,7 @@ mod test_utils {
             }
         }
 
-        pub fn disassemble(&mut self, mut bytes: Vec<u8>) -> Option<Vec<String>> {
+        pub fn disassemble(&mut self, mut bytes: Vec<u8>) -> Vec<String> {
             let mut disasm: Vec<String> = Vec::with_capacity(64);
 
             while !bytes.is_empty() {
@@ -134,7 +132,7 @@ mod test_utils {
 
                 bytes.drain(..disassembly_size);
                 if old_len == bytes.len() {
-                    return None;
+                    panic!("Failed to decompile {:#x?}", bytes);
                 }
 
                 disasm.push(
@@ -151,7 +149,7 @@ mod test_utils {
                     .join(" "),
                 );
             }
-            Some(disasm)
+            disasm
         }
     }
 

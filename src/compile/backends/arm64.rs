@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn test_set_reg_simple() {
         let mut disassembler = Disassembler::new(ElfArch::Arm64);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec()).unwrap();
+        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
         // the following can be set with 1 instruction each.
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
@@ -393,7 +393,7 @@ mod tests {
     fn test_inc_dec_reg() {
         let mut v: Vec<u8> = Vec::new();
         let mut disassembler = Disassembler::new(ElfArch::Arm64);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec()).unwrap();
+        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
         Arm64Inter::inc_reg(&mut v, Arm64Register::X0);
         assert_eq!(disassemble(&v), vec![String::from("add x0, x0, #0x1")]);
         v.clear();
@@ -413,7 +413,7 @@ mod tests {
     #[test]
     fn test_load_store() {
         let mut disassembler = Disassembler::new(ElfArch::Arm64);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec()).unwrap();
+        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
         assert_eq!(
             disassemble(&load_from_byte(Arm64Register::X19, Arm64Register::X16)),
             vec![String::from("ldrb w16, [x19], #0x0")],
@@ -428,7 +428,7 @@ mod tests {
     #[test]
     fn test_add_sub_reg() {
         let mut disassembler = Disassembler::new(ElfArch::Arm64);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec()).unwrap();
+        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
         let mut v: Vec<u8> = Vec::with_capacity(24);
 
         // Handling of 24-bit values
