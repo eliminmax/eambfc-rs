@@ -480,8 +480,13 @@ mod tests {
     /// way to explain the reasoning
     macro_rules! given_that {
         ($expr: expr) => {
-            #[allow(clippy::unreadable_literal, reason = "disasm doesn't have _ in literals")]
-            const { assert!($expr); }
+            #[allow(
+                clippy::unreadable_literal,
+                reason = "disasm doesn't have _ in literals"
+            )]
+            const {
+                assert!($expr);
+            }
         };
     }
 
