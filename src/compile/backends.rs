@@ -43,20 +43,14 @@ mod test_utils {
         });
     }
 
-    impl ElfArch {
-        fn triple(self) -> &'static CStr {
-            match self {
-                #[cfg(feature = "arm64")]
-                ElfArch::Arm64 => c"aarch64-unknown-linux-gnu",
-                #[cfg(feature = "s390x")]
-                ElfArch::S390x => c"systemz-unknown-linux-gnu",
-                #[cfg(feature = "x86_64")]
-                ElfArch::X86_64 => c"x86_64-unknown-linux-gnu",
-            }
-        }
-
-        pub(super) fn disassemble(self, bytes: &[u8]) -> Vec<String> {
-            Disassembler::new(self).disassemble(bytes.to_vec())
+    fn triple_for_arch(arch: ElfArch) -> &'static CStr {
+        match arch {
+            #[cfg(feature = "arm64")]
+            ElfArch::Arm64 => c"aarch64-unknown-linux-gnu",
+            #[cfg(feature = "s390x")]
+            ElfArch::S390x => c"systemz-unknown-linux-gnu",
+            #[cfg(feature = "x86_64")]
+            ElfArch::X86_64 => c"x86_64-unknown-linux-gnu",
         }
     }
 
@@ -70,7 +64,7 @@ mod test_utils {
             init_llvm();
             unsafe {
                 let p = disassembler::LLVMCreateDisasm(
-                    isa.triple().as_ptr(),
+                    triple_for_arch(isa).as_ptr(),
                     core::ptr::null_mut(),
                     0,
                     None,
