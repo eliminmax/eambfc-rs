@@ -468,20 +468,23 @@ mod tests {
     use super::super::test_utils::Disassembler;
     use super::*;
 
+    fn disassembler() -> Disassembler {
+        Disassembler::new(ElfArch::S390x)
+    }
+
     #[test]
     fn test_store_load() {
-        let mut disassembler = Disassembler::new(ElfArch::S390x);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
+        let mut ds = disassembler();
         assert_eq!(
-            disassemble(&load_from_byte(S390xRegister::R8)),
+            ds.disassemble(load_from_byte(S390xRegister::R8).into()),
             ["llgc %r5, 0(%r8,0)"]
         );
         assert_eq!(
-            disassemble(&store_to_byte(S390xRegister::R8, S390xRegister::R5)),
+            ds.disassemble(store_to_byte(S390xRegister::R8, S390xRegister::R5).into()),
             ["stc %r5, 0(%r8,0)"]
         );
         assert_eq!(
-            disassemble(&store_to_byte(S390xRegister::R5, S390xRegister::R8)),
+            ds.disassemble(store_to_byte(S390xRegister::R5, S390xRegister::R8).into()),
             ["stc %r8, 0(%r5,0)"]
         );
     }
@@ -490,7 +493,7 @@ mod tests {
     fn test_reg_copy() {
         let mut v: Vec<u8> = Vec::new();
         S390xInter::reg_copy(&mut v, S390xRegister::R2, S390xRegister::R1);
-        assert_eq!(ElfArch::S390x.disassemble(&v), ["lgr %r2, %r1"]);
+        assert_eq!(disassembler().disassemble(v), ["lgr %r2, %r1"]);
     }
 
     #[test]
@@ -498,19 +501,19 @@ mod tests {
         let (mut a, mut b): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
         S390xInter::set_reg(&mut a, S390xRegister::R2, 0);
         S390xInter::reg_copy(&mut b, S390xRegister::R2, S390xRegister::R0);
-        assert_eq!(ElfArch::S390x.disassemble(&a), ["lgr %r2, %r0"]);
         assert_eq!(a, b);
+        assert_eq!(disassembler().disassemble(a), ["lgr %r2, %r0"]);
     }
 
     #[test]
     fn test_reg_set_small_imm() {
         let mut v: Vec<u8> = Vec::new();
         S390xInter::set_reg(&mut v, S390xRegister::R5, 12345);
-        assert_eq!(ElfArch::S390x.disassemble(&v), ["lghi %r5, 12345"]);
-        v.clear();
-
         S390xInter::set_reg(&mut v, S390xRegister::R8, -12345);
-        assert_eq!(ElfArch::S390x.disassemble(&v), ["lghi %r8, -12345"]);
+        assert_eq!(
+            disassembler().disassemble(v),
+            ["lghi %r5, 12345", "lghi %r8, -12345"]
+        );
     }
 
     #[test]
@@ -519,36 +522,50 @@ mod tests {
         S390xInter::set_reg(&mut v, S390xRegister::R4, 0x1234_abcd);
         S390xInter::set_reg(&mut v, S390xRegister::R4, -0x1234_abcd);
         assert_eq!(
-            ElfArch::S390x.disassemble(&v),
+            disassembler().disassemble(v),
             ["lgfi %r4, 305441741", "lgfi %r4, -305441741"]
         );
     }
 
     #[test]
     fn test_set_large_imm() {
-        let mut disassembler = Disassembler::new(ElfArch::S390x);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
+        let mut ds = Disassembler::new(ElfArch::S390x);
         // this one's messy, due to the number of possible combinations
         let mut v: Vec<u8> = Vec::new();
         S390xInter::set_reg(&mut v, S390xRegister::R1, 0xdead_0000_beef);
-        assert_eq!(disassemble(&v), ["lgfi %r1, 48879", "iihl %r1, 57005"]);
+        assert_eq!(
+            ds.disassemble(v.clone()),
+            ["lgfi %r1, 48879", "iihl %r1, 57005"]
+        );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R2, -0xdead_0000_beef);
         // 2's complement of 0xdead is 0x2152
-        assert_eq!(disassemble(&v), ["lgfi %r2, -48879", "iihl %r2, 8530"]);
+        assert_eq!(
+            ds.disassemble(v.clone()),
+            ["lgfi %r2, -48879", "iihl %r2, 8530"]
+        );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R3, 0xdead_0000_0000);
-        assert_eq!(disassemble(&v), ["lgr %r3, %r0", "iihl %r3, 57005"]);
+        assert_eq!(
+            ds.disassemble(v.clone()),
+            ["lgr %r3, %r0", "iihl %r3, 57005"]
+        );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R4, i64::MAX ^ (0xffff << 32));
-        assert_eq!(disassemble(&v), ["lghi %r4, -1", "iihh %r4, 32767"]);
+        assert_eq!(
+            ds.disassemble(v.clone()),
+            ["lghi %r4, -1", "iihh %r4, 32767"]
+        );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R5, i64::MIN ^ (0xffff << 32));
-        assert_eq!(disassemble(&v), ["lgr %r5, %r0", "iihh %r5, 32768"]);
+        assert_eq!(
+            ds.disassemble(v.clone()),
+            ["lgr %r5, %r0", "iihh %r5, 32768"]
+        );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R8, 0x1234_5678_9abc_def0);
@@ -556,14 +573,14 @@ mod tests {
         // in decimal
         // 0x12345678 is 305419896 in decimal
         assert_eq!(
-            disassemble(&v),
+            ds.disassemble(v.clone()),
             ["lgfi %r8, -1698898192", "iihf %r8, 305419896"]
         );
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R8, -0x1234_5678_9abc_def0);
         assert_eq!(
-            disassemble(&v),
+            ds.disassemble(v.clone()),
             ["lgfi %r8, 1698898192", "iihf %r8, 3989547399"]
         );
     }
