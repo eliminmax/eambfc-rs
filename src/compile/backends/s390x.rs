@@ -442,14 +442,13 @@ impl ArchInter for S390xInter {
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
-        // there are not equivalent sub instructions to any of the add instructions used, so just
+        // There are no equivalent sub instructions to any of the add instructions used.
+        // Given that in 2's complement with wrapping, adding i64::MIN and subtracting i64::MIN are
+        // equivalent (except possibly for effect on overflow flag, which is never checked in this
+        // program), simply make sure that if imm is i64::MIN, pass it directly, otherwise, pass
+        // `-imm`
         // check that "-imm" won't cause problems, then call add_reg with negative imm.
-        if imm == i64::MIN {
-            S390xInter::add_reg(code_buf, reg, -i64::MAX);
-            S390xInter::add_reg(code_buf, reg, -1);
-        } else {
-            S390xInter::add_reg(code_buf, reg, -imm);
-        }
+        S390xInter::add_reg(code_buf, reg, if imm == i64::MIN { i64::MIN } else { -imm });
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
