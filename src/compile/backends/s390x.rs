@@ -646,4 +646,98 @@ mod tests {
         assert_eq!(v, store_to_byte(S390xInter::REGISTERS.bf_ptr, S390xRegister::R0));
         assert_eq!(disassembler().disassemble(v), ["stc %r0, 0(%r8,0)"]);
     }
+
+    /// test `S390xInter::inc_reg`, `S390xInter::dec_reg`, and test `S390xInter::add_reg` and
+    /// `S390xInter::sub_reg` for immediates that can be expressed with 16 bits
+    #[test]
+    fn reg_arith_small_imms() {
+        let mut ds = disassembler();
+
+        let mut a: Vec<u8> = Vec::new();
+        let mut b: Vec<u8> = Vec::new();
+        S390xInter::add_reg(&mut a, S390xRegister::R8, 1);
+        S390xInter::inc_reg(&mut b, S390xRegister::R8);
+        // check that inc_reg is the same as add_reg(.., 1)
+        assert_eq!(a, b);
+        assert_eq!(ds.disassemble(a), ["aghi %r8, 1"]);
+
+        let mut a: Vec<u8> = Vec::new();
+        b.clear();
+        S390xInter::sub_reg(&mut a, S390xRegister::R8, 1);
+        S390xInter::dec_reg(&mut b, S390xRegister::R8);
+        // check that dec_reg is the same as sub_reg(.., 1)
+        assert_eq!(a, b);
+        b.clear();
+        S390xInter::add_reg(&mut b, S390xRegister::R8, -1);
+        // check that sub_reg(.., 1) is the same as add_reg(.., -1)
+        assert_eq!(a, b);
+        // make sure that the disassembly is as expected.
+        assert_eq!(ds.disassemble(a), ["aghi %r8, -1"]);
+
+        let mut a: Vec<u8> = Vec::new();
+        b.clear();
+        S390xInter::add_reg(&mut a, S390xRegister::R8, 12345);
+        S390xInter::sub_reg(&mut a, S390xRegister::R8, 12345);
+
+        S390xInter::sub_reg(&mut b, S390xRegister::R8, -12345);
+        S390xInter::add_reg(&mut b, S390xRegister::R8, -12345);
+        assert_eq!(a, b);
+        assert_eq!(ds.disassemble(a), ["aghi %r8, 12345", "aghi %r8, -12345"]);
+    }
+
+    /// test `S390xInter::add_reg` and `S390xInter::sub_reg` for immediates that fit within 32 bits
+    #[test]
+    fn reg_arith_medium_imms() {
+        let mut ds = disassembler();
+
+        let mut v: Vec<u8> = Vec::new();
+        S390xInter::add_reg(&mut v, S390xRegister::R8, 0x123_456);
+        // 0x123456 in hex is 1193046 in decimal
+        assert_eq!(ds.disassemble(v), ["agfi %r8, 1193046"]);
+
+        let mut a: Vec<u8> = Vec::new();
+        let mut b: Vec<u8> = Vec::new();
+        S390xInter::sub_reg(&mut a, S390xRegister::R8, 0x123_456);
+        S390xInter::add_reg(&mut b, S390xRegister::R8, -0x123_456);
+        assert_eq!(a, b);
+        assert_eq!(ds.disassemble(a), ["agfi %r8, -1193046"]);
+    }
+
+    /// test `S390xInter::add_reg` and `S390x::sub_reg` for immediates too large to fit within 32
+    /// bits
+    #[test]
+    #[expect(
+        clippy::separated_literal_suffix,
+        clippy::unreadable_literal,
+        overflowing_literals,
+        reason = "needed to demonstrate bitwise equivalence"
+    )]
+    fn reg_arith_large_imms() {
+        let mut ds = disassembler();
+
+        let mut v: Vec<u8> = Vec::new();
+        S390xInter::add_reg(&mut v, S390xRegister::R8, 9876543210);
+        debug_assert_eq!(9876543210_i32, 1286608618);
+        debug_assert_eq!((9876543210_i64 >> 32), 2);
+        assert_eq!(ds.disassemble(v), ["agfi %r8, 1286608618", "aih %r8, 2"]);
+
+        let mut a: Vec<u8> = Vec::new();
+        let mut b: Vec<u8> = Vec::new();
+        S390xInter::sub_reg(&mut a, S390xRegister::R8, 9876543210);
+        S390xInter::add_reg(&mut b, S390xRegister::R8, -9876543210);
+        assert_eq!(a, b);
+        debug_assert_eq!(-9876543210_i32, -1286608618);
+        debug_assert_eq!((-9876543210_i64 >> 32), -3);
+        assert_eq!(ds.disassemble(b), ["agfi %r8, -1286608618", "aih %r8, -3"]);
+    }
+
+    // test `S390xInter::sub_reg` with `i64::MIN`
+    #[test]
+    fn sub_reg_int_min() {
+        let mut a: Vec<u8> = Vec::new();
+        let mut b: Vec<u8> = Vec::new();
+        S390xInter::add_reg(&mut a, S390xRegister::R4, i64::MIN);
+        S390xInter::sub_reg(&mut b, S390xRegister::R4, i64::MIN);
+        assert_eq!(a, b);
+    }
 }
