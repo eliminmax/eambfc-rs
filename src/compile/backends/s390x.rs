@@ -463,6 +463,9 @@ impl ArchInter for S390xInter {
     }
 }
 
+
+// This test suite was made far more difficult by the fact that some of the mnemonics used by
+// real-world assemblers are different from the opcodes used in the documentation cited above.
 #[cfg(test)]
 mod tests {
     use super::super::test_utils::Disassembler;
@@ -635,5 +638,13 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         S390xInter::syscall(&mut v);
         assert_eq!(Disassembler::new(ElfArch::S390x).disassemble(v), ["svc 0"]);
+    }
+
+    #[test]
+    fn zero_byte_test() {
+        let mut v: Vec<u8> = Vec::new();
+        S390xInter::zero_byte(&mut v, S390xInter::REGISTERS.bf_ptr);
+        assert_eq!(v, store_to_byte(S390xInter::REGISTERS.bf_ptr, S390xRegister::R0));
+        assert_eq!(disassembler().disassemble(v), ["stc %r0, 0(%r8,0)"]);
     }
 }
