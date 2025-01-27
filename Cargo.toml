@@ -52,5 +52,4 @@ codegen-units = 1
 strip="symbols"
 
 [dev-dependencies]
-capstone = "0.12.0"
 llvm-sys = { version = "191.0.0", features = ["prefer-dynamic"] }
