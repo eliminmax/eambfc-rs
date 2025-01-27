@@ -22,24 +22,6 @@ use super::elf_tools;
 
 #[cfg(not(tarpaulin_include))]
 #[cfg(test)]
-fn disassemble(code: &[u8], engine: &capstone::Capstone) -> Vec<String> {
-    let disassembled = engine.disasm_all(code, 0).expect("Failed to disassemble");
-    disassembled
-        .iter()
-        .map(|insn| {
-            let mut ret = insn.mnemonic().unwrap().to_string();
-            let op_str = insn.op_str().unwrap();
-            if !op_str.is_empty() {
-                ret.push(' ');
-                ret.push_str(op_str);
-            }
-            ret
-        })
-        .collect()
-}
-
-#[cfg(not(tarpaulin_include))]
-#[cfg(test)]
 mod test_utils {
 
     use super::elf_tools::ElfArch;
