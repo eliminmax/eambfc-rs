@@ -465,6 +465,12 @@ impl ArchInter for S390xInter {
 // This test suite was made far more difficult by the fact that some of the mnemonics used by
 // real-world assemblers are different from the opcodes used in the documentation cited above.
 #[cfg(test)]
+#[expect(
+    clippy::separated_literal_suffix,
+    clippy::unreadable_literal,
+    overflowing_literals,
+    reason = "needed to demonstrate bitwise equivalence"
+)]
 mod tests {
     use super::super::test_utils::Disassembler;
     use super::*;
@@ -616,6 +622,7 @@ mod tests {
         // lh for low | high (i.e. not equal).
         // For some reason, treats operand as an unsigned immediate after sign extending it to the
         // full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
+        debug_assert_eq!(-0x24_i32 as u64, 0xffffffffffffffdc);
         assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
         // LLVM apparently also flips the nop and nopr mnemonics, and requires that they have
         // arguments. I double-checked the IBM docs on this one after seeing this, and I got it the
@@ -694,7 +701,7 @@ mod tests {
 
         let mut v: Vec<u8> = Vec::new();
         S390xInter::add_reg(&mut v, S390xRegister::R8, 0x123_456);
-        // 0x123456 in hex is 1193046 in decimal
+        debug_assert_eq!(0x123_456, 1193046);
         assert_eq!(ds.disassemble(v), ["agfi %r8, 1193046"]);
 
         let mut a: Vec<u8> = Vec::new();
@@ -708,15 +715,8 @@ mod tests {
     /// test `S390xInter::add_reg` and `S390x::sub_reg` for immediates too large to fit within 32
     /// bits
     #[test]
-    #[expect(
-        clippy::separated_literal_suffix,
-        clippy::unreadable_literal,
-        overflowing_literals,
-        reason = "needed to demonstrate bitwise equivalence"
-    )]
     fn reg_arith_large_imms() {
         let mut ds = disassembler();
-
         let mut v: Vec<u8> = Vec::new();
         S390xInter::add_reg(&mut v, S390xRegister::R8, 9876543210);
         debug_assert_eq!(9876543210_i32, 1286608618);
@@ -731,6 +731,12 @@ mod tests {
         debug_assert_eq!(-9876543210_i32, -1286608618);
         debug_assert_eq!((-9876543210_i64 >> 32), -3);
         assert_eq!(ds.disassemble(b), ["agfi %r8, -1286608618", "aih %r8, -3"]);
+
+        // make sure that if the lower bits are zero, the `agfi` instruction is skipped
+        a.clear();
+        S390xInter::add_reg(&mut a, S390xRegister::R8, 0x1234_abcd_0000_0000);
+        debug_assert_eq!(0x1234_abcd_0000_0000_i64 >> 32, 305441741);
+        assert_eq!(ds.disassemble(a), ["aih %r8, 305441741"]);
     }
 
     // test `S390xInter::sub_reg` with `i64::MIN`
