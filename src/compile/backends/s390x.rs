@@ -567,4 +567,49 @@ mod tests {
             ["lgfi %r8, 1698898192", "iihf %r8, 3989547399"]
         );
     }
+
+    #[test]
+    fn jump_tests() {
+        assert_eq!(
+            S390xInter::jump_zero(&mut Vec::new(), S390xRegister::R3, 0x1_2345_6789_abcd)
+                .unwrap_err()
+                .kind,
+            BFErrorID::JumpTooLong
+        );
+        let mut v: Vec<u8> = Vec::new();
+        S390xInter::jump_zero(&mut v, S390xRegister::R3, 18).unwrap();
+        S390xInter::jump_not_zero(&mut v, S390xRegister::R3, -36).unwrap();
+        S390xInter::nop_loop_open(&mut v);
+        // it took a while, but I found a comment in the LLVM source code* that explained that it
+        // uses "jge" instead of the IBM-documented "jle" extended mnemonic for `brcl 8,addr`
+        // because "jl" is also "jump if less". Thinking that Capstone was getting this wrong is
+        // part of what motivated me to switch to LLVM disassembler in the first place.
+        //
+        // Argh!
+        //
+        // * I ran `apt source llvm-19` on Debian Bookworm and found it in the file within the
+        // source tree at llvm/lib/Target/SystemZ/SystemZInstrInfo.td
+        let mut disasm_lines = Disassembler::new(ElfArch::S390x).disassemble(v).into_iter();
+        assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
+        assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
+        assert_eq!(disasm_lines.next().unwrap(), "jge 0x12");
+        assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
+        assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
+        // lh for low | high (i.e. not equal).
+        // For some reason, treats operand as an unsigned immediate after sign extending it to the
+        // full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
+        assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
+        // LLVM apparently also flips the nop and nopr mnemonics, and requires that they have
+        // arguments. I double-checked the IBM docs on this one after seeing this, and I got it the
+        // right way around, so I'm confused here.
+        for i in 0..4 {
+            assert_eq!(
+                disasm_lines.next().unwrap(),
+                "nop 0",
+                "only {i}/4 nopr instructions were matched"
+            );
+        }
+        assert_eq!(disasm_lines.next().unwrap(), "nopr %r0");
+        assert!(disasm_lines.next().is_none());
+    }
 }
