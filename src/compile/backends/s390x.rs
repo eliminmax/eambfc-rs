@@ -757,4 +757,56 @@ mod tests {
         S390xInter::sub_reg(&mut b, S390xRegister::R4, i64::MIN);
         assert_eq!(a, b);
     }
+
+    // test `S390xInter::add_byte`, `S390xInter::sub_byte`, `S390xInter::inc_byte`, and
+    // `S390xInter::dec_byte`
+    #[test]
+    fn test_byte_arith() {
+        let mut ds = disassembler();
+
+        let mut expected = Vec::from(load_from_byte(S390xRegister::R8));
+        S390xInter::inc_reg(&mut expected, TMP_REG);
+        expected.extend(store_to_byte(S390xRegister::R8, TMP_REG));
+
+        let mut a: Vec<u8> = Vec::new();
+        let mut b: Vec<u8> = Vec::new();
+
+        S390xInter::inc_byte(&mut a, S390xRegister::R8);
+        S390xInter::add_byte(&mut b, S390xRegister::R8, 1);
+        assert_eq!(a, b);
+        assert_eq!(a, expected);
+        assert_eq!(
+            ds.disassemble(b),
+            ["llgc %r5, 0(%r8,0)", "aghi %r5, 1", "stc %r5, 0(%r8,0)"]
+        );
+
+        expected = Vec::from(load_from_byte(S390xRegister::R8));
+        S390xInter::dec_reg(&mut expected, TMP_REG);
+        expected.extend(store_to_byte(S390xRegister::R8, TMP_REG));
+        a.clear();
+        let mut b: Vec<u8> = Vec::new();
+        S390xInter::dec_byte(&mut a, S390xRegister::R8);
+        S390xInter::sub_byte(&mut b, S390xRegister::R8, 1);
+        assert_eq!(a, b);
+        assert_eq!(a, expected);
+        assert_eq!(
+            ds.disassemble(b),
+            ["llgc %r5, 0(%r8,0)", "aghi %r5, -1", "stc %r5, 0(%r8,0)"]
+        );
+
+        a.clear();
+        S390xInter::add_byte(&mut a, S390xRegister::R8, 32);
+        S390xInter::sub_byte(&mut a, S390xRegister::R8, 32);
+        assert_eq!(
+            ds.disassemble(a),
+            [
+                "llgc %r5, 0(%r8,0)",
+                "aghi %r5, 32",
+                "stc %r5, 0(%r8,0)",
+                "llgc %r5, 0(%r8,0)",
+                "aghi %r5, -32",
+                "stc %r5, 0(%r8,0)"
+            ]
+        );
+    }
 }
