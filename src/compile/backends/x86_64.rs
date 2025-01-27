@@ -304,16 +304,10 @@ mod tests {
         let mut ds = disassembler();
 
         X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 0);
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            vec![String::from("xor ebx, ebx")]
-        );
+        assert_eq!(ds.disassemble(v.clone()), ["xor ebx, ebx"]);
         v.clear();
         X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 128);
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            vec![String::from("mov ebx, 0x80")]
-        );
+        assert_eq!(ds.disassemble(v.clone()), ["mov ebx, 0x80"]);
 
         v.clear();
         X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, i64::MAX - 0xffff);
@@ -321,7 +315,7 @@ mod tests {
             ds.disassemble(v),
             // movabs is an internal term some dis/assemblers have for MOV variant for large
             // immediates.
-            vec![String::from("movabs rbx, 0x7fffffffffff0000")]
+            ["movabs rbx, 0x7fffffffffff0000"]
         );
     }
 
@@ -365,11 +359,11 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         let mut ds = disassembler();
         X86_64Inter::add_reg(&mut v, X86_64Register::Rsi, 0x20);
-        assert_eq!(ds.disassemble(v), vec!["add esi, 0x20"]);
+        assert_eq!(ds.disassemble(v), ["add esi, 0x20"]);
 
         let mut v: Vec<u8> = Vec::new();
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rsi, 0x20);
-        assert_eq!(ds.disassemble(v), vec!["sub esi, 0x20"]);
+        assert_eq!(ds.disassemble(v), ["sub esi, 0x20"]);
     }
 
     #[test]
@@ -377,11 +371,11 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         let mut ds = disassembler();
         X86_64Inter::add_reg(&mut v, X86_64Register::Rdx, 0xdead);
-        assert_eq!(ds.disassemble(v), vec!["add edx, 0xdead"]);
+        assert_eq!(ds.disassemble(v), ["add edx, 0xdead"]);
 
         let mut v: Vec<u8> = Vec::new();
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rdx, 0xbeef);
-        assert_eq!(ds.disassemble(v), vec!["sub edx, 0xbeef"]);
+        assert_eq!(ds.disassemble(v), ["sub edx, 0xbeef"]);
     }
 
     #[test]
@@ -393,10 +387,7 @@ mod tests {
         X86_64Inter::add_reg(&mut v, X86_64Register::Rbx, 0xdeadbeef);
         assert_eq!(
             ds.disassemble(v),
-            vec![
-                String::from("movabs rcx, 0xdeadbeef"),
-                String::from("add rbx, rcx"),
-            ]
+            ["movabs rcx, 0xdeadbeef", "add rbx, rcx",]
         );
 
         let mut v: Vec<u8> = Vec::new();
@@ -404,10 +395,7 @@ mod tests {
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rbx, 0xdeadbeef);
         assert_eq!(
             ds.disassemble(v),
-            vec![
-                String::from("movabs rcx, 0xdeadbeef"),
-                String::from("sub rbx, rcx"),
-            ]
+            ["movabs rcx, 0xdeadbeef", "sub rbx, rcx",]
         );
     }
 
@@ -418,7 +406,7 @@ mod tests {
         X86_64Inter::sub_byte(&mut v, X86_64Register::Rdi, 0x23);
         assert_eq!(
             disassembler().disassemble(v),
-            &["add byte ptr [rdi], 0x23", "sub byte ptr [rdi], 0x23"]
+            ["add byte ptr [rdi], 0x23", "sub byte ptr [rdi], 0x23"]
         );
     }
 
@@ -426,9 +414,6 @@ mod tests {
     fn test_zero_byte() {
         let mut v: Vec<u8> = Vec::new();
         X86_64Inter::zero_byte(&mut v, X86_64Register::Rdx);
-        assert_eq!(
-            disassembler().disassemble(v),
-            &["mov byte ptr [rdx], 0x0"]
-        );
+        assert_eq!(disassembler().disassemble(v), ["mov byte ptr [rdx], 0x0"]);
     }
 }
