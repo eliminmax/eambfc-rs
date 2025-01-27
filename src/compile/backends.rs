@@ -31,6 +31,7 @@ mod test_utils {
 
     static LLVM_TARGET_INIT: OnceLock<()> = OnceLock::new();
 
+    /// call the needed functions to set up the LLVM disassembler
     fn init_llvm() {
         use llvm_sys::target;
         LLVM_TARGET_INIT.get_or_init(|| unsafe {
@@ -43,7 +44,7 @@ mod test_utils {
     }
 
     impl ElfArch {
-        fn triple(&self) -> &'static CStr {
+        fn triple(self) -> &'static CStr {
             match self {
                 #[cfg(feature = "arm64")]
                 ElfArch::Arm64 => c"aarch64-unknown-linux-gnu",
@@ -54,12 +55,12 @@ mod test_utils {
             }
         }
 
-        pub(super) fn disassemble(&self, bytes: &[u8]) -> Vec<String> {
-            Disassembler::new(*self).disassemble(bytes.to_vec())
+        pub(super) fn disassemble(self, bytes: &[u8]) -> Vec<String> {
+            Disassembler::new(self).disassemble(bytes.to_vec())
         }
     }
 
-    /// A safe abstraction over llvm_sys::disassembler::LLVMDisasmContextRef
+    /// A safe abstraction over `llvm_sys::disassembler::LLVMDisasmContextRef`
     #[derive(Debug)]
     pub struct Disassembler(disassembler::LLVMDisasmContextRef);
 
@@ -113,15 +114,14 @@ mod test_utils {
                 };
 
                 bytes.drain(..disassembly_size);
-                if old_len == bytes.len() {
-                    panic!("Failed to decompile {:#x?}", bytes);
-                }
+                assert_ne!(old_len, bytes.len(), "Failed to decompile {bytes:#x?}");
 
                 disasm.push(
                     String::from_utf8(
                         output
                             .into_iter()
-                            .filter_map(|c| if c != 0 { Some(c as u8) } else { None })
+                            .filter(|&c| c != 0)
+                            .map(|c| c as u8)
                             .collect(),
                     )
                     .unwrap()
