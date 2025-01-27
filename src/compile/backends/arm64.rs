@@ -322,29 +322,32 @@ fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp) {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_utils::*;
+    use super::super::test_utils::Disassembler;
     use super::*;
+
+    fn disassembler() -> Disassembler {
+        Disassembler::new(ElfArch::Arm64)
+    }
 
     #[test]
     fn test_set_reg_simple() {
-        let mut disassembler = Disassembler::new(ElfArch::Arm64);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
+        let mut ds = disassembler();
         // the following can be set with 1 instruction each.
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
-        assert_eq!(disassemble(&v), ["mov x0, #0x0"],);
-        v.clear();
+        assert_eq!(ds.disassemble(v), ["mov x0, #0x0"],);
 
+        let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, -1);
-        assert_eq!(disassemble(&v), ["mov x0, #-0x1"],);
-        v.clear();
+        assert_eq!(ds.disassemble(v), ["mov x0, #-0x1"],);
 
+        let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001);
-        assert_eq!(disassemble(&v), ["mov x0, #-0x100001"]);
-        v.clear();
+        assert_eq!(ds.disassemble(v), ["mov x0, #-0x100001"]);
 
+        let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X1, 0xbeef);
-        assert_eq!(disassemble(&v), ["mov x1, #0xbeef"]);
+        assert_eq!(ds.disassemble(v), ["mov x1, #0xbeef"]);
     }
 
     #[test]
@@ -353,7 +356,7 @@ mod tests {
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
         assert_eq!(
-            ElfArch::Arm64.disassemble(&v),
+            disassembler().disassemble(v),
             ["mov x0, #0xbeef", "movk x0, #0xdead, lsl #16"],
         );
     }
@@ -363,7 +366,7 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead_0000_beef);
         assert_eq!(
-            ElfArch::Arm64.disassemble(&v),
+            disassembler().disassemble(v),
             ["mov x19, #0xbeef", "movk x19, #0xdead, lsl #32"],
         );
     }
@@ -374,7 +377,7 @@ mod tests {
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
         assert_eq!(
-            ElfArch::Arm64.disassemble(&v),
+            disassembler().disassemble(v),
             [
                 "mov x19, #-0xbeef",
                 // the bitwise negation of 0xdead is 0x2152
@@ -385,66 +388,63 @@ mod tests {
 
     #[test]
     fn test_inc_dec_reg() {
+        let mut ds = disassembler();
         let mut v: Vec<u8> = Vec::new();
-        let mut disassembler = Disassembler::new(ElfArch::Arm64);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
         Arm64Inter::inc_reg(&mut v, Arm64Register::X0);
-        assert_eq!(disassemble(&v), ["add x0, x0, #0x1"]);
-        v.clear();
+        assert_eq!(ds.disassemble(v), ["add x0, x0, #0x1"]);
 
+        let mut v: Vec<u8> = Vec::new();
         Arm64Inter::inc_reg(&mut v, Arm64Register::X19);
-        assert_eq!(disassemble(&v), ["add x19, x19, #0x1"]);
-        v.clear();
+        assert_eq!(ds.disassemble(v), ["add x19, x19, #0x1"]);
 
+        let mut v: Vec<u8> = Vec::new();
         Arm64Inter::dec_reg(&mut v, Arm64Register::X1);
-        assert_eq!(disassemble(&v), ["sub x1, x1, #0x1"]);
-        v.clear();
+        assert_eq!(ds.disassemble(v), ["sub x1, x1, #0x1"]);
 
+        let mut v: Vec<u8> = Vec::new();
         Arm64Inter::dec_reg(&mut v, Arm64Register::X19);
-        assert_eq!(disassemble(&v), ["sub x19, x19, #0x1"]);
+        assert_eq!(ds.disassemble(v), ["sub x19, x19, #0x1"]);
     }
 
     #[test]
     fn test_load_store() {
-        let mut disassembler = Disassembler::new(ElfArch::Arm64);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
+        let mut ds = disassembler();
         assert_eq!(
-            disassemble(&load_from_byte(Arm64Register::X19, Arm64Register::X16)),
+            ds.disassemble(load_from_byte(Arm64Register::X19, Arm64Register::X16).into()),
             ["ldrb w16, [x19], #0x0"],
         );
 
         assert_eq!(
-            disassemble(&store_to_byte(Arm64Register::X19, Arm64Register::X16)),
+            ds.disassemble(store_to_byte(Arm64Register::X19, Arm64Register::X16).into()),
             ["strb w16, [x19], #0x0"],
         );
     }
 
     #[test]
     fn test_add_sub_reg() {
-        let mut disassembler = Disassembler::new(ElfArch::Arm64);
-        let mut disassemble = |v: &[u8]| disassembler.disassemble(v.to_vec());
-        let mut v: Vec<u8> = Vec::with_capacity(24);
+        let mut ds = disassembler();
 
         // Handling of 24-bit values
+        let mut v: Vec<u8> = Vec::with_capacity(24);
         add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add);
         assert_eq!(
-            disassemble(&v),
+            ds.disassemble(v),
             ["add x16, x16, #0xabc, lsl #12", "add x16, x16, #0xdef"]
         );
-        v.clear();
 
         // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
         // included
+        let mut v: Vec<u8> = Vec::with_capacity(24);
         add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub);
-        assert_eq!(disassemble(&v), ["sub x16, x16, #0xabc, lsl #12"]);
-        v.clear();
+        assert_eq!(ds.disassemble(v), ["sub x16, x16, #0xabc, lsl #12"]);
 
+        let mut v: Vec<u8> = Vec::with_capacity(24);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::add_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::sub_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
         assert_eq!(
-            disassemble(&v),
+            ds.disassemble(v),
             [
                 "mov x17, #0xbeef",
                 "movk x17, #0xdead, lsl #16",
@@ -462,7 +462,7 @@ mod tests {
         Arm64Inter::add_byte(&mut v, Arm64Register::X19, i8::from_le_bytes([0xa5]));
         Arm64Inter::sub_byte(&mut v, Arm64Register::X19, i8::from_le_bytes([0xa5]));
         assert_eq!(
-            ElfArch::Arm64.disassemble(&v),
+            disassembler().disassemble(v),
             [
                 "ldrb w17, [x19], #0x0",
                 "add x17, x17, #0xa5",
@@ -479,7 +479,7 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
         assert_eq!(
-            ElfArch::Arm64.disassemble(&v),
+            disassembler().disassemble(v),
             ["mov x17, #0x0", "strb w17, [x19], #0x0"]
         );
     }
@@ -509,7 +509,7 @@ mod tests {
         Arm64Inter::inc_byte(&mut v, Arm64Register::X1);
         Arm64Inter::dec_byte(&mut v, Arm64Register::X17);
         assert_eq!(
-            ElfArch::Arm64.disassemble(&v),
+            disassembler().disassemble(v),
             [
                 "ldrb w17, [x1], #0x0",
                 "add x17, x17, #0x1",
@@ -528,7 +528,7 @@ mod tests {
         Arm64Inter::reg_copy(&mut v, Arm64Register::X2, Arm64Register::X17);
         Arm64Inter::reg_copy(&mut v, Arm64Register::X8, Arm64Register::X16);
         assert_eq!(
-            ElfArch::Arm64.disassemble(&v),
+            disassembler().disassemble(v),
             ["mov x1, x19", "mov x2, x17", "mov x8, x16"]
         );
     }
@@ -537,14 +537,14 @@ mod tests {
     fn test_syscall() {
         let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::syscall(&mut v);
-        assert_eq!(ElfArch::Arm64.disassemble(&v), ["svc #0"]);
+        assert_eq!(disassembler().disassemble(v), ["svc #0"]);
     }
 
     #[test]
     fn test_nops() {
         let mut v = Vec::with_capacity(12);
         Arm64Inter::nop_loop_open(&mut v);
-        assert_eq!(ElfArch::Arm64.disassemble(&v), ["nop", "nop", "nop"]);
+        assert_eq!(disassembler().disassemble(v), ["nop", "nop", "nop"]);
     }
 
     #[test]
@@ -567,7 +567,7 @@ mod tests {
         Arm64Inter::jump_zero(&mut v, Arm64Register::X0, 32).unwrap();
         Arm64Inter::jump_not_zero(&mut v, Arm64Register::X0, -32).unwrap();
         assert_eq!(
-            ElfArch::Arm64.disassemble(&v),
+            disassembler().disassemble(v),
             [
                 "ldrb w17, [x0], #0x0",
                 "tst x17, #0xff",
