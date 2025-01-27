@@ -293,11 +293,15 @@ mod tests {
     use super::super::test_utils::Disassembler;
     use super::*;
 
+    fn disassembler() -> Disassembler {
+        Disassembler::new(ElfArch::X86_64)
+    }
+
     #[test]
     fn test_set_reg() {
         // test that appropriate encodings are used for different immediates
         let mut v: Vec<u8> = Vec::new();
-        let mut ds = Disassembler::new(ElfArch::X86_64);
+        let mut ds = disassembler();
 
         X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 0);
         assert_eq!(
@@ -314,7 +318,7 @@ mod tests {
         v.clear();
         X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, i64::MAX - 0xffff);
         assert_eq!(
-            ds.disassemble(v.clone()),
+            ds.disassemble(v),
             // movabs is an internal term some dis/assemblers have for MOV variant for large
             // immediates.
             vec![String::from("movabs rbx, 0x7fffffffffff0000")]
@@ -339,7 +343,7 @@ mod tests {
         X86_64Inter::jump_zero(&mut v, X86_64Register::Rdi, 9).unwrap();
         X86_64Inter::jump_not_zero(&mut v, X86_64Register::Rdi, -18).unwrap();
         X86_64Inter::nop_loop_open(&mut v);
-        let mut disasm_lines = ElfArch::X86_64.disassemble(&v).into_iter();
+        let mut disasm_lines = disassembler().disassemble(v).into_iter();
         // NOTE: the disassembly uses absolute addresses, not relative addresses.
         assert_eq!(disasm_lines.next().unwrap(), "test byte ptr [rdi], -0x1");
         assert_eq!(disasm_lines.next().unwrap(), "je 0x9");
@@ -359,45 +363,47 @@ mod tests {
     #[test]
     fn add_sub_small_imm() {
         let mut v: Vec<u8> = Vec::new();
+        let mut ds = disassembler();
         X86_64Inter::add_reg(&mut v, X86_64Register::Rsi, 0x20);
-        assert_eq!(ElfArch::X86_64.disassemble(&v), vec!["add esi, 0x20"]);
-        v.clear();
+        assert_eq!(ds.disassemble(v), vec!["add esi, 0x20"]);
 
+        let mut v: Vec<u8> = Vec::new();
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rsi, 0x20);
-        assert_eq!(ElfArch::X86_64.disassemble(&v), vec!["sub esi, 0x20"]);
+        assert_eq!(ds.disassemble(v), vec!["sub esi, 0x20"]);
     }
 
     #[test]
     fn add_sub_medium_imm() {
         let mut v: Vec<u8> = Vec::new();
+        let mut ds = disassembler();
         X86_64Inter::add_reg(&mut v, X86_64Register::Rdx, 0xdead);
-        assert_eq!(ElfArch::X86_64.disassemble(&v), vec!["add edx, 0xdead"]);
-        v.clear();
+        assert_eq!(ds.disassemble(v), vec!["add edx, 0xdead"]);
 
+        let mut v: Vec<u8> = Vec::new();
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rdx, 0xbeef);
-        assert_eq!(ElfArch::X86_64.disassemble(&v), vec!["sub edx, 0xbeef"]);
+        assert_eq!(ds.disassemble(v), vec!["sub edx, 0xbeef"]);
     }
 
     #[test]
     fn add_sub_large_imm() {
         let mut v: Vec<u8> = Vec::new();
+        let mut ds = disassembler();
 
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         X86_64Inter::add_reg(&mut v, X86_64Register::Rbx, 0xdeadbeef);
         assert_eq!(
-            ElfArch::X86_64.disassemble(&v),
+            ds.disassemble(v),
             vec![
                 String::from("movabs rcx, 0xdeadbeef"),
                 String::from("add rbx, rcx"),
-            ],
-            "{v:?}"
+            ]
         );
-        v.clear();
 
+        let mut v: Vec<u8> = Vec::new();
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rbx, 0xdeadbeef);
         assert_eq!(
-            ElfArch::X86_64.disassemble(&v),
+            ds.disassemble(v),
             vec![
                 String::from("movabs rcx, 0xdeadbeef"),
                 String::from("sub rbx, rcx"),
@@ -411,7 +417,7 @@ mod tests {
         X86_64Inter::add_byte(&mut v, X86_64Register::Rdi, 0x23);
         X86_64Inter::sub_byte(&mut v, X86_64Register::Rdi, 0x23);
         assert_eq!(
-            ElfArch::X86_64.disassemble(&v),
+            disassembler().disassemble(v),
             &["add byte ptr [rdi], 0x23", "sub byte ptr [rdi], 0x23"]
         );
     }
@@ -421,7 +427,7 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         X86_64Inter::zero_byte(&mut v, X86_64Register::Rdx);
         assert_eq!(
-            ElfArch::X86_64.disassemble(&v),
+            disassembler().disassemble(v),
             &["mov byte ptr [rdx], 0x0"]
         );
     }
