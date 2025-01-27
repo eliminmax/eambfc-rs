@@ -421,7 +421,7 @@ impl ArchInter for S390xInter {
                 encode_ri_op!(code_buf, 0xa7b, reg, i16, imm);
             }
             i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
-                // AFGI reg, imm {RIL-a}
+                // AGFI reg, imm {RIL-a}
                 encode_ri_op!(code_buf, 0xc28, reg, i32, imm);
             }
             _ => {
@@ -429,7 +429,7 @@ impl ArchInter for S390xInter {
                 if imm_l != 0 {
                     S390xInter::add_reg(code_buf, reg, i64::from(imm_l));
                 }
-                // AIX reg, imm {RIL-a}
+                // AIH reg, imm {RIL-a}
                 encode_ri_op!(code_buf, 0xcc8, reg, i32, imm_h);
             }
         }
