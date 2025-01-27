@@ -612,4 +612,11 @@ mod tests {
         assert_eq!(disasm_lines.next().unwrap(), "nopr %r0");
         assert!(disasm_lines.next().is_none());
     }
+
+    #[test]
+    fn syscall_test() {
+        let mut v: Vec<u8> = Vec::new();
+        S390xInter::syscall(&mut v);
+        assert_eq!(Disassembler::new(ElfArch::S390x).disassemble(v), ["svc 0"]);
+    }
 }
