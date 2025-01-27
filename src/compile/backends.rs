@@ -43,14 +43,14 @@ mod test_utils {
         });
     }
 
-    fn triple_for_arch(arch: ElfArch) -> &'static CStr {
+    fn target_info(arch: ElfArch) -> (&'static CStr, &'static CStr) {
         match arch {
             #[cfg(feature = "arm64")]
-            ElfArch::Arm64 => c"aarch64-unknown-linux-gnu",
+            ElfArch::Arm64 => (c"aarch64-linux-gnu", c"generic"),
             #[cfg(feature = "s390x")]
-            ElfArch::S390x => c"systemz-unknown-linux-gnu",
+            ElfArch::S390x => (c"systemz-linux-gnu", c"z196"),
             #[cfg(feature = "x86_64")]
-            ElfArch::X86_64 => c"x86_64-unknown-linux-gnu",
+            ElfArch::X86_64 => (c"x86_64-linux-gnu", c"x86-64"),
         }
     }
 
@@ -62,9 +62,11 @@ mod test_utils {
         /// Create a new Disassembler for the target architecture
         pub fn new(isa: ElfArch) -> Self {
             init_llvm();
+            let (triple, cpu) = target_info(isa);
             unsafe {
-                let p = disassembler::LLVMCreateDisasm(
-                    triple_for_arch(isa).as_ptr(),
+                let p = disassembler::LLVMCreateDisasmCPU(
+                    triple.as_ptr(),
+                    cpu.as_ptr(),
                     core::ptr::null_mut(),
                     0,
                     None,
@@ -108,7 +110,7 @@ mod test_utils {
                 };
 
                 bytes.drain(..disassembly_size);
-                assert_ne!(old_len, bytes.len(), "Failed to decompile {bytes:#x?}");
+                assert_ne!(old_len, bytes.len(), "Failed to decompile {bytes:02x?}");
 
                 disasm.push(
                     String::from_utf8(
