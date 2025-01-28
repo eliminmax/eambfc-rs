@@ -113,4 +113,36 @@ mod integration_tests {
         assert!(cmd_output.stdout.is_empty());
         assert!(cmd_output.stderr.is_empty());
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn permission_error_test() -> std::io::Result<()> {
+        use std::fs::{copy as copy_file, remove_file, set_permissions, OpenOptions, Permissions};
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+        let mut open_options = OpenOptions::new();
+        open_options
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o044);
+        drop(open_options.open("test_assets/unreadable.bf")?);
+        test_err!("OPEN_R_FAILED", "test_assets/unreadable.bf");
+        set_permissions("test_assets/unreadable.bf", Permissions::from_mode(0o644))?;
+        remove_file("test_assets/unreadable.bf")?;
+        assert!(!std::fs::exists("test_assets/unreadable")?);
+
+        copy_file("test_assets/hello.bf", "test_assets/unwritable.bf")?;
+        let mut open_options = OpenOptions::new();
+        open_options
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o555);
+        drop(open_options.open("test_assets/unwritable")?);
+        test_err!("OPEN_W_FAILED", "test_assets/unwritable.bf");
+        remove_file("test_assets/unwritable.bf")?;
+        remove_file("test_assets/unwritable")?;
+        Ok(())
+    }
 }
