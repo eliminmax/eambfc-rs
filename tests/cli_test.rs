@@ -30,11 +30,13 @@ mod cli_tests {
         "wrap.bf",
     ];
 
+    struct IsInit;
+    static INIT: OnceLock<IsInit> = OnceLock::new();
     /// Return the working directory. The first time it's called, it's initialized with `TempDir`,
     /// and subdirectories for each testable arches are created, with the source files for each test
     /// copied into them.
     fn working_dir() -> impl std::ops::Deref<Target = TempDir> {
-        #[dynamic(lazy, drop)]
+        #[dynamic(lazy)]
         static mut WORKING_DIR: TempDir = TempDir::new().unwrap();
         fn init_arch_dir(dst: impl AsRef<Path>) {
             fs::create_dir(&dst).unwrap();
@@ -46,15 +48,14 @@ mod cli_tests {
                 .unwrap();
             }
         }
-        static INIT: OnceLock<()> = OnceLock::new();
         INIT.get_or_init(|| {
-            let inner = tempfile::TempDir::new().unwrap();
             #[cfg(can_run_arm64)]
-            init_arch_dir(inner.path().join("arm64"));
+            init_arch_dir(WORKING_DIR.read().path().join("arm64"));
             #[cfg(can_run_s390x)]
-            init_arch_dir(inner.path().join("s390x"));
+            init_arch_dir(WORKING_DIR.read().path().join("s390x"));
             #[cfg(can_run_x86_64)]
-            init_arch_dir(inner.path().join("x86_64"));
+            init_arch_dir(WORKING_DIR.read().path().join("x86_64"));
+            IsInit
         });
         WORKING_DIR.read()
     }
@@ -215,5 +216,76 @@ mod cli_tests {
             unwritable_src.as_os_str().to_str().unwrap()
         );
         Ok(())
+    }
+
+    fn test_arch(arch: &str) {
+        fn basic_test(file: &PathBuf, expected: &[u8]) {
+            let result = Command::new(file).output().unwrap();
+            assert!(result.status.success());
+            assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
+            let result = Command::new(file.with_extension("unopt")).output().unwrap();
+            assert!(result.status.success());
+            assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
+        }
+
+        let base_dir = working_dir().path().join(arch);
+        let alt_ext_result = Command::new(PATH)
+            .args(["-a", arch])
+            .arg("-e.brnfck")
+            .arg(base_dir.join("alternative_extension.brnfck"))
+            .status()
+            .unwrap();
+        assert!(alt_ext_result.success());
+        let general_result = Command::new(PATH)
+            .args(["-a", arch])
+            .args(TEST_FILES[1..].iter().map(|f| base_dir.join(f)))
+            .status()
+            .unwrap();
+        assert!(general_result.success());
+        for file in TEST_FILES {
+            let path = base_dir.join(file).with_extension("");
+            fs::rename(&path, path.with_extension("unopt")).unwrap();
+        }
+        let alt_ext_optimized_result = Command::new(PATH)
+            .args(["-O", "-a", arch])
+            .arg("-e.brnfck")
+            .arg(base_dir.join("alternative_extension.brnfck"))
+            .status()
+            .unwrap();
+        assert!(alt_ext_optimized_result.success());
+        let optimized_result = Command::new(PATH)
+            .arg("-O")
+            .args(TEST_FILES[1..].iter().map(|f| base_dir.join(f)))
+            .status()
+            .unwrap();
+        assert!(optimized_result.success());
+
+        basic_test(&base_dir.join("alternative_extension"), b"Hello, world!\n");
+        basic_test(&base_dir.join("hello"), b"Hello, world!\n");
+        basic_test(&base_dir.join("loop"), b"!");
+        basic_test(&base_dir.join("wrap2"), b"0000");
+        basic_test(&base_dir.join("wrap"), "🧟".as_bytes());
+        basic_test(
+            &base_dir.join("colortest"),
+            include_bytes!("../test_assets/colortest_output"),
+        );
+    }
+
+    #[cfg(can_run_arm64)]
+    #[test]
+    fn test_arm64() {
+        test_arch("arm64");
+    }
+
+    #[cfg(can_run_s390x)]
+    #[test]
+    fn test_s390x() {
+        test_arch("s390x");
+    }
+
+    #[cfg(can_run_x86_64)]
+    #[test]
+    fn test_x86_64() {
+        test_arch("x86_64");
     }
 }
