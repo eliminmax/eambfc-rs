@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #[cfg(test)]
-mod integration_tests {
+mod cli_tests {
     extern crate serde;
     extern crate serde_json;
     extern crate tempfile;
