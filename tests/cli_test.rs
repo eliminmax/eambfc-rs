@@ -8,13 +8,13 @@ mod cli_tests {
     extern crate serde_json;
     extern crate tempfile;
     use serde::Deserialize;
+    use static_init::dynamic;
+    use tempfile::TempDir;
+
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::Command;
     use std::sync::OnceLock;
-    use tempfile::TempDir;
-    use static_init::dynamic;
-
 
     const PATH: &str = "./target/debug/eambfc-rs";
 
@@ -182,7 +182,10 @@ mod cli_tests {
             .mode(0o044);
         let unreadable_src = test_asset("unreadable.bf");
         drop(open_options.open(&unreadable_src)?);
-        test_err!("OPEN_R_FAILED", unreadable_src.as_os_str().to_str().unwrap());
+        test_err!(
+            "OPEN_R_FAILED",
+            unreadable_src.as_os_str().to_str().unwrap()
+        );
 
         let unwritable_dest = test_asset("unwritable");
         let unwritable_src = test_asset("unwritable.bf");
@@ -197,7 +200,10 @@ mod cli_tests {
             .truncate(false)
             .mode(0o555);
         drop(open_options.open(&unwritable_dest)?);
-        test_err!("OPEN_W_FAILED", unwritable_src.as_os_str().to_str().unwrap());
+        test_err!(
+            "OPEN_W_FAILED",
+            unwritable_src.as_os_str().to_str().unwrap()
+        );
         Ok(())
     }
 }
