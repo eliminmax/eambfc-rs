@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2024 - 2025 Eli Array Minkoff
+#
+# SPDX-License-Identifier: 0BSD
+
+alternative_extension
+colortest
+hello
+loop
+null
+rw
+too_many_nested_loops
+truthmachine
+wrap
+wrap2
+unmatched_open
+unmatched_close
+unseekable
+dead_code
+
+# test assets
+unseekable_f
+piped_in
+piped_in.bf
+unreadable*
+unwritable*
