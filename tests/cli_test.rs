@@ -127,9 +127,10 @@ mod cli_tests {
 
     macro_rules! test_err {
         ($first_err: expr) => {
-            let errors = String::from_utf8(
-                eambfc_with_args!("-j").output().unwrap().stdout
-                ).unwrap().lines().map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
+            let errors = String::from_utf8(eambfc_with_args!("-j").output().unwrap().stdout)
+            .unwrap()
+            .lines()
+            .map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
             ErrorMsg::validate_formatting(
                 &errors,
                 &mut Command::new(PATH),
@@ -139,7 +140,9 @@ mod cli_tests {
         ($first_err: expr, $($args:expr),+) => {
             let errors = String::from_utf8(
                 eambfc_with_args!("-j", $($args),+).output().unwrap().stdout
-                ).unwrap().lines().map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
+            ).unwrap()
+            .lines()
+            .map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
             ErrorMsg::validate_formatting(
                 &errors,
                 eambfc_with_args!($($args),+)
