@@ -227,6 +227,22 @@ mod cli_tests {
         assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
     }
 
+    fn test_rw_cmd(rw: &Path) {
+        use std::io::Write;
+        use std::process::Stdio;
+        for byte in u8::MIN..=u8::MAX {
+            let mut child = Command::new(rw)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap();
+            child.stdin.take().unwrap().write_all(&[byte]).unwrap();
+            let output = child.wait_with_output().unwrap();
+            assert!(output.status.success());
+            assert_eq!(output.stdout, &[byte]);
+        }
+    }
+
     fn test_arch(arch: &str) {
         let base_dir = working_dir().path().join(arch);
         let alt_ext_result = Command::new(PATH)
@@ -269,6 +285,8 @@ mod cli_tests {
             &base_dir.join("colortest"),
             include_bytes!("../test_assets/colortest_output"),
         );
+        test_rw_cmd(&base_dir.join("rw"));
+        test_rw_cmd(&base_dir.join("rw.unopt"));
     }
 
     #[cfg(can_run_arm64)]
