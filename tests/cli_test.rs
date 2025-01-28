@@ -218,16 +218,16 @@ mod cli_tests {
         Ok(())
     }
 
-    fn test_arch(arch: &str) {
-        fn basic_test(file: &PathBuf, expected: &[u8]) {
-            let result = Command::new(file).output().unwrap();
-            assert!(result.status.success());
-            assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
-            let result = Command::new(file.with_extension("unopt")).output().unwrap();
-            assert!(result.status.success());
-            assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
-        }
+    fn test_fixed_output(file: &PathBuf, expected: &[u8]) {
+        let result = Command::new(file).output().unwrap();
+        assert!(result.status.success());
+        assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
+        let result = Command::new(file.with_extension("unopt")).output().unwrap();
+        assert!(result.status.success());
+        assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
+    }
 
+    fn test_arch(arch: &str) {
         let base_dir = working_dir().path().join(arch);
         let alt_ext_result = Command::new(PATH)
             .args(["-a", arch])
@@ -260,12 +260,12 @@ mod cli_tests {
             .unwrap();
         assert!(optimized_result.success());
 
-        basic_test(&base_dir.join("alternative_extension"), b"Hello, world!\n");
-        basic_test(&base_dir.join("hello"), b"Hello, world!\n");
-        basic_test(&base_dir.join("loop"), b"!");
-        basic_test(&base_dir.join("wrap2"), b"0000");
-        basic_test(&base_dir.join("wrap"), "🧟".as_bytes());
-        basic_test(
+        test_fixed_output(&base_dir.join("alternative_extension"), b"Hello, world!\n");
+        test_fixed_output(&base_dir.join("hello"), b"Hello, world!\n");
+        test_fixed_output(&base_dir.join("loop"), b"!");
+        test_fixed_output(&base_dir.join("wrap2"), b"0000");
+        test_fixed_output(&base_dir.join("wrap"), "🧟".as_bytes());
+        test_fixed_output(
             &base_dir.join("colortest"),
             include_bytes!("../test_assets/colortest_output"),
         );
