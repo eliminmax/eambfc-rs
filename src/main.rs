@@ -39,10 +39,11 @@ fn main() -> ExitCode {
             println!("- arm64 (aliases: aarch64)");
             #[cfg(feature = "s390x")]
             println!("- s390x (aliases: s390, z/architecture)");
-            println!(
-                "\nIf no architecture is specified, it defaults to {}.",
-                ElfArch::default()
-            );
+            println!(concat!(
+                "\nIf no architecture is specified, it defaults to ",
+                env!("EAMBFC_DEFAULT_ARCH"),
+                '.'
+            ));
         }
         Ok(RunConfig::ShowHelp) => {
             println!(

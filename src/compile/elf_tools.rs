@@ -36,18 +36,17 @@ impl std::fmt::Display for ElfArch {
     }
 }
 
-pub(super) const DEFAULT_ARCH: ElfArch =
-    if cfg!(feature = "arm64") && (cfg!(target_arch = "aarch64") || !cfg!(feature = "x86_64")) {
-        ElfArch::Arm64
-    } else if cfg!(feature = "x86_64") {
-        ElfArch::X86_64
-    } else {
-        ElfArch::S390x
-    };
-
 impl Default for ElfArch {
     fn default() -> Self {
-        DEFAULT_ARCH
+        match env!("EAMBFC_DEFAULT_ARCH") {
+            #[cfg(feature = "arm64")]
+            "arm64" => ElfArch::Arm64,
+            #[cfg(feature = "s390x")]
+            "s390x" => ElfArch::S390x,
+            #[cfg(feature = "x86_64")]
+            "x86_64" => ElfArch::X86_64,
+            _ => unreachable!("build.rs sets this to valid values only"),
+        }
     }
 }
 

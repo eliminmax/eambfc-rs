@@ -9,6 +9,36 @@ use std::process::Command;
 #[cfg(not(any(feature = "x86_64", feature = "arm64", feature = "s390x")))]
 compile_error!("Must have at least one architecture enabled");
 fn main() {
+    println!("cargo::rerun-if-changed=.git/index");
+    println!("cargo::rerun-if-env-changed=EAMBFC_DEFAULT_ARCH");
+
+    // set default arch
+    if let Some(arch) = option_env!("EAMBFC_DEFAULT_ARCH") {
+        macro_rules! arch_check {
+            ($arch: literal) => {{
+                assert!(
+                    cfg!(feature = $arch),
+                    concat!("Can't default to ", $arch, " unless it's enabled")
+                )
+            }};
+        }
+        match arch {
+            "arm64" => arch_check!("arm64"),
+            "s390x" => arch_check!("s390x"),
+            "x86_64" => arch_check!("x86_64"),
+            bad_arch => panic!("Can't default to {bad_arch} as no backend exists"),
+        }
+    } else if cfg!(feature = "arm64")
+        && (cfg!(target_arch = "aarch64") || !cfg!(feature = "x86_64"))
+    {
+        println!("cargo::rustc-env=EAMBFC_DEFAULT_ARCH=arm64");
+    } else if cfg!(feature = "x86_64") {
+        println!("cargo::rustc-env=EAMBFC_DEFAULT_ARCH=x86_64");
+    } else {
+        assert!(cfg!(feature = "s390x"));
+        println!("cargo::rustc-env=EAMBFC_DEFAULT_ARCH=s390x");
+    }
+
     macro_rules! check_exec_support {
         ($platform: literal) => {
             if cfg!(feature = $platform)
@@ -38,7 +68,6 @@ fn main() {
         return;
     }
 
-    println!("cargo::rerun-if-changed=.git/index");
     let git_invocation = Command::new("git")
         .args(["log", "-n1", "--pretty=format:built from git commit: %h"])
         .output()
