@@ -18,7 +18,7 @@ mod cli_tests {
 
     const PATH: &str = "./target/debug/eambfc-rs";
 
-    const TEST_FILES: [&str; 11] = [
+    const TEST_FILES: [&str; 9] = [
         "alternative_extension.brnfck",
         "colortest.bf",
         "hello.bf",
@@ -26,8 +26,6 @@ mod cli_tests {
         "null.bf",
         "rw.bf",
         "truthmachine.bf",
-        "unmatched_close.bf",
-        "unmatched_open.bf",
         "wrap2.bf",
         "wrap.bf",
     ];
@@ -164,6 +162,8 @@ mod cli_tests {
         test_err!("OPEN_R_FAILED", "nonexistent.bf");
         test_err!("UNKNOWN_ARCH", "-a", "pdp10.99999");
         test_err!("MULTIPLE_ARCHES", "-a", "amd64", "-aarm64");
+        test_err!("UNMATCHED_OPEN", "./test_assets/unmatched_open.bf");
+        test_err!("UNMATCHED_CLOSE", "./test_assets/unmatched_close.bf");
     }
 
     #[test]
