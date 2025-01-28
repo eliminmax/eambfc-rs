@@ -15,7 +15,7 @@ x86_64 = []
 
 [lints.rust]
 # don't warn on tarpaulin code coverage cfg conditions
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include, can_run_arm64, can_run_s390x, can_run_x86_64)'] }
 
 [lints.clippy]
 # enable these categories with a negative priority, so that individual lints can

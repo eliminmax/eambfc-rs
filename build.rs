@@ -9,6 +9,22 @@ use std::process::Command;
 #[cfg(not(any(feature = "x86_64", feature = "arm64", feature = "s390x")))]
 compile_error!("Must have at least one architecture enabled");
 fn main() {
+    macro_rules! check_exec_support {
+        ($platform: literal) => {
+            if cfg!(feature = $platform)
+                && Command::new(concat!("./test_assets/exec_support/", $platform))
+                    .output()
+                    .is_ok_and(|res| res.status.success())
+            {
+                println!(concat!("cargo::rustc-cfg=can_run_", $platform));
+            }
+        };
+    }
+
+    check_exec_support!("arm64");
+    check_exec_support!("s390x");
+    check_exec_support!("x86_64");
+
     if !PathBuf::from(".git").exists() {
         println!("cargo::rustc-env=EAMBFC_RS_GIT_COMMIT=unknown: not built from git repository");
         return;
