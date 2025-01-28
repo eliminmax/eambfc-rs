@@ -60,7 +60,7 @@ mod cli_tests {
         WORKING_DIR.read()
     }
 
-    fn test_asset(sub_path: impl AsRef<Path>) -> PathBuf {
+    fn temp_asset(sub_path: impl AsRef<Path>) -> PathBuf {
         working_dir().path().join(sub_path)
     }
 
@@ -191,18 +191,18 @@ mod cli_tests {
             .create(true)
             .truncate(false)
             .mode(0o044);
-        let unreadable_src = test_asset("unreadable.bf");
+        let unreadable_src = temp_asset("unreadable.bf");
         drop(open_options.open(&unreadable_src)?);
         test_err!(
             "OPEN_R_FAILED",
             unreadable_src.as_os_str().to_str().unwrap()
         );
 
-        let unwritable_dest = test_asset("unwritable");
-        let unwritable_src = test_asset("unwritable.bf");
+        let unwritable_dest = temp_asset("unwritable");
+        let unwritable_src = temp_asset("unwritable.bf");
         copy_file(
             "test_assets/templates/hello.bf",
-            test_asset("unwritable.bf"),
+            temp_asset("unwritable.bf"),
         )?;
         let mut open_options = OpenOptions::new();
         open_options
