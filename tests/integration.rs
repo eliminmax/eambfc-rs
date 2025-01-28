@@ -132,7 +132,7 @@ mod integration_tests {
         remove_file("test_assets/unreadable.bf")?;
         assert!(!std::fs::exists("test_assets/unreadable")?);
 
-        copy_file("test_assets/hello.bf", "test_assets/unwritable.bf")?;
+        copy_file("test_assets/templates/hello.bf", "test_assets/unwritable.bf")?;
         let mut open_options = OpenOptions::new();
         open_options
             .write(true)
