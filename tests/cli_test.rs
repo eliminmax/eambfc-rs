@@ -72,14 +72,11 @@ mod cli_tests {
         (with_cmd $cmd:expr, $arg:expr, $($args:expr),*) => {
             eambfc_with_args!(with_cmd $cmd.arg($arg), $($args),*)
         };
-        () => {
-            Command::new(PATH)
-        };
         ($arg:expr) => {
-            eambfc_with_args!().arg($arg)
+            Command::new(PATH).arg($arg)
         };
         ($arg:expr, $($args:expr),*) => {
-            eambfc_with_args!(with_cmd eambfc_with_args!().arg($arg), $($args),*)
+            eambfc_with_args!(with_cmd Command::new(PATH).arg($arg), $($args),*)
         };
     }
 
@@ -131,6 +128,16 @@ mod cli_tests {
     }
 
     macro_rules! test_err {
+        ($first_err: expr) => {
+            let errors = String::from_utf8(
+                eambfc_with_args!("-j").output().unwrap().stdout
+                ).unwrap().lines().map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
+            ErrorMsg::validate_formatting(
+                &errors,
+                &mut Command::new(PATH),
+            );
+            assert_eq!(errors[0].errorId, $first_err);
+        };
         ($first_err: expr, $($args:expr),+) => {
             let errors = String::from_utf8(
                 eambfc_with_args!("-j", $($args),+).output().unwrap().stdout
@@ -149,7 +156,7 @@ mod cli_tests {
         test_err!("MULTIPLE_TAPE_BLOCK_COUNTS", "-t", "32", "-t", "76");
         test_err!("MISSING_OPERAND", "-t");
         test_err!("UNKNOWN_ARG", "-r");
-        test_err!("NO_SOURCE_FILES", "-k");
+        test_err!("NO_SOURCE_FILES");
         test_err!("BAD_EXTENSION", "e");
         test_err!("NO_TAPE", "-t", "0");
         test_err!("TAPE_TOO_LARGE", "-t9223372036854775807");
