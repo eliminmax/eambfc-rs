@@ -11,10 +11,10 @@ mod cli_tests {
     use static_init::dynamic;
     use tempfile::TempDir;
 
-    use std::fs;
     use std::path::{Path, PathBuf};
-    use std::process::Command;
+    use std::process::{Command, Stdio};
     use std::sync::OnceLock;
+    use std::{fs, io};
 
     const PATH: &str = "./target/debug/eambfc-rs";
 
@@ -181,7 +181,7 @@ mod cli_tests {
 
     #[cfg(unix)]
     #[test]
-    fn permission_error_test() -> std::io::Result<()> {
+    fn permission_error_test() -> io::Result<()> {
         use fs::{copy as copy_file, OpenOptions};
         use std::os::unix::fs::OpenOptionsExt;
 
@@ -228,8 +228,7 @@ mod cli_tests {
     }
 
     fn test_rw_cmd(rw: &Path) {
-        use std::io::Write;
-        use std::process::Stdio;
+        use io::Write;
         for byte in u8::MIN..=u8::MAX {
             let mut child = Command::new(rw)
                 .stdin(Stdio::piped())
