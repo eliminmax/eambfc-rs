@@ -2,12 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#[derive(Debug)]
 pub(super) enum ElfClass {
     ELFClass64 = 2,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub(super) enum ByteOrdering {
     #[cfg(any(feature = "x86_64", feature = "arm64"))]
     LittleEndian = 1,
@@ -56,22 +55,18 @@ impl Default for ElfArch {
     }
 }
 
-#[derive(Debug)]
 pub(super) enum ElfVersion {
     EvCurrent = 1,
 }
 
-#[derive(Debug)]
 pub(super) enum ElfOsAbi {
     None,
 }
 
-#[derive(Debug)]
 pub(super) enum ElfType {
     Exec = 2,
 }
 
-#[derive(Debug)]
 pub(super) struct EIdent {
     pub class: ElfClass,
     pub data: ByteOrdering,
@@ -119,7 +114,6 @@ pub(super) struct Ehdr {
     pub shstrndx: u16,
 }
 
-#[derive(Debug)]
 pub(super) enum PType {
     Load = 1,
 }

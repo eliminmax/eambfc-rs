@@ -26,7 +26,7 @@ pub(in super::super) enum Arm64Register {
     X19 = 19, // bf pointer register
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 #[repr(u8)]
 enum ShiftLevel {
     NoShift = 0b000_0000,
@@ -35,7 +35,7 @@ enum ShiftLevel {
     Shift48 = 0b110_0000,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 #[repr(u8)]
 enum MoveType {
     Keep = 0xf2,
@@ -278,7 +278,7 @@ impl ArchInter for Arm64Inter {
 }
 
 // discriminants used here are often, but not always, the last byte in an ADD or SUB instructions
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(u8)]
 enum ArithOp {
     Add = 0x91,

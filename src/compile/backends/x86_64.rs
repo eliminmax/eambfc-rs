@@ -33,7 +33,7 @@ use crate::err::{BFCompileError, BFErrorID};
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 #[repr(u8)]
 pub(in super::super) enum X86_64Register {
     Rax = 0b000,
@@ -45,7 +45,7 @@ pub(in super::super) enum X86_64Register {
 
 // many add/subtract instructions use these bit values for the upper five bits and the target
 // register for the lower 3 bits to encode instructions.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 #[repr(u8)]
 enum ArithOp {
     Add = 0xc0,
@@ -66,14 +66,13 @@ enum ArithOp {
 // when working on registers and 0 when working on memory, then doing some messy
 // bitwise hackery, the following enums and function can be used.
 
-#[derive(Debug)]
 #[repr(u8)]
 enum OffsetOp {
     Inc = 0,
     Dec = 8,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 #[repr(u8)]
 enum OffsetMode {
     BytePtr = 0,

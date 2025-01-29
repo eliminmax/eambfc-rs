@@ -55,7 +55,6 @@ mod test_utils {
     }
 
     /// A safe abstraction over `llvm_sys::disassembler::LLVMDisasmContextRef`
-    #[derive(Debug)]
     pub struct Disassembler(disassembler::LLVMDisasmContextRef);
 
     impl Disassembler {

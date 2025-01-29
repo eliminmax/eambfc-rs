@@ -35,7 +35,6 @@ pub(super) trait ArchInter {
     fn zero_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
 }
 
-#[derive(Debug)]
 pub(super) struct Registers<R: Copy> {
     pub sc_num: R,
     pub arg1: R,
@@ -44,7 +43,6 @@ pub(super) struct Registers<R: Copy> {
     pub bf_ptr: R,
 }
 
-#[derive(Debug)]
 pub(super) struct SyscallNums {
     pub read: i64,
     pub write: i64,

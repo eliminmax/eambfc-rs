@@ -216,7 +216,7 @@ use super::elf_tools::{ByteOrdering, ElfArch};
 // corresponding assembly in a comment nearby. Unlike other backends, that
 // comment is followed by the instruction format in curly braces.
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub(in super::super) enum S390xRegister {
     R0 = 0, // zero register
