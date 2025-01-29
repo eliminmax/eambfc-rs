@@ -167,7 +167,13 @@ mod cli_tests {
         test_err!("NOT_NUMERIC", "-t", "hello");
         test_err!("OPEN_R_FAILED", "nonexistent.bf");
         test_err!("UNKNOWN_ARCH", "-a", "pdp10.99999");
-        test_err!("MULTIPLE_ARCHES", "-a", "amd64", "-aarm64");
+        test_err!(
+            "MULTIPLE_ARCHES",
+            "-a",
+            env!("EAMBFC_DEFAULT_ARCH"),
+            "-a",
+            env!("EAMBFC_DEFAULT_ARCH")
+        );
         test_err!("UNMATCHED_OPEN", "./test_assets/unmatched_open.bf");
         test_err!("UNMATCHED_CLOSE", "./test_assets/unmatched_close.bf");
     }
