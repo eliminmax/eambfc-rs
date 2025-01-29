@@ -6,12 +6,8 @@ SPDX-License-Identifier: 0BSD
 
 # About these binaries
 
-These binaries are adapted from [my tiny-clear-elf project](https://github.com/eliminmax/tiny-clear-elf)
+These binaries each simply call the exit system call with exit code 0, to check whether or not the system this is running on can test binaries for the relevant architectures.
 
-They each consist of a 64-bit ELF header, a 56-bit Program Header Table entry, then the code to execute the exit(0) syscall, and nothing else.
+They are adapted from [my tiny-clear-elf project](https://github.com/eliminmax/tiny-clear-elf), and made in a hex editor.
 
-The write-ups in the tiny-clear-elf repository explain how the original versions of these binaries worked.
-
-The original versions printed a 10-byte ANSI escape sequence, and the code for the write system call that printed that has been removed, as has the escape sequence itself. The p_filesz and p_memsz program header fields have been adjusted for the new smaller size. Other than that, the original write-ups apply.
-
-I was trying to figure out a way to check for executable support without needing to ship these, but working within the cargo build system, nothing as simple as just stripping out the `write` system call in a hex editor seemed available.
+If anyone is concerned by their inclusion, I understand, and I wrote the `check_bins.py` script in python to help anyone who wants to audit them. While the binaries themselves were created by hand using a minimal hex editor, the `check_bins.py` script can be used to check that they are what I claim them to be, using only Python on a Linux system, and its docstring lists places to double-check the constants and registers used within everything.
