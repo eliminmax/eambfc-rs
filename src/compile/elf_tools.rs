@@ -205,8 +205,11 @@ mod tests {
     use super::ElfArch;
     #[test]
     fn display_elfarch() {
+        #[cfg(feature = "arm64")]
         assert_eq!(format!("{}", ElfArch::Arm64), String::from("arm64"));
+        #[cfg(feature = "s390x")]
         assert_eq!(format!("{}", ElfArch::S390x), String::from("s390x"));
+        #[cfg(feature = "x86_64")]
         assert_eq!(format!("{}", ElfArch::X86_64), String::from("x86_64"));
     }
 }

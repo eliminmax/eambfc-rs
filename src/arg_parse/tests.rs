@@ -190,53 +190,64 @@ fn list_arch_processed() {
 
 #[test]
 fn arch_selection() {
+    // use these ugly double-checking constructs to avoid trying to construct nonexisttent enum
+    // variants when architectures are disabled.
     if cfg!(feature = "arm64") {
-        assert_eq!(
-            parse_standard(vec![arg("-aarm64"), arg("foo.bf")]).arch,
-            ElfArch::Arm64
-        );
-        assert_eq!(
-            parse_standard(vec![arg("-aaarch64"), arg("foo.bf")]).arch,
-            ElfArch::Arm64
-        );
+        #[cfg(feature = "arm64")]
+        {
+            assert_eq!(
+                parse_standard(vec![arg("-aarm64"), arg("foo.bf")]).arch,
+                ElfArch::Arm64
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-aaarch64"), arg("foo.bf")]).arch,
+                ElfArch::Arm64
+            );
+        };
     } else {
         assert!(parse_args(vec![arg("-aarm64"), arg("foo.bf")].into_iter())
             .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
     }
     if cfg!(feature = "s390x") {
-        assert_eq!(
-            parse_standard(vec![arg("-as390x"), arg("foo.bf")]).arch,
-            ElfArch::S390x
-        );
-        assert_eq!(
-            parse_standard(vec![arg("-as390"), arg("foo.bf")]).arch,
-            ElfArch::S390x
-        );
-        assert_eq!(
-            parse_standard(vec![arg("-az/architecture"), arg("foo.bf")]).arch,
-            ElfArch::S390x
-        );
+        #[cfg(feature = "s390x")]
+        {
+            assert_eq!(
+                parse_standard(vec![arg("-as390x"), arg("foo.bf")]).arch,
+                ElfArch::S390x
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-as390"), arg("foo.bf")]).arch,
+                ElfArch::S390x
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-az/architecture"), arg("foo.bf")]).arch,
+                ElfArch::S390x
+            );
+        };
     } else {
         assert!(parse_args(vec![arg("-as390x"), arg("foo.bf")].into_iter())
             .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
     }
     if cfg!(feature = "x86_64") {
-        assert_eq!(
-            parse_standard(vec![arg("-ax86_64"), arg("foo.bf")]).arch,
-            ElfArch::X86_64
-        );
-        assert_eq!(
-            parse_standard(vec![arg("-ax64"), arg("foo.bf")]).arch,
-            ElfArch::X86_64
-        );
-        assert_eq!(
-            parse_standard(vec![arg("-aamd64"), arg("foo.bf")]).arch,
-            ElfArch::X86_64
-        );
-        assert_eq!(
-            parse_standard(vec![arg("-ax86-64"), arg("foo.bf")]).arch,
-            ElfArch::X86_64
-        );
+        #[cfg(feature = "x86_64")]
+        {
+            assert_eq!(
+                parse_standard(vec![arg("-ax86_64"), arg("foo.bf")]).arch,
+                ElfArch::X86_64
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-ax64"), arg("foo.bf")]).arch,
+                ElfArch::X86_64
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-aamd64"), arg("foo.bf")]).arch,
+                ElfArch::X86_64
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-ax86-64"), arg("foo.bf")]).arch,
+                ElfArch::X86_64
+            );
+        };
     } else {
         assert!(parse_args(vec![arg("-ax86_64"), arg("foo.bf")].into_iter())
             .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
