@@ -120,8 +120,8 @@ pub(super) fn to_condensed(
     })?;
     code_buf.retain(|b| b"+-<>,.[]".contains(b));
     loops_match(code_buf.as_slice())?;
-    let stripped_bytes = strip_dead_code(code_buf);
-    Ok(condense(stripped_bytes))
+    strip_dead_code(&mut code_buf);
+    Ok(condense(code_buf))
 }
 
 fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
@@ -153,70 +153,82 @@ fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
     }
 }
 
-fn remove_loop_at(index: usize, target: &mut Vec<u8>) {
-    if target.get(index).unwrap_or(&b'_') != &b'[' {
-        // early return - maybe removed if nested inside of another loop removed in an earlier run
-        // through this function, and vec.split_off(at) panics if out-of-bounds
-        return;
-    }
-    let split_holder = target.split_off(index);
-    let mut nest_level = 0;
-    let mut index = 0;
-    let mut split_holder = split_holder
-        .into_iter()
-        .skip_while(|b| {
-            if b == &b'[' {
-                nest_level += 1;
-            } else if b == &b']' {
-                nest_level -= 1;
-            }
-
-            index += 1;
-            nest_level > 0
-        })
-        .skip(1)
-        .collect::<Vec<u8>>();
-
-    target.append(&mut split_holder);
+#[derive(PartialEq)]
+enum CancellingCodeIndex {
+    CancellingPair(usize),
+    OverflowingArith(usize),
 }
 
-fn strip_dead_code(mut filtered_bytes: Vec<u8>) -> Vec<u8> {
-    // loop through 3 steps until they leave things unchanged
-    assert!(filtered_bytes.is_ascii());
-    let mut old_filtered: String;
+fn find_cancelling_code(code_bytes: &[u8]) -> Option<CancellingCodeIndex> {
+    let small_patterns: [&[u8]; 4] = [
+        b"+-".as_slice(),
+        b"-+".as_slice(),
+        b"<>".as_slice(),
+        b"><".as_slice(),
+    ];
+    for (i, window) in code_bytes.windows(2).enumerate() {
+        if small_patterns.contains(&window) {
+            return Some(CancellingCodeIndex::CancellingPair(i));
+        }
+    }
+    for (i, window) in code_bytes.windows(256).enumerate() {
+        if [[b'-'; 256].as_slice(), [b'+'; 256].as_slice()].contains(&window) {
+            return Some(CancellingCodeIndex::OverflowingArith(i));
+        }
+    }
+    None
+}
+
+fn find_dead_loop(code_bytes: &[u8]) -> Option<usize> {
+    if code_bytes[0] == b'[' { return Some(0); }
+    for (index, window) in code_bytes.windows(2).enumerate() {
+        if window == b"][" {
+            return Some(index + 1);
+        }
+    }
+    None
+}
+
+fn strip_dead_code(filtered_bytes: &mut Vec<u8>) {
+    // alternate between finding and removing code that cancels itself out, and finding and
+    // removing loops that can never run. Return the remaining code once both steps complete
+    // without changing any code
     loop {
-        old_filtered =
-            String::from_utf8(filtered_bytes).expect("non-bf bytes shouldn't have appeared!");
-        // first, replace sequences within the bf_bytes String that cancel out.
-        let mut new_filtered = old_filtered
-            .replace("+-", "")
-            .replace("-+", "")
-            .replace("<>", "")
-            .replace("><", "")
-            .replace(&"-".repeat(256), "")
-            .replace(&"+".repeat(256), "")
-            .into_bytes();
-
-        // remove leading dead loop
-        if new_filtered.starts_with(b"[") {
-            remove_loop_at(0, &mut new_filtered);
+        let mut unchanged = true;
+        // first, remove sequences within bf_bytes that cancel out.
+        while let Some(cancelling_code) = find_cancelling_code(filtered_bytes) {
+            unchanged = false;
+            match cancelling_code {
+                CancellingCodeIndex::CancellingPair(i) => {
+                    let _ = filtered_bytes.drain(i..i + 2);
+                }
+                CancellingCodeIndex::OverflowingArith(i) => {
+                    let _ = filtered_bytes.drain(i..i + 256);
+                }
+            }
         }
-        // find location of dead loop that may exist later in the program
-        let mut dead_loop_starts = new_filtered
-            .as_slice()
-            .windows(2)
-            .enumerate()
-            .filter(|(_, val)| (val == b"]["))
-            .map(|(i, _)| i + 1);
 
-        if let Some(index) = dead_loop_starts.next() {
-            remove_loop_at(index, &mut new_filtered);
+        // find and remove dead loops later in the program
+        while let Some(index) = find_dead_loop(filtered_bytes) {
+            unchanged = false;
+            let mut nest_level = 0;
+            for (i, b) in filtered_bytes[index..].iter().enumerate() {
+                if *b == b'[' {
+                    nest_level += 1;
+                } else if *b == b']' {
+                    nest_level -= 1;
+                }
+                if nest_level == 0 {
+                    filtered_bytes.drain(index..=index + i);
+                    break;
+                }
+            }
         }
+
         // finally, check if any of the above changed anything. If not, break out of the loop.
-        if old_filtered.as_bytes() == new_filtered.as_slice() {
-            return new_filtered;
+        if unchanged {
+            break;
         }
-        filtered_bytes = new_filtered;
     }
 }
 
@@ -255,7 +267,8 @@ mod tests {
         code.extend_from_slice(b"[+-]>");
         code.extend(b"-".repeat(256));
         code.extend_from_slice(b"[->+<][,.]");
-        assert_eq!(strip_dead_code(code), Vec::from(b">[->+<]"));
+        strip_dead_code(&mut code);
+        assert_eq!(code, Vec::from(b">[->+<]"));
     }
 
     #[test]
