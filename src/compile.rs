@@ -291,7 +291,7 @@ impl<B: BFCompileHelper> BFCompile for B {
         let reader = BufReader::new(in_f);
 
         if optimize {
-            errs.append(&mut match to_condensed(Box::new(reader)) {
+            errs.append(&mut match to_condensed(reader) {
                 Ok(condensed) => condensed
                     .into_iter()
                     .filter_map(|i| {
@@ -377,8 +377,8 @@ mod tests {
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
         X86_64Inter::compile(
-            Box::new(b"+[>]<-,.".as_slice()),
-            Box::new(Vec::<u8>::new()),
+            b"+[>]<-,.".as_slice(),
+            Vec::<u8>::new(),
             false,
             8,
         )
@@ -390,8 +390,8 @@ mod tests {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
         X86_64Inter::compile(
-            Box::new(b">+[-->---[-<]>]>+".as_slice()),
-            Box::new(Vec::<u8>::new()),
+            b">+[-->---[-<]>]>+".as_slice(),
+            Vec::<u8>::new(),
             false,
             8,
         )
@@ -401,8 +401,8 @@ mod tests {
     #[test]
     fn unmatched_open() {
         assert!(X86_64Inter::compile(
-            Box::new(b"[".as_slice()),
-            Box::new(Vec::<u8>::new()),
+            b"[".as_slice(),
+            Vec::<u8>::new(),
             false,
             8,
         )
@@ -412,8 +412,8 @@ mod tests {
     #[test]
     fn unmatched_close() {
         assert!(X86_64Inter::compile(
-            Box::new(b"]".as_slice()),
-            Box::new(Vec::<u8>::new()),
+            b"]".as_slice(),
+            Vec::<u8>::new(),
             false,
             8,
         )

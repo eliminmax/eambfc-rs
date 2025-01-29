@@ -279,7 +279,7 @@ mod tests {
     #[test]
     fn to_condensed_test() {
         assert_eq!(
-            to_condensed(Box::new(b"e+[+]++[-],.....".as_slice()))
+            to_condensed(b"e+[+]++[-],.....".as_slice())
                 .unwrap()
                 .collect::<Vec<_>>(),
             vec![
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn read_failure_handled() {
-        let unreadable = Box::new(Unreadable {});
+        let unreadable = Unreadable;
 
         assert!(to_condensed(unreadable).is_err_and(|e| e.kind == BFErrorID::FailedRead));
     }
