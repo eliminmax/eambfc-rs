@@ -245,6 +245,38 @@ mod cli_tests {
         }
     }
 
+    fn test_truthmachine_cmd(truthmachine: impl AsRef<Path>) {
+        use io::{Read, Write};
+
+        macro_rules! spawn_tm {
+            ($binding: ident, $input: literal) => {
+                let mut $binding = Command::new(truthmachine.as_ref())
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .unwrap();
+                let write_result = $binding
+                    .stdin
+                    .take()
+                    .unwrap()
+                    .write($input);
+                assert!(write_result.is_ok_and(|sz| sz == 1));
+            }
+        }
+
+        spawn_tm!(cmd_0, b"0");
+        let output = cmd_0.wait_with_output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"0");
+
+        spawn_tm!(cmd_1, b"1");
+        let mut output = cmd_1.stdout.take().unwrap();
+        let mut read_buf : [u8; 16] = [0; 16];
+        output.read_exact(&mut read_buf).unwrap();
+        assert_eq!(read_buf, [b'1'; 16]);
+        cmd_1.kill().and_then(|()| cmd_1.wait()).unwrap();
+    }
+
     fn test_arch(arch: &str) {
         use fs::File;
         use io::Read;
@@ -310,6 +342,8 @@ mod cli_tests {
             (dead_code_elf_size, dead_code_elf_bytes),
             (null_elf_size, null_elf_bytes)
         );
+        test_truthmachine_cmd(base_dir.join("truthmachine"));
+        test_truthmachine_cmd(base_dir.join("truthmachine.unopt"));
     }
 
     #[cfg(can_run_arm64)]
