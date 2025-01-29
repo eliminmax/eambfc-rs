@@ -38,7 +38,8 @@ mod cli_tests {
     /// copied into them.
     fn working_dir() -> impl std::ops::Deref<Target = TempDir> {
         #[dynamic(lazy)]
-        static mut WORKING_DIR: TempDir = TempDir::new().unwrap();
+        static mut WORKING_DIR: TempDir =
+            tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
         fn init_arch_dir(dst: impl AsRef<Path>) {
             fs::create_dir(&dst).unwrap();
             for file in TEST_FILES.iter().copied() {
