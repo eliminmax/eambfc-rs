@@ -17,8 +17,11 @@ pub(super) enum ByteOrdering {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) enum ElfArch {
+    #[cfg(feature = "arm64")]
     Arm64 = 183, // EM_AARCH64
+    #[cfg(feature = "s390x")]
     S390x = 22,  // EM_S390
+    #[cfg(feature = "x86_64")]
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
 
@@ -28,8 +31,11 @@ impl std::fmt::Display for ElfArch {
             f,
             "{}",
             match *self {
+                #[cfg(feature = "arm64")]
                 ElfArch::Arm64 => "arm64",
+                #[cfg(feature = "s390x")]
                 ElfArch::S390x => "s390x",
+                #[cfg(feature = "x86_64")]
                 ElfArch::X86_64 => "x86_64",
             }
         )
