@@ -81,13 +81,10 @@ mod cli_tests {
         };
     }
 
-    #[allow(
-        non_snake_case,
-        reason = "Match de-facto JSON schema used within the output"
-    )]
     #[derive(Deserialize, Debug, PartialEq, Clone)]
     struct ErrorMsg {
-        errorId: String,
+        #[serde(rename = "errorId")]
+        error_id: String,
         message: String,
         instruction: Option<String>,
         line: Option<usize>,
@@ -100,7 +97,7 @@ mod cli_tests {
 
             let mut s: String = String::new();
             for err in errs {
-                write!(s, "Error {}", err.errorId).unwrap();
+                write!(s, "Error {}", err.error_id).unwrap();
                 if let Some(instr) = err.instruction.as_ref() {
                     write!(s, " when compiling '{}'", instr.as_bytes().escape_ascii()).unwrap();
                 }
@@ -138,7 +135,7 @@ mod cli_tests {
                 &errors,
                 &mut Command::new(PATH),
             );
-            assert_eq!(errors[0].errorId, $first_err);
+            assert_eq!(errors[0].error_id, $first_err);
         };
         ($first_err: expr, $($args:expr),+) => {
             let errors = String::from_utf8(
@@ -150,7 +147,7 @@ mod cli_tests {
                 &errors,
                 eambfc_with_args!($($args),+)
             );
-            assert_eq!(errors[0].errorId, $first_err);
+            assert_eq!(errors[0].error_id, $first_err);
         };
     }
 
