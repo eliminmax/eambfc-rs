@@ -359,4 +359,32 @@ mod cli_tests {
     fn test_x86_64() {
         test_arch("x86_64");
     }
+
+    #[test]
+    fn test_version_output() {
+        let expected = format!(
+            concat!(
+                include_str!("../src/text_assets/version_template.txt"),
+                '\n'
+            ),
+            PATH,
+            env!("CARGO_PKG_VERSION"),
+            env!("EAMBFC_RS_GIT_COMMIT"),
+        );
+        let output = eambfc_with_args!("-V").output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, expected.as_bytes());
+    }
+
+    #[test]
+    fn test_help_output() {
+        let expected = format!(
+            concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
+            PATH,
+            env!("EAMBFC_DEFAULT_ARCH"),
+        );
+        let output = eambfc_with_args!("-h").output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, expected.as_bytes());
+    }
 }
