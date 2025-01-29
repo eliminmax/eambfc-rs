@@ -20,7 +20,7 @@ pub(crate) enum ElfArch {
     #[cfg(feature = "arm64")]
     Arm64 = 183, // EM_AARCH64
     #[cfg(feature = "s390x")]
-    S390x = 22,  // EM_S390
+    S390x = 22, // EM_S390
     #[cfg(feature = "x86_64")]
     X86_64 = 62, // EM_X86_64 (i.e. amd64)
 }
