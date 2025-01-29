@@ -218,19 +218,21 @@ mod cli_tests {
         Ok(())
     }
 
-    fn test_fixed_output(file: &PathBuf, expected: &[u8]) {
-        let result = Command::new(file).output().unwrap();
+    fn test_fixed_output(file: impl AsRef<Path>, expected: &[u8]) {
+        let result = Command::new(file.as_ref()).output().unwrap();
         assert!(result.status.success());
         assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
-        let result = Command::new(file.with_extension("unopt")).output().unwrap();
+        let result = Command::new(file.as_ref().with_extension("unopt"))
+            .output()
+            .unwrap();
         assert!(result.status.success());
         assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
     }
 
-    fn test_rw_cmd(rw: &Path) {
+    fn test_rw_cmd(rw: impl AsRef<Path>) {
         use io::Write;
         for byte in u8::MIN..=u8::MAX {
-            let mut child = Command::new(rw)
+            let mut child = Command::new(rw.as_ref())
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()
@@ -275,17 +277,19 @@ mod cli_tests {
             .unwrap();
         assert!(optimized_result.success());
 
-        test_fixed_output(&base_dir.join("alternative_extension"), b"Hello, world!\n");
-        test_fixed_output(&base_dir.join("hello"), b"Hello, world!\n");
-        test_fixed_output(&base_dir.join("loop"), b"!");
-        test_fixed_output(&base_dir.join("wrap2"), b"0000");
-        test_fixed_output(&base_dir.join("wrap"), "🧟".as_bytes());
+        test_fixed_output(base_dir.join("alternative_extension"), b"Hello, world!\n");
+        test_fixed_output(base_dir.join("hello"), b"Hello, world!\n");
+        test_fixed_output(base_dir.join("dead_code"), b"");
+        test_fixed_output(base_dir.join("null"), b"");
+        test_fixed_output(base_dir.join("loop"), b"!");
+        test_fixed_output(base_dir.join("wrap2"), b"0000");
+        test_fixed_output(base_dir.join("wrap"), "🧟".as_bytes());
         test_fixed_output(
-            &base_dir.join("colortest"),
+            base_dir.join("colortest"),
             include_bytes!("../test_assets/colortest_output"),
         );
-        test_rw_cmd(&base_dir.join("rw"));
-        test_rw_cmd(&base_dir.join("rw.unopt"));
+        test_rw_cmd(base_dir.join("rw"));
+        test_rw_cmd(base_dir.join("rw.unopt"));
     }
 
     #[cfg(can_run_arm64)]
