@@ -5,7 +5,6 @@
 name = "eambfc-rs"
 locked = true
 offline = true
-generate = ["html"]
 engine = "Llvm"
 test-timeout = "1m"
 count = true
