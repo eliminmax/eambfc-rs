@@ -18,9 +18,10 @@ mod cli_tests {
 
     const PATH: &str = "./target/debug/eambfc-rs";
 
-    const TEST_FILES: [&str; 9] = [
+    const TEST_FILES: [&str; 10] = [
         "alternative_extension.brnfck",
         "colortest.bf",
+        "dead_code.bf",
         "hello.bf",
         "loop.bf",
         "null.bf",
@@ -245,6 +246,8 @@ mod cli_tests {
     }
 
     fn test_arch(arch: &str) {
+        use fs::File;
+        use io::Read;
         let base_dir = working_dir().path().join(arch);
         let alt_ext_result = Command::new(PATH)
             .args(["-a", arch])
@@ -290,6 +293,23 @@ mod cli_tests {
         );
         test_rw_cmd(base_dir.join("rw"));
         test_rw_cmd(base_dir.join("rw.unopt"));
+
+        // make sure that the optimized build of dead_code and the optimized build of null are
+        // byte-for-byte identical
+        let mut dead_code_elf_bytes = Vec::new();
+        let mut null_elf_bytes = Vec::new();
+        let dead_code_elf_size = File::open(base_dir.join("dead_code"))
+            .unwrap()
+            .read_to_end(&mut dead_code_elf_bytes)
+            .unwrap();
+        let null_elf_size = File::open(base_dir.join("null"))
+            .unwrap()
+            .read_to_end(&mut null_elf_bytes)
+            .unwrap();
+        assert_eq!(
+            (dead_code_elf_size, dead_code_elf_bytes),
+            (null_elf_size, null_elf_bytes)
+        );
     }
 
     #[cfg(can_run_arm64)]
