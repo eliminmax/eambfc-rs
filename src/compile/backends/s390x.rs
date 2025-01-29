@@ -282,11 +282,10 @@ fn load_from_byte(reg: S390xRegister) -> [u8; 6] {
 }
 
 fn branch_cond(
-    code_buf: &mut Vec<u8>,
     reg: S390xRegister,
     offset: i64,
     comp_mask: ComparisonMask,
-) -> FailableInstrEncoding {
+) -> Result<[u8; 18], BFCompileError> {
     let offset: i32 = i16::try_from(offset >> 1)
         .map_err(|_| {
             BFCompileError::basic(
@@ -295,13 +294,18 @@ fn branch_cond(
             )
         })?
         .into();
-    code_buf.extend(load_from_byte(reg));
+    let mut code_buf = [0; 18];
+    code_buf[..6].clone_from_slice(&load_from_byte(reg));
     // CFI aux, 0 {RIL-a}
-    encode_ri_op!(code_buf, 0xc2d, TMP_REG, 0i32);
+    code_buf[6] = 0xc2;
+    code_buf[7] = (TMP_REG as u8) << 4 | 0x0d;
+    code_buf[8..12].clone_from_slice(&[0; 4]);
     // BRCL mask, offset
-    encode_ri_op!(code_buf, 0xc04, comp_mask, offset);
+    code_buf[12] = 0xc0;
+    code_buf[13] = (comp_mask as u8) << 4 | 0x04;
+    code_buf[14..].clone_from_slice(&offset.to_be_bytes());
 
-    Ok(())
+    Ok(code_buf)
 }
 
 pub(crate) struct S390xInter;
@@ -374,16 +378,27 @@ impl ArchInter for S390xInter {
         code_buf.extend([0x0a, 0x00]);
     }
 
-    fn jump_zero(code_buf: &mut Vec<u8>, reg: S390xRegister, offset: i64) -> FailableInstrEncoding {
-        branch_cond(code_buf, reg, offset, ComparisonMask::MaskEQ)
+    fn jump_open(
+        code_buf: &mut [u8],
+        index: usize,
+        reg: S390xRegister,
+        offset: i64,
+    ) -> FailableInstrEncoding {
+        code_buf[index..index + Self::JUMP_SIZE].copy_from_slice(&branch_cond(
+            reg,
+            offset,
+            ComparisonMask::MaskEQ,
+        )?);
+        Ok(())
     }
 
-    fn jump_not_zero(
+    fn jump_close(
         code_buf: &mut Vec<u8>,
         reg: S390xRegister,
         offset: i64,
     ) -> FailableInstrEncoding {
-        branch_cond(code_buf, reg, offset, ComparisonMask::MaskNE)
+        code_buf.extend(branch_cond(reg, offset, ComparisonMask::MaskNE)?);
+        Ok(())
     }
 
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
@@ -609,14 +624,14 @@ mod tests {
     #[test]
     fn jump_tests() {
         assert_eq!(
-            S390xInter::jump_zero(&mut Vec::new(), S390xRegister::R3, 0x1_2345_6789_abcd)
+            S390xInter::jump_open(&mut [0; 18], 0, S390xRegister::R3, 0x1_2345_6789_abcd)
                 .unwrap_err()
                 .kind,
             BFErrorID::JumpTooLong
         );
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::jump_zero(&mut v, S390xRegister::R3, 18).unwrap();
-        S390xInter::jump_not_zero(&mut v, S390xRegister::R3, -36).unwrap();
+        let mut v: Vec<u8> = vec![0; 18];
+        S390xInter::jump_open(&mut v, 0, S390xRegister::R3, 18).unwrap();
+        S390xInter::jump_close(&mut v, S390xRegister::R3, -36).unwrap();
         S390xInter::nop_loop_open(&mut v);
         // it took a while, but I found a comment in the LLVM source code* that explained that it
         // uses "jge" instead of the IBM-documented "jle" extended mnemonic for `brcl 8,addr`

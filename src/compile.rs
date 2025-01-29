@@ -225,13 +225,14 @@ trait BFCompileHelper: ArchInter {
                             b']',
                             *loc,
                         ))?;
-                let open_address = open_location.index;
-                let distance = code_buf.len() - open_address;
-                let mut jump_code: Vec<u8> = Vec::with_capacity(Self::JUMP_SIZE);
-                Self::jump_zero(&mut jump_code, Self::REGISTERS.bf_ptr, distance as i64)?;
-                code_buf[open_address..open_address + Self::JUMP_SIZE]
-                    .swap_with_slice(&mut jump_code);
-                Self::jump_not_zero(code_buf, Self::REGISTERS.bf_ptr, -(distance as i64))?;
+                let distance = code_buf.len() - open_location.index;
+                Self::jump_open(
+                    code_buf,
+                    open_location.index,
+                    Self::REGISTERS.bf_ptr,
+                    distance as i64,
+                )?;
+                Self::jump_close(code_buf, Self::REGISTERS.bf_ptr, -(distance as i64))?;
             }
             b'\n' => {
                 loc.col = 0;
@@ -376,47 +377,31 @@ mod tests {
 
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
-        X86_64Inter::compile(
-            b"+[>]<-,.".as_slice(),
-            Vec::<u8>::new(),
-            false,
-            8,
-        )
-        .map_err(|e| format!("Failed to compile: {e:?}"))
+        X86_64Inter::compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false, 8)
+            .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
     #[test]
     fn compile_nested_loops() -> Result<(), String> {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
-        X86_64Inter::compile(
-            b">+[-->---[-<]>]>+".as_slice(),
-            Vec::<u8>::new(),
-            false,
-            8,
-        )
-        .map_err(|e| format!("Failed to compile: {e:?}"))
+        X86_64Inter::compile(b">+[-->---[-<]>]>+".as_slice(), Vec::<u8>::new(), false, 8)
+            .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
     #[test]
     fn unmatched_open() {
-        assert!(X86_64Inter::compile(
-            b"[".as_slice(),
-            Vec::<u8>::new(),
-            false,
-            8,
-        )
-        .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedOpen));
+        assert!(
+            X86_64Inter::compile(b"[".as_slice(), Vec::<u8>::new(), false, 8,)
+                .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedOpen)
+        );
     }
 
     #[test]
     fn unmatched_close() {
-        assert!(X86_64Inter::compile(
-            b"]".as_slice(),
-            Vec::<u8>::new(),
-            false,
-            8,
-        )
-        .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedClose));
+        assert!(
+            X86_64Inter::compile(b"]".as_slice(), Vec::<u8>::new(), false, 8,)
+                .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedClose)
+        );
     }
 }

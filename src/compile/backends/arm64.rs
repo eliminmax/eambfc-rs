@@ -105,11 +105,10 @@ enum ConditionCode {
 }
 
 fn branch_cond(
-    code_buf: &mut Vec<u8>,
     reg: Arm64Register,
     offset: i64,
     cond: ConditionCode,
-) -> FailableInstrEncoding {
+) -> Result<[u8; 12], BFCompileError> {
     // as A64 uses fixed-size 32-bit instructions, offset must be a multiple of 4.
     assert!(
         offset.trailing_zeros() >= 2,
@@ -126,8 +125,9 @@ fn branch_cond(
     }
     let offset = (1 + ((offset as u32) >> 2)) & 0x7ffff;
     let aux = aux_reg(reg);
-    code_buf.extend(load_from_byte(reg, aux));
-    code_buf.extend([
+    let mut code_buf = [0; 12];
+    code_buf[..4].clone_from_slice(&load_from_byte(reg, aux));
+    code_buf[4..].clone_from_slice(&[
         // TST reg, 0xff (technically an alias for ANDS xzr, reg, 0xff)
         0x1f | (aux as u8) << 5,
         (aux as u8) >> 3 | 0x1c,
@@ -139,7 +139,7 @@ fn branch_cond(
         (offset >> 11) as u8,
         0x54,
     ]);
-    Ok(())
+    Ok(code_buf)
 }
 
 pub(crate) struct Arm64Inter;
@@ -264,16 +264,27 @@ impl ArchInter for Arm64Inter {
         code_buf.extend(store_to_byte(reg, aux));
     }
 
-    fn jump_not_zero(
+    fn jump_close(
         code_buf: &mut Vec<u8>,
         reg: Self::RegType,
         offset: i64,
     ) -> FailableInstrEncoding {
-        branch_cond(code_buf, reg, offset, ConditionCode::Ne)
+        code_buf.extend(branch_cond(reg, offset, ConditionCode::Ne)?);
+        Ok(())
     }
 
-    fn jump_zero(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64) -> FailableInstrEncoding {
-        branch_cond(code_buf, reg, offset, ConditionCode::Eq)
+    fn jump_open(
+        code_buf: &mut [u8],
+        index: usize,
+        reg: Self::RegType,
+        offset: i64,
+    ) -> FailableInstrEncoding {
+        code_buf[index..index + Self::JUMP_SIZE].swap_with_slice(&mut branch_cond(
+            reg,
+            offset,
+            ConditionCode::Eq,
+        )?);
+        Ok(())
     }
 }
 
@@ -550,22 +561,22 @@ mod tests {
     #[test]
     #[should_panic(expected = "offset 31 is invalid for architecture (offset % 4 != 0)")]
     fn invalid_offset_panics() {
-        Arm64Inter::jump_zero(&mut Vec::new(), Arm64Register::X0, 31).unwrap();
+        Arm64Inter::jump_open(&mut [0; 12], 0, Arm64Register::X0, 31).unwrap();
     }
 
     #[test]
     fn out_of_bounds_jumps_test() {
         assert!(
-            Arm64Inter::jump_zero(&mut Vec::new(), Arm64Register::X0, i64::MAX ^ 0b11)
+            Arm64Inter::jump_open(&mut [0; 12], 0, Arm64Register::X0, i64::MAX ^ 0b11)
                 .is_err_and(|e| e.kind == BFErrorID::JumpTooLong)
         );
     }
 
     #[test]
     fn successfull_jumps_test() {
-        let mut v = Vec::with_capacity(24);
-        Arm64Inter::jump_zero(&mut v, Arm64Register::X0, 32).unwrap();
-        Arm64Inter::jump_not_zero(&mut v, Arm64Register::X0, -32).unwrap();
+        let mut v = vec![0; 12];
+        Arm64Inter::jump_open(&mut v, 0, Arm64Register::X0, 32).unwrap();
+        Arm64Inter::jump_close(&mut v, Arm64Register::X0, -32).unwrap();
         assert_eq!(
             disassembler().disassemble(v),
             [

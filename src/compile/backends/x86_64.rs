@@ -97,11 +97,10 @@ enum ConditionCode {
 }
 
 fn conditional_jump(
-    code_buf: &mut Vec<u8>,
     reg: X86_64Register,
     offset: i64,
     condition: ConditionCode,
-) -> FailableInstrEncoding {
+) -> Result<[u8; 9], BFCompileError> {
     let offset_bytes = i32::try_from(offset)
         .map_err(|_| {
             BFCompileError::basic(
@@ -110,15 +109,16 @@ fn conditional_jump(
             )
         })?
         .to_le_bytes();
+    let mut code_buf = [0; 9];
     #[rustfmt::skip]
-    code_buf.extend([
+    code_buf[..5].copy_from_slice(&[
         // TEST byte [reg], 0xff
         0xf6, reg as u8, 0xff,
         // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
         0x0f, 0x80| (condition as u8)
     ]);
-    code_buf.extend(offset_bytes);
-    Ok(())
+    code_buf[5..].copy_from_slice(&offset_bytes);
+    Ok(code_buf)
 }
 
 pub(crate) struct X86_64Inter;
@@ -171,15 +171,26 @@ impl ArchInter for X86_64Inter {
         code_buf.extend([0x0f, 0x05]);
     }
 
-    fn jump_zero(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64) -> FailableInstrEncoding {
-        conditional_jump(code_buf, reg, offset, ConditionCode::Zero)
+    fn jump_open(
+        code_buf: &mut [u8],
+        index: usize,
+        reg: Self::RegType,
+        offset: i64,
+    ) -> FailableInstrEncoding {
+        code_buf[index..index + Self::JUMP_SIZE].copy_from_slice(&conditional_jump(
+            reg,
+            offset,
+            ConditionCode::Zero,
+        )?);
+        Ok(())
     }
-    fn jump_not_zero(
+    fn jump_close(
         code_buf: &mut Vec<u8>,
         reg: Self::RegType,
         offset: i64,
     ) -> FailableInstrEncoding {
-        conditional_jump(code_buf, reg, offset, ConditionCode::NotZero)
+        code_buf.extend(conditional_jump(reg, offset, ConditionCode::NotZero)?);
+        Ok(())
     }
 
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
@@ -321,7 +332,6 @@ mod tests {
     #[test]
     fn test_jump_too_large_error() {
         let err = conditional_jump(
-            &mut Vec::new(),
             X86_64Register::Rdx,
             i64::from(i32::MAX) + 1,
             ConditionCode::Zero,
@@ -332,9 +342,9 @@ mod tests {
 
     #[test]
     fn test_jump_instructions() {
-        let mut v: Vec<u8> = Vec::new();
-        X86_64Inter::jump_zero(&mut v, X86_64Register::Rdi, 9).unwrap();
-        X86_64Inter::jump_not_zero(&mut v, X86_64Register::Rdi, -18).unwrap();
+        let mut v: Vec<u8> = vec![0; 9];
+        X86_64Inter::jump_open(&mut v, 0, X86_64Register::Rdi, 9).unwrap();
+        X86_64Inter::jump_close(&mut v, X86_64Register::Rdi, -18).unwrap();
         X86_64Inter::nop_loop_open(&mut v);
         let mut disasm_lines = disassembler().disassemble(v).into_iter();
         // NOTE: the disassembly uses absolute addresses, not relative addresses.

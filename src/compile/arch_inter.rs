@@ -17,12 +17,14 @@ pub(super) trait ArchInter {
     fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType);
     fn syscall(code_buf: &mut Vec<u8>);
-    fn jump_zero(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64) -> FailableInstrEncoding;
-    fn jump_not_zero(
-        code_buf: &mut Vec<u8>,
+    fn jump_open(
+        code_buf: &mut [u8],
+        index: usize,
         reg: Self::RegType,
         offset: i64,
     ) -> FailableInstrEncoding;
+    fn jump_close(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64)
+        -> FailableInstrEncoding;
     fn nop_loop_open(code_buf: &mut Vec<u8>);
     fn inc_reg(code_buf: &mut Vec<u8>, reg: Self::RegType);
     fn inc_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
