@@ -1,0 +1,11 @@
+{
+    "cargo": {
+        "cfgs": [
+            "debug_assertions",
+            "miri",
+            "can_run_arm64",
+            "can_run_s390x",
+            "can_run_x86_64"
+        ]
+    }
+}

@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+#
+# SPDX-License-Identifier: 0BSD
+[test_config]
+name = "eambfc-rs"
+locked = true
+offline = true
+engine = "Llvm"
+test-timeout = "1m"
+count = true

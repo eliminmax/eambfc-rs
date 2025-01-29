@@ -1,0 +1,4 @@
+[codespell]
+skip = .git,target,tarpaulin-report.html
+ignore-words-list = crate
+# vim: ft=dosini

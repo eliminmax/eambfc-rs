@@ -2,173 +2,33 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-pub mod arch_inter;
-pub mod arg_parse;
-#[cfg(feature = "arm64")]
-pub mod backend_arm64;
-#[cfg(feature = "s390x")]
-pub mod backend_s390x;
-#[cfg(feature = "x86_64")]
-pub mod backend_x86_64;
-pub mod compile;
-pub mod elf_tools;
-pub mod err;
-pub mod optimize;
+mod arg_parse;
+mod compile;
+mod err;
 
-use arg_parse::RunConfig;
-use compile::BFCompile;
-use elf_tools::ELFArch;
-use err::{BFCompileError, BFErrorID};
 use std::borrow::Cow;
 use std::env::args_os;
-use std::ffi::{OsStr, OsString};
-use std::fs::{remove_file, File, OpenOptions};
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::os::unix::fs::OpenOptionsExt;
 use std::process::ExitCode;
+
+use crate::arg_parse::RunConfig;
+use crate::compile::elf_tools::ElfArch;
+use crate::compile::BFCompile;
+use crate::err::OutMode;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
-use backend_arm64::Arm64Inter;
+use crate::compile::backends::Arm64Inter;
 #[cfg(feature = "s390x")]
-use backend_s390x::S390xInter;
+use crate::compile::backends::S390xInter;
 #[cfg(feature = "x86_64")]
-use backend_x86_64::X86_64Inter;
-
-#[derive(PartialEq, Debug, Clone, Copy, Default)]
-pub enum OutMode {
-    #[default]
-    Basic,
-    JSON,
-    Quiet,
-}
-
-impl OutMode {
-    fn json(&mut self) {
-        *self = OutMode::JSON;
-    }
-    fn quiet(&mut self) {
-        // for consistency with original C version, quiet doesn't override JSON mode
-        if *self == OutMode::Basic {
-            *self = OutMode::Quiet;
-        }
-    }
-}
-
-fn help_text(progname: &str) -> String {
-    format!(
-        "Usage: {progname} [options] <program.bf> [<program2.bf> ...]
-
- -h        - display this help text and exit
- -V        - print version information and exit
- -j        - print errors in JSON format
- -q        - don't print errors unless -j was passed
- -O        - enable optimization*.
- -k        - keep files that failed to compile (for debugging)
- -c        - continue to the next file instead of quitting if a
-             file fails to compile
- -t count  - allocate <count> 4-KiB blocks for the tape
-             (defaults to 8 if not specified)**
- -e ext    - use 'ext' as the extension for source files instead of '.bf'
-             (This program will remove this at the end of the input
-             file to create the output file name)**
- -a arch   - compile for specified architecture
-             (defaults to {} if not specified)**
- -A        - list supported architectures and exit
-
-* Optimization can make error reporting less precise.
-** -a, -t and -e can only be passed at most once each.
-
-Remaining options are treated as source file names. If they don't
-end with '.bf' (or the extension specified with '-e'), the program
-will raise an error.
-",
-        ELFArch::default(),
-    )
-}
-
-// if filename ends with extension, return Ok(f), where f is the filename without the extension
-// otherwise, return Err(filename)
-fn rm_ext<'a>(filename: &'a OsStr, extension: &OsStr) -> Result<OsString, &'a OsStr> {
-    let name_len: usize = filename.as_bytes().len();
-    let ext_len: usize = extension.as_bytes().len();
-    if filename
-        .to_os_string()
-        .into_vec()
-        .ends_with(extension.as_bytes())
-    {
-        let mut noext = filename.to_os_string().into_vec();
-        noext.truncate(name_len - ext_len);
-        Ok(OsString::from_vec(noext))
-    } else {
-        Err(filename)
-    }
-}
-
-// wrapper around the compilation of a specific file
-fn compile_wrapper<Compiler: BFCompile>(
-    _compiler: Compiler,
-    file_name: &OsString,
-    extension: &OsStr,
-    optimize: bool,
-    keep: bool,
-    tape_blocks: u64,
-) -> Result<(), Vec<BFCompileError>> {
-    let outfile_name = rm_ext(file_name, extension).map_err(|e| {
-        vec![BFCompileError::basic(
-            BFErrorID::BAD_EXTENSION,
-            format!(
-                "Filename \"{}\" does not end with expected extension \"{}\"",
-                e.to_string_lossy(),
-                extension.to_string_lossy()
-            ),
-        )]
-    })?;
-    let mut open_options = OpenOptions::new();
-    open_options
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o755);
-    let infile = File::open(file_name).map_err(|_| {
-        vec![BFCompileError::basic(
-            BFErrorID::OPEN_R_FAILED,
-            format!(
-                "Failed to open {} for reading.",
-                file_name.to_string_lossy()
-            ),
-        )]
-    })?;
-    let outfile = open_options.open(&outfile_name).map_err(|_| {
-        vec![BFCompileError::basic(
-            BFErrorID::OPEN_W_FAILED,
-            format!(
-                "Failed to open {} for writing.",
-                outfile_name.to_string_lossy()
-            ),
-        )]
-    })?;
-    if let Err(e) = Compiler::compile(Box::new(infile), Box::new(outfile), optimize, tape_blocks) {
-        if !keep {
-            // try to delete the file
-            #[allow(
-                clippy::let_underscore_must_use,
-                reason = "if file can't be deleted, there's nothing to do"
-            )]
-            let _ = remove_file(outfile_name);
-        }
-        Err(e)
-    } else {
-        Ok(())
-    }
-}
+use crate::compile::backends::X86_64Inter;
 
 fn main() -> ExitCode {
     let mut exit_code = ExitCode::SUCCESS;
     let mut args = args_os();
     // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
-    let progname = args.next().map_or(Cow::Borrowed("eambfc-rs"), |c| {
-        Cow::Owned(c.to_string_lossy().to_string())
+    let progname: Cow<'static, str> = args.next().map_or("eambfc-rs".into(), |c| {
+        c.to_string_lossy().to_string().into()
     });
     match arg_parse::parse_args(args) {
         Ok(RunConfig::ListArches) => {
@@ -178,13 +38,20 @@ fn main() -> ExitCode {
             #[cfg(feature = "arm64")]
             println!("- arm64 (aliases: aarch64)");
             #[cfg(feature = "s390x")]
-            println!("- s390x (aliases: s390, z/architecure)");
+            println!("- s390x (aliases: s390, z/architecture)");
+            println!(concat!(
+                "\nIf no architecture is specified, it defaults to ",
+                env!("EAMBFC_DEFAULT_ARCH"),
+                '.'
+            ));
+        }
+        Ok(RunConfig::ShowHelp) => {
             println!(
-                "\nIf no architecure is specified, it defaults to {}.",
-                ELFArch::default()
+                include_str!("text_assets/help_template.txt"),
+                progname,
+                ElfArch::default()
             );
         }
-        Ok(RunConfig::ShowHelp) => println!("{}", help_text(&progname)),
         Ok(RunConfig::StandardRun(rc)) => {
             for f in rc.source_files {
                 #[allow(
@@ -193,27 +60,24 @@ fn main() -> ExitCode {
                 )]
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]
-                    ELFArch::Arm64 => compile_wrapper(
-                        Arm64Inter,
-                        &f,
+                    ElfArch::Arm64 => Arm64Inter::compile_file(
+                        f.as_ref(),
                         &rc.extension,
                         rc.optimize,
                         rc.keep,
                         rc.tape_blocks,
                     ),
                     #[cfg(feature = "s390x")]
-                    ELFArch::S390x => compile_wrapper(
-                        S390xInter,
-                        &f,
+                    ElfArch::S390x => S390xInter::compile_file(
+                        f.as_ref(),
                         &rc.extension,
                         rc.optimize,
                         rc.keep,
                         rc.tape_blocks,
                     ),
                     #[cfg(feature = "x86_64")]
-                    ELFArch::X86_64 => compile_wrapper(
-                        X86_64Inter,
-                        &f,
+                    ElfArch::X86_64 => X86_64Inter::compile_file(
+                        f.as_ref(),
                         &rc.extension,
                         rc.optimize,
                         rc.keep,
@@ -232,14 +96,8 @@ fn main() -> ExitCode {
         }
         Ok(RunConfig::ShowVersion) => {
             println!(
-                "{progname}: eambfc-rs version {}
-
-Copyright (c) 2024 Eli Array Minkoff
-License: GNU GPL version 3 <https://gnu.org/licenses/gpl.html>
-This is free software: you are free to change and redistribute it.
-There is NO WARRANTY, to the extent permitted by law.
-
-{}",
+                include_str!("text_assets/version_template.txt"),
+                progname,
                 env!("CARGO_PKG_VERSION"),
                 env!("EAMBFC_RS_GIT_COMMIT")
             );
@@ -248,46 +106,13 @@ There is NO WARRANTY, to the extent permitted by law.
         Err((err, out_mode)) => {
             err.report(out_mode);
             if out_mode == OutMode::Basic {
-                eprintln!("{}", help_text(&progname));
+                eprintln!(
+                    include_str!("text_assets/help_template.txt"),
+                    progname,
+                    ElfArch::default()
+                );
             }
         }
     }
     exit_code
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rmext_success_ascii() {
-        assert_eq!(
-            rm_ext(OsStr::from_bytes(b"foobar"), OsStr::from_bytes(b"bar")),
-            Ok(OsString::from("foo"))
-        );
-    }
-
-    #[test]
-    fn rmext_success_non_ascii() {
-        assert_eq!(
-            rm_ext(OsStr::from_bytes(b"\xee.e"), OsStr::from_bytes(b".e")),
-            Ok(OsString::from_vec(vec![0xeeu8]))
-        );
-    }
-
-    #[test]
-    fn rmext_fail_ascii() {
-        assert_eq!(
-            rm_ext(OsStr::from_bytes(b"foobar"), OsStr::from_bytes(b"baz")),
-            Err(OsStr::from_bytes(b"foobar"))
-        );
-    }
-
-    #[test]
-    fn rmext_fail_non_ascii() {
-        assert_eq!(
-            rm_ext(OsStr::from_bytes(b"\xee.e"), OsStr::from_bytes(b".bf")),
-            Err(OsStr::from_bytes(b"\xee.e"))
-        );
-    }
 }

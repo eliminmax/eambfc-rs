@@ -7,9 +7,25 @@
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
-cargo test
-cargo clippy --tests -- -D warnings
+# fail with uncommitted changes - porcelain output will be empty if good to go
+if git status --porcelain | grep -q .; then
+    printf 'Uncommitted changes!\n' >&2
+    exit 1
+fi
 
+# check for spelling mistakes
+codespell
+# ensure formatted
+cargo fmt --check
+# run general test suite
+cargo test
+# check for clippy issues
+cargo clippy --tests -- -D warnings
+# ensure that code coverage is at least 90%
+cargo tarpaulin --fail-under 90
+
+# test all single-backend builds one-by-one
 for backend in arm64 s390x x86_64; do
     cargo clippy --no-default-features --features "$backend" -- -D warnings
+    cargo test --no-default-features --features "$backend"
 done
