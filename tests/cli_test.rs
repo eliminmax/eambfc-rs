@@ -255,13 +255,9 @@ mod cli_tests {
                     .stdout(Stdio::piped())
                     .spawn()
                     .unwrap();
-                let write_result = $binding
-                    .stdin
-                    .take()
-                    .unwrap()
-                    .write($input);
+                let write_result = $binding.stdin.take().unwrap().write($input);
                 assert!(write_result.is_ok_and(|sz| sz == 1));
-            }
+            };
         }
 
         spawn_tm!(cmd_0, b"0");
@@ -271,7 +267,7 @@ mod cli_tests {
 
         spawn_tm!(cmd_1, b"1");
         let mut output = cmd_1.stdout.take().unwrap();
-        let mut read_buf : [u8; 16] = [0; 16];
+        let mut read_buf: [u8; 16] = [0; 16];
         output.read_exact(&mut read_buf).unwrap();
         assert_eq!(read_buf, [b'1'; 16]);
         cmd_1.kill().and_then(|()| cmd_1.wait()).unwrap();
