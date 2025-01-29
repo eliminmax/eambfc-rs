@@ -14,7 +14,7 @@ use super::elf_tools::{ByteOrdering, ElfArch};
 // Other registers are not defined because they are not needed for eambfc-rs, but they go up to 31.
 // 32 is a special case not relevant here.
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u8)]
 pub(in super::super) enum Arm64Register {
     X0 = 0,   // arg1 register
@@ -26,7 +26,7 @@ pub(in super::super) enum Arm64Register {
     X19 = 19, // bf pointer register
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(u8)]
 enum ShiftLevel {
     NoShift = 0b000_0000,

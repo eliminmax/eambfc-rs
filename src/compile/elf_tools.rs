@@ -6,7 +6,7 @@ pub(super) enum ElfClass {
     ELFClass64 = 2,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub(super) enum ByteOrdering {
     #[cfg(any(feature = "x86_64", feature = "arm64"))]
     LittleEndian = 1,
@@ -14,7 +14,7 @@ pub(super) enum ByteOrdering {
     BigEndian = 2,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ElfArch {
     #[cfg(feature = "arm64")]
     Arm64 = 183, // EM_AARCH64

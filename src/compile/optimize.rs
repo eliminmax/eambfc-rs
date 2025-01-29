@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::io::Read;
 use std::num::NonZeroUsize;
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub(super) enum CondensedInstruction {
     BFInstruction(u8),
     RepeatMoveR(NonZeroUsize),

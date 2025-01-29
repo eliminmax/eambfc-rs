@@ -33,7 +33,7 @@ use crate::err::{BFCompileError, BFErrorID};
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub(in super::super) enum X86_64Register {
     Rax = 0b000,
