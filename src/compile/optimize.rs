@@ -111,14 +111,24 @@ impl Iterator for CondensedInstructions {
     }
 }
 
+/// Read `file` into an iterator over `CondensedInstruction`s.
+///
+/// NOTE: uses `std::io::Read::bytes` internally, which is "inefficient for data that's not in
+/// memory". It's best to either pass `&[u8]` or `std::io::BufReader`
 pub(super) fn to_condensed(
-    mut file: impl Read,
+    file: impl Read,
 ) -> Result<impl Iterator<Item = CondensedInstruction>, BFCompileError> {
-    let mut code_buf = Vec::<u8>::new();
-    let _ = file.read_to_end(&mut code_buf).map_err(|_| {
-        BFCompileError::basic(BFErrorID::FailedRead, "Failed to read file into buffer")
-    })?;
-    code_buf.retain(|b| b"+-<>,.[]".contains(b));
+    let mut code_buf: Vec<u8> = file
+        .bytes()
+        .filter_map(|res| match res {
+            Ok(b) if b"+-<>,.[]".contains(&b) => Some(Ok(b)),
+            Ok(_) => None,
+            Err(_) => Some(Err(BFCompileError::basic(
+                BFErrorID::FailedRead,
+                "Failed to read file into buffer",
+            ))),
+        })
+        .collect::<Result<_, _>>()?;
     loops_match(code_buf.as_slice())?;
     strip_dead_code(&mut code_buf);
     Ok(condense(code_buf))
