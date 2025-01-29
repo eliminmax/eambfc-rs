@@ -125,19 +125,23 @@ pub(super) fn to_condensed(
 }
 
 fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
-    let mut ret: Result<(), ()> = Ok(());
     let mut nest_level: usize = 0;
-    code_bytes.iter().for_each(|b| match b {
-        b'[' => nest_level += 1,
-        b']' => {
-            if nest_level == 0 {
-                ret = Err(());
-            } else {
+    for b in code_bytes {
+        match b {
+            b'[' => nest_level += 1,
+            b']' => {
+                if nest_level == 0 {
+                    return Err(BFCompileError::basic(
+                        BFErrorID::UnmatchedClose,
+                        "Found an unmatched ']' while preparing for optimization. \
+                            Compile without -O for more information.",
+                    ));
+                }
                 nest_level -= 1;
             }
+            _ => (),
         }
-        _ => {}
-    });
+    }
     if nest_level > 0 {
         Err(BFCompileError::basic(
             BFErrorID::UnmatchedOpen,
@@ -145,13 +149,7 @@ fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
                     Compile without -O for more information.",
         ))
     } else {
-        ret.map_err(|()| {
-            BFCompileError::basic(
-                BFErrorID::UnmatchedClose,
-                "Found an unmatched ']' while preparing for optimization. \
-                    Compile without -O for more information.",
-            )
-        })
+        Ok(())
     }
 }
 
