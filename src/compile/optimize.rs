@@ -183,7 +183,9 @@ fn find_dead_loop(code_bytes: &[u8]) -> Option<usize> {
     if code_bytes.is_empty() {
         return None;
     }
-    if code_bytes[0] == b'[' { return Some(0); }
+    if code_bytes[0] == b'[' {
+        return Some(0);
+    }
     for (index, window) in code_bytes.windows(2).enumerate() {
         if window == b"][" {
             return Some(index + 1);
