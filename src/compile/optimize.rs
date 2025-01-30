@@ -9,9 +9,7 @@ use std::io::Read;
 ///
 /// NOTE: uses `std::io::Read::bytes` internally, which is "inefficient for data that's not in
 /// memory". It's best to either pass `&[u8]` or `std::io::BufReader`
-pub(super) fn filtered_read(
-    file: impl Read,
-) -> Result<Vec<u8>, BFCompileError> {
+pub(super) fn filtered_read(file: impl Read) -> Result<Vec<u8>, BFCompileError> {
     let mut code_buf: Vec<u8> = file
         .bytes()
         .filter_map(|res| match res {
@@ -27,7 +25,7 @@ pub(super) fn filtered_read(
     strip_dead_code(&mut code_buf);
     while let Some(i) = set_zero_code(&code_buf) {
         code_buf[i] = b'@';
-        code_buf.drain(i+1..=i+2);
+        code_buf.drain(i + 1..=i + 2);
     }
 
     Ok(code_buf)

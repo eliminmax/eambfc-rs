@@ -87,7 +87,6 @@ pub(crate) struct BFCompileError {
 }
 
 impl BFCompileError {
-
     #[must_use]
     pub fn new<M: Into<ErrMsg>>(
         kind: BFErrorID,

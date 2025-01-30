@@ -270,12 +270,7 @@ trait BFCompileHelper: ArchInter {
             b'>' => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as i64),
             b',' | b'.' | b'[' | b']' => {
                 for _ in 0..count {
-                    Self::compile_instr(
-                        instr,
-                        dst,
-                        None,
-                        jump_stack,
-                    )?;
+                    Self::compile_instr(instr, dst, None, jump_stack)?;
                 }
             }
             _ => unreachable!("Other bytes have been filtered out"),
