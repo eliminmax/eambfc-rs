@@ -44,10 +44,9 @@ fn main() {
 
     macro_rules! check_exec_support {
         ($platform: literal) => {
-            if cfg!(feature = $platform)
-                && Command::new(concat!("./test_assets/exec_support/", $platform))
-                    .output()
-                    .is_ok_and(|res| res.status.success())
+            if Command::new(concat!("./test_assets/exec_support/", $platform))
+                .status()
+                .is_ok_and(|status| status.success())
             {
                 println!(concat!("cargo::rustc-cfg=can_run_", $platform));
             }
