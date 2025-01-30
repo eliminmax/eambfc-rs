@@ -260,13 +260,7 @@ trait BFCompileHelper: ArchInter {
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
         if instr != b'@' && count == 1 {
-            return Self::compile_instr(
-                instr,
-                dst,
-                // throwaway position value
-                None,
-                jump_stack,
-            );
+            return Self::compile_instr(instr, dst, None, jump_stack);
         }
         match instr {
             b'@' => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
