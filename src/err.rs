@@ -136,18 +136,6 @@ impl BFCompileError {
             loc: Some(loc),
         }
     }
-    #[must_use]
-    pub fn unknown_flag(flag: u8) -> Self {
-        Self {
-            kind: BFErrorID::UnknownArg,
-            msg: Cow::from(format!(
-                "'{}' is not a recognized argument",
-                flag.escape_ascii()
-            )),
-            instr: None,
-            loc: None,
-        }
-    }
 
     fn report_basic(&self) {
         let mut report_string = format!("Error {:?}", self.kind);

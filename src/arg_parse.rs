@@ -71,7 +71,15 @@ impl PartialRunConfig {
             b'O' => self.optimize = true,
             b'k' => self.keep = true,
             b'c' => self.cont = true,
-            _ => return Err((BFCompileError::unknown_flag(flag), self.out_mode)),
+            bad_arg => {
+                return Err((
+                    BFCompileError::basic(
+                        BFErrorID::UnknownArg,
+                        format!("'{}' is not a recognized argument", bad_arg.escape_ascii()),
+                    ),
+                    self.out_mode,
+                ))
+            }
         }
         Ok(())
     }
