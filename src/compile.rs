@@ -21,7 +21,7 @@ use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
 
 struct JumpLocation {
-    loc: CodePosition,
+    loc: Option<CodePosition>,
     index: usize,
 }
 
@@ -188,10 +188,12 @@ trait BFCompileHelper: ArchInter {
     fn compile_instr(
         instr: u8,
         code_buf: &mut Vec<u8>,
-        loc: &mut CodePosition,
+        mut loc: Option<&mut CodePosition>,
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
-        loc.col += 1;
+        if let Some(ref mut pos) = loc {
+            pos.col += 1;
+        }
         match instr {
             // decrement the tape pointer register
             b'<' => Self::dec_reg(code_buf, Self::REGISTERS.bf_ptr),
@@ -209,22 +211,28 @@ trait BFCompileHelper: ArchInter {
             // will replace when reaching the corresponding ']' instruction
             b'[' => {
                 jump_stack.push(JumpLocation {
-                    loc: *loc,
+                    loc: loc.copied(),
                     index: code_buf.len(),
                 });
                 Self::nop_loop_open(code_buf);
             }
             b']' => {
                 // First, compile the skipped '[' instruction
-                let open_location =
-                    jump_stack
-                        .pop()
-                        .ok_or::<BFCompileError>(BFCompileError::positional(
+                let Some(open_location) = jump_stack.pop() else {
+                    if let Some(pos) = loc {
+                        return Err(BFCompileError::positional(
                             BFErrorID::UnmatchedClose,
                             "Found ']' without matching '['.",
                             b']',
-                            *loc,
-                        ))?;
+                            *pos,
+                        ));
+                    }
+                    return Err(BFCompileError::instruction(
+                        BFErrorID::UnmatchedClose,
+                        "Found ']' without matching '['.",
+                        b']',
+                    ));
+                };
                 let distance = code_buf.len() - open_location.index;
                 Self::jump_open(
                     code_buf,
@@ -235,8 +243,10 @@ trait BFCompileHelper: ArchInter {
                 Self::jump_close(code_buf, Self::REGISTERS.bf_ptr, -(distance as i64))?;
             }
             b'\n' => {
-                loc.col = 0;
-                loc.line += 1;
+                if let Some(ref mut pos) = loc {
+                    pos.col = 0;
+                    pos.line += 1;
+                }
             }
             _ => (),
         }
@@ -254,7 +264,7 @@ trait BFCompileHelper: ArchInter {
                 instr,
                 dst,
                 // throwaway position value
-                &mut CodePosition { line: 0, col: 0 },
+                None,
                 jump_stack,
             );
         }
@@ -269,7 +279,7 @@ trait BFCompileHelper: ArchInter {
                     Self::compile_instr(
                         instr,
                         dst,
-                        &mut CodePosition { line: 0, col: 0 },
+                        None,
                         jump_stack,
                     )?;
                 }
@@ -336,7 +346,7 @@ impl<B: BFCompileHelper> BFCompile for B {
             reader.bytes().for_each(|maybe_byte| match maybe_byte {
                 Ok(byte) => {
                     if let Err(e) =
-                        Self::compile_instr(byte, &mut code_buf, &mut loc, &mut jump_stack)
+                        Self::compile_instr(byte, &mut code_buf, Some(&mut loc), &mut jump_stack)
                     {
                         errs.push(e);
                     }
@@ -354,12 +364,20 @@ impl<B: BFCompileHelper> BFCompile for B {
 
         // quick check to make sure that there are no unterminated loops
         if let Some(jl) = jump_stack.pop() {
-            errs.push(BFCompileError::positional(
-                BFErrorID::UnmatchedOpen,
-                String::from("Reached the end of the file with an unmatched '['"),
-                b'[',
-                jl.loc,
-            ));
+            if let Some(loc) = jl.loc {
+                errs.push(BFCompileError::positional(
+                    BFErrorID::UnmatchedOpen,
+                    String::from("Reached the end of the file with an unmatched '['"),
+                    b'[',
+                    loc,
+                ));
+            } else {
+                errs.push(BFCompileError::instruction(
+                    BFErrorID::UnmatchedOpen,
+                    String::from("Reached the end of the file with an unmatched '['"),
+                    b'[',
+                ));
+            }
         }
         // finally, after that mess, end with an exit(0)
         Self::set_reg(&mut code_buf, Self::REGISTERS.sc_num, Self::SC_NUMS.exit);
