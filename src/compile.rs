@@ -352,11 +352,11 @@ impl<B: BFCompileHelper> BFCompile for B {
                     }
                 }
                 Err(_) => {
-                    errs.push(BFCompileError::positional(
+                    errs.push(BFCompileError::new(
                         BFErrorID::FailedRead,
                         String::from("Failed to read byte after current position"),
-                        b'\0',
-                        loc,
+                        None,
+                        Some(loc),
                     ));
                 }
             });

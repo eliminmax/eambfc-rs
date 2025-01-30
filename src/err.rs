@@ -87,6 +87,22 @@ pub(crate) struct BFCompileError {
 }
 
 impl BFCompileError {
+
+    #[must_use]
+    pub fn new<M: Into<ErrMsg>>(
+        kind: BFErrorID,
+        msg: M,
+        instr: Option<u8>,
+        loc: Option<CodePosition>,
+    ) -> Self {
+        Self {
+            kind,
+            msg: msg.into(),
+            instr,
+            loc,
+        }
+    }
+
     #[must_use]
     pub fn basic<M: Into<ErrMsg>>(kind: BFErrorID, msg: M) -> Self {
         Self {
@@ -102,7 +118,7 @@ impl BFCompileError {
             kind,
             msg: msg.into(),
             instr: Some(instr),
-            loc: None
+            loc: None,
         }
     }
 
