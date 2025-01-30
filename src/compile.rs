@@ -219,18 +219,11 @@ trait BFCompileHelper: ArchInter {
             b']' => {
                 // First, compile the skipped '[' instruction
                 let Some(open_location) = jump_stack.pop() else {
-                    if let Some(pos) = loc {
-                        return Err(BFCompileError::positional(
-                            BFErrorID::UnmatchedClose,
-                            "Found ']' without matching '['.",
-                            b']',
-                            *pos,
-                        ));
-                    }
-                    return Err(BFCompileError::instruction(
+                    return Err(BFCompileError::new(
                         BFErrorID::UnmatchedClose,
                         "Found ']' without matching '['.",
-                        b']',
+                        Some(b']'),
+                        loc.copied(),
                     ));
                 };
                 let distance = code_buf.len() - open_location.index;
@@ -353,14 +346,11 @@ impl<B: BFCompileHelper> BFCompile for B {
 
         // quick check to make sure that there are no unterminated loops
         if let Some(jl) = jump_stack.pop() {
-            let Some(loc) = jl.loc else {
-                unreachable!("the optimization process checks for unbalanced loops")
-            };
-            errs.push(BFCompileError::positional(
+            errs.push(BFCompileError::new(
                 BFErrorID::UnmatchedOpen,
                 String::from("Reached the end of the file with an unmatched '['"),
-                b'[',
-                loc,
+                Some(b'['),
+                jl.loc,
             ));
         }
         // finally, after that mess, end with an exit(0)
