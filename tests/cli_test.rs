@@ -173,6 +173,9 @@ mod cli_tests {
         );
         test_err!("UNMATCHED_OPEN", "./test_assets/unmatched_open.bf");
         test_err!("UNMATCHED_CLOSE", "./test_assets/unmatched_close.bf");
+        // optimization mode uses a separate dedicated check for unbalanced loops, so check again
+        test_err!("UNMATCHED_OPEN", "-O", "./test_assets/unmatched_open.bf");
+        test_err!("UNMATCHED_CLOSE", "-O", "./test_assets/unmatched_close.bf");
     }
 
     #[test]
