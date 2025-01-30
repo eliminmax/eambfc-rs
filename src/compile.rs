@@ -4,7 +4,7 @@
 mod fsutil;
 use fsutil::rm_ext;
 mod optimize;
-use optimize::{to_condensed, CondensedInstruction};
+use optimize::filtered_read;
 mod arch_inter;
 use arch_inter::ArchInter;
 
@@ -243,33 +243,63 @@ trait BFCompileHelper: ArchInter {
         Ok(())
     }
 
-    fn compile_condensed(
-        condensed_instr: CondensedInstruction,
+    fn compile_condensed_instr(
+        instr: u8,
+        count: usize,
         dst: &mut Vec<u8>,
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
-        use CondensedInstruction as CI;
+        if instr != b'@' && count == 1 {
+            return Self::compile_instr(
+                instr,
+                dst,
+                // throwaway position value
+                &mut CodePosition { line: 0, col: 0 },
+                jump_stack,
+            );
+        }
+        match instr {
+            b'@' => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
+            b'+' => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as i8),
+            b'-' => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as i8),
+            b'<' => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as i64),
+            b'>' => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as i64),
+            b',' | b'.' | b'[' | b']' => {
+                for _ in 0..count {
+                    Self::compile_instr(
+                        instr,
+                        dst,
+                        &mut CodePosition { line: 0, col: 0 },
+                        jump_stack,
+                    )?;
+                }
+            }
+            _ => unreachable!("Other bytes have been filtered out"),
+        }
+        Ok(())
+    }
 
-        match condensed_instr {
-            CI::SetZero => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
-            CI::RepeatAdd(count) => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count.get() as i8),
-            CI::RepeatSub(count) => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count.get() as i8),
-            CI::RepeatMoveR(count) => {
-                Self::add_reg(dst, Self::REGISTERS.bf_ptr, count.get() as i64);
-            }
-            CI::RepeatMoveL(count) => {
-                Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count.get() as i64);
-            }
-            CI::BFInstruction(i) => {
-                Self::compile_instr(
-                    i,
-                    dst,
-                    // throwaway position value
-                    &mut CodePosition { line: 0, col: 0 },
-                    jump_stack,
-                )?;
+    fn compile_condensed(
+        dst: &mut Vec<u8>,
+        jump_stack: &mut Vec<JumpLocation>,
+        filtered_code: Vec<u8>,
+    ) -> Result<(), Vec<BFCompileError>> {
+        let mut filtered_code = filtered_code.into_iter();
+        let Some(mut prev_instr) = filtered_code.next() else {
+            return Ok(());
+        };
+
+        let mut count: usize = 1;
+        for instr in filtered_code {
+            if instr == prev_instr {
+                count += 1;
+            } else {
+                Self::compile_condensed_instr(prev_instr, count, dst, jump_stack)?;
+                prev_instr = instr;
+                count = 1;
             }
         }
+        Self::compile_condensed_instr(prev_instr, count, dst, jump_stack)?;
         Ok(())
     }
 }
@@ -292,19 +322,16 @@ impl<B: BFCompileHelper> BFCompile for B {
         let reader = BufReader::new(in_f);
 
         if optimize {
-            errs.append(&mut match to_condensed(reader) {
-                Ok(condensed) => condensed
-                    .into_iter()
-                    .filter_map(|i| {
-                        if let Err(e) = Self::compile_condensed(i, &mut code_buf, &mut jump_stack) {
-                            Some(e)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<BFCompileError>>(),
-                Err(e) => vec![e],
-            });
+            match filtered_read(reader) {
+                Ok(filtered_code) => {
+                    if let Err(e) =
+                        Self::compile_condensed(&mut code_buf, &mut jump_stack, filtered_code)
+                    {
+                        errs.extend(e);
+                    }
+                }
+                Err(e) => errs.push(e),
+            }
         } else {
             reader.bytes().for_each(|maybe_byte| match maybe_byte {
                 Ok(byte) => {
