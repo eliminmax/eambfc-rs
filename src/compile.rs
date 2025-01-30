@@ -29,6 +29,7 @@ struct JumpLocation {
 const PHTB_SIZE: u64 = (PHDR_SIZE * PHNUM) as u64;
 const TAPE_ADDR: u64 = 0x10000;
 const PHNUM: u16 = 2;
+const START_ADDR: u64 = (((EHDR_SIZE as u64) + PHTB_SIZE) & (!0xff)) + 0x100;
 
 fn write_headers(
     output: &mut impl Write,
@@ -41,8 +42,7 @@ fn write_headers(
     // ELF addressing stuff that depends on tape_blocks, so can't be constant
     let tape_size: u64 = tape_blocks * 0x1000;
     let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffff)) + 0x10000;
-    let start_addr: u64 = ((u64::from(EHDR_SIZE) + PHTB_SIZE) & (!0xff)) + 0x100;
-    let start_virt_addr: u64 = start_addr + load_vaddr;
+    let start_virt_addr: u64 = START_ADDR + load_vaddr;
     let ehdr = Ehdr {
         ident: EIdent {
             class: ElfClass::ELFClass64,
@@ -81,8 +81,8 @@ fn write_headers(
         offset: 0,                            // load bytes from this index in the file
         vaddr: load_vaddr,                    // load segment into this section of memory
         paddr: 0,                             // load from this physical address
-        filesz: start_addr + codesize as u64, // load this many bytes from file…
-        memsz: start_addr + codesize as u64,  // allocate this many bytes of memory…
+        filesz: START_ADDR + codesize as u64, // load this many bytes from file…
+        memsz: START_ADDR + codesize as u64,  // allocate this many bytes of memory…
         align: 1,                             // align with this power of 2
     };
     let mut to_write = Vec::<u8>::from(ehdr);
@@ -90,7 +90,7 @@ fn write_headers(
     to_write.extend(Vec::<u8>::from(code_segment));
 
     // add padding bytes
-    to_write.resize(start_addr as usize, 0);
+    to_write.resize(START_ADDR as usize, 0);
     match output.write(to_write.as_slice()) {
         Ok(count) if count == to_write.len() => Ok(()),
         Ok(count) => Err(BFCompileError::basic(
