@@ -404,6 +404,8 @@ mod tests {
     use super::*;
     use backends::X86_64Inter;
 
+    use std::io;
+
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
         X86_64Inter::compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false, 8)
@@ -432,5 +434,63 @@ mod tests {
             X86_64Inter::compile(b"]".as_slice(), Vec::<u8>::new(), false, 8,)
                 .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedClose)
         );
+    }
+
+    struct FailingWriter {
+        fail_after: usize,
+    }
+    impl Write for FailingWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            if self.fail_after == 0 {
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "testing write failure handling",
+                ))
+            } else if buf.len() < self.fail_after {
+                self.fail_after -= buf.len();
+                Ok(buf.len())
+            } else {
+                let ret = self.fail_after;
+                self.fail_after = 0;
+                Ok(ret)
+            }
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn write_failures_handled() {
+        // partial write failure while writing headers
+        assert!(
+            X86_64Inter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 60 }, true, 8)
+                .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite)
+        );
+        // total write failure while writing headers
+        assert!(
+            X86_64Inter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 0 }, true, 8)
+                .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite)
+        );
+        // partial write failure while writing code
+        assert!(X86_64Inter::compile(
+            b"[-]".as_slice(),
+            FailingWriter {
+                fail_after: START_ADDR as usize + 1
+            },
+            true,
+            8
+        )
+        .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite));
+        // total write failure after writing headers
+        assert!(X86_64Inter::compile(
+            b"[-]".as_slice(),
+            FailingWriter {
+                fail_after: START_ADDR as usize
+            },
+            true,
+            8
+        )
+        .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite));
     }
 }
