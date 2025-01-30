@@ -76,15 +76,15 @@ impl std::fmt::Debug for BFErrorID {
     }
 }
 
+type ErrMsg = Cow<'static, str>;
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct BFCompileError {
     pub kind: BFErrorID,
-    msg: Cow<'static, str>,
+    msg: ErrMsg,
     instr: Option<u8>,
     loc: Option<CodePosition>,
 }
-
-type ErrMsg = Cow<'static, str>;
 
 impl BFCompileError {
     #[must_use]
