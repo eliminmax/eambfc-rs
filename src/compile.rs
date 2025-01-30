@@ -388,17 +388,20 @@ impl<B: BFCompileHelper> BFCompile for B {
     }
 }
 
-#[cfg(feature = "x86_64")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use backends::X86_64Inter;
-
+    #[cfg(eambfc_default_arch = "arm64")]
+    use backends::Arm64Inter as TestInter;
+    #[cfg(eambfc_default_arch = "s390x")]
+    use backends::S390xInter as TestInter;
+    #[cfg(eambfc_default_arch = "x86_64")]
+    use backends::X86_64Inter as TestInter;
     use std::io;
 
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
-        X86_64Inter::compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false, 8)
+        TestInter::compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false, 8)
             .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
@@ -406,14 +409,14 @@ mod tests {
     fn compile_nested_loops() -> Result<(), String> {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
-        X86_64Inter::compile(b">+[-->---[-<]>]>+".as_slice(), Vec::<u8>::new(), false, 8)
+        TestInter::compile(b">+[-->---[-<]>]>+".as_slice(), Vec::<u8>::new(), false, 8)
             .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
     #[test]
     fn unmatched_open() {
         assert!(
-            X86_64Inter::compile(b"[".as_slice(), Vec::<u8>::new(), false, 8,)
+            TestInter::compile(b"[".as_slice(), Vec::<u8>::new(), false, 8,)
                 .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedOpen)
         );
     }
@@ -421,7 +424,7 @@ mod tests {
     #[test]
     fn unmatched_close() {
         assert!(
-            X86_64Inter::compile(b"]".as_slice(), Vec::<u8>::new(), false, 8,)
+            TestInter::compile(b"]".as_slice(), Vec::<u8>::new(), false, 8,)
                 .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedClose)
         );
     }
@@ -454,16 +457,16 @@ mod tests {
     fn write_failures_handled() {
         // partial write failure while writing headers
         assert!(
-            X86_64Inter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 60 }, true, 8)
+            TestInter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 60 }, true, 8)
                 .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite)
         );
         // total write failure while writing headers
         assert!(
-            X86_64Inter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 0 }, true, 8)
+            TestInter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 0 }, true, 8)
                 .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite)
         );
         // partial write failure while writing code
-        assert!(X86_64Inter::compile(
+        assert!(TestInter::compile(
             b"[-]".as_slice(),
             FailingWriter {
                 fail_after: START_ADDR as usize + 1
@@ -473,7 +476,7 @@ mod tests {
         )
         .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite));
         // total write failure after writing headers
-        assert!(X86_64Inter::compile(
+        assert!(TestInter::compile(
             b"[-]".as_slice(),
             FailingWriter {
                 fail_after: START_ADDR as usize
