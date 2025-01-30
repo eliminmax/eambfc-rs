@@ -111,30 +111,6 @@ impl BFCompileError {
             loc: None,
         }
     }
-    #[must_use]
-    pub fn instruction<M: Into<ErrMsg>>(kind: BFErrorID, msg: M, instr: u8) -> Self {
-        Self {
-            kind,
-            msg: msg.into(),
-            instr: Some(instr),
-            loc: None,
-        }
-    }
-
-    #[must_use]
-    pub fn positional<M: Into<ErrMsg>>(
-        kind: BFErrorID,
-        msg: M,
-        instr: u8,
-        loc: CodePosition,
-    ) -> Self {
-        Self {
-            kind,
-            msg: msg.into(),
-            instr: Some(instr),
-            loc: Some(loc),
-        }
-    }
 
     fn report_basic(&self) {
         let mut report_string = format!("Error {:?}", self.kind);
