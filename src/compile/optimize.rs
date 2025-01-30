@@ -2,20 +2,22 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use super::arch_inter::ArchInter;
 use crate::err::{BFCompileError, BFErrorID};
 use std::collections::VecDeque;
 use std::io::Read;
-use std::num::NonZeroUsize;
+use std::num::NonZero;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub(super) enum CondensedInstruction {
     BFInstruction(u8),
-    RepeatMoveR(NonZeroUsize),
-    RepeatMoveL(NonZeroUsize),
-    RepeatAdd(NonZeroUsize),
-    RepeatSub(NonZeroUsize),
+    RepeatMoveR(NonZero<usize>),
+    RepeatMoveL(NonZero<usize>),
+    RepeatAdd(NonZero<usize>),
+    RepeatSub(NonZero<usize>),
     SetZero,
 }
+
 
 #[derive(PartialEq, Clone, Copy)]
 enum InstructionTag {
@@ -36,7 +38,7 @@ enum InstructionTag {
 
 struct CondensedInstructions {
     instructions: VecDeque<InstructionTag>,
-    repeat_counts: VecDeque<NonZeroUsize>,
+    repeat_counts: VecDeque<NonZero<usize>>,
 }
 
 impl CondensedInstructions {
@@ -59,7 +61,7 @@ impl CondensedInstructions {
         if count == 1 {
             self.instructions.push_back(single_tag);
         } else {
-            let count = NonZeroUsize::new(count).expect("count is nonzero");
+            let count = NonZero::<usize>::new(count).expect("count is nonzero");
             self.instructions.push_back(repeat_tag);
             self.repeat_counts.push_back(count);
         }
@@ -83,7 +85,7 @@ impl CondensedInstructions {
         }
     }
 
-    fn get_count(&mut self) -> NonZeroUsize {
+    fn get_count(&mut self) -> NonZero<usize> {
         self.repeat_counts
             .pop_front()
             .expect("CondensedInstructions will always have exactly enough repeat_counts")
@@ -170,14 +172,14 @@ enum CancellingCodeIndex {
 }
 
 fn find_cancelling_code(code_bytes: &[u8]) -> Option<CancellingCodeIndex> {
-    let small_patterns: [&[u8]; 4] = [
+    const SMALL_PATTERNS: [&[u8]; 4] = [
         b"+-".as_slice(),
         b"-+".as_slice(),
         b"<>".as_slice(),
         b"><".as_slice(),
     ];
     for (i, window) in code_bytes.windows(2).enumerate() {
-        if small_patterns.contains(&window) {
+        if SMALL_PATTERNS.contains(&window) {
             return Some(CancellingCodeIndex::CancellingPair(i));
         }
     }
@@ -295,7 +297,7 @@ mod tests {
             vec![
                 CondensedInstruction::BFInstruction(b'+'),
                 CondensedInstruction::SetZero,
-                CondensedInstruction::RepeatAdd(const { NonZeroUsize::new(2).unwrap() }),
+                CondensedInstruction::RepeatAdd(const { NonZero::<usize>::new(2).unwrap() }),
                 CondensedInstruction::SetZero,
                 CondensedInstruction::BFInstruction(b','),
                 CondensedInstruction::BFInstruction(b'.'),
@@ -357,15 +359,15 @@ mod tests {
                 CondensedInstruction::BFInstruction(b'+'),
                 CondensedInstruction::BFInstruction(b'<'),
                 CondensedInstruction::BFInstruction(b'-'),
-                CondensedInstruction::RepeatMoveR(NonZeroUsize::new(32).unwrap()),
-                CondensedInstruction::RepeatAdd(NonZeroUsize::new(32).unwrap()),
-                CondensedInstruction::RepeatMoveL(NonZeroUsize::new(32).unwrap()),
-                CondensedInstruction::RepeatSub(NonZeroUsize::new(32).unwrap()),
+                CondensedInstruction::RepeatMoveR(NonZero::<usize>::new(32).unwrap()),
+                CondensedInstruction::RepeatAdd(NonZero::<usize>::new(32).unwrap()),
+                CondensedInstruction::RepeatMoveL(NonZero::<usize>::new(32).unwrap()),
+                CondensedInstruction::RepeatSub(NonZero::<usize>::new(32).unwrap()),
                 CondensedInstruction::SetZero,
                 CondensedInstruction::BFInstruction(b'['),
                 CondensedInstruction::BFInstruction(b'['),
                 CondensedInstruction::BFInstruction(b'['),
-                CondensedInstruction::RepeatSub(NonZeroUsize::new(101).unwrap()),
+                CondensedInstruction::RepeatSub(NonZero::<usize>::new(101).unwrap()),
                 CondensedInstruction::BFInstruction(b']'),
                 CondensedInstruction::BFInstruction(b']'),
                 CondensedInstruction::BFInstruction(b']'),
