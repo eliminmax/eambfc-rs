@@ -358,20 +358,15 @@ impl<B: BFCompileHelper> BFCompile for B {
 
         // quick check to make sure that there are no unterminated loops
         if let Some(jl) = jump_stack.pop() {
-            if let Some(loc) = jl.loc {
-                errs.push(BFCompileError::positional(
-                    BFErrorID::UnmatchedOpen,
-                    String::from("Reached the end of the file with an unmatched '['"),
-                    b'[',
-                    loc,
-                ));
-            } else {
-                errs.push(BFCompileError::instruction(
-                    BFErrorID::UnmatchedOpen,
-                    String::from("Reached the end of the file with an unmatched '['"),
-                    b'[',
-                ));
-            }
+            let Some(loc) = jl.loc else {
+                unreachable!("the optimization process checks for unbalanced loops")
+            };
+            errs.push(BFCompileError::positional(
+                BFErrorID::UnmatchedOpen,
+                String::from("Reached the end of the file with an unmatched '['"),
+                b'[',
+                loc,
+            ));
         }
         // finally, after that mess, end with an exit(0)
         Self::set_reg(&mut code_buf, Self::REGISTERS.sc_num, Self::SC_NUMS.exit);
