@@ -187,7 +187,7 @@ mod cli_tests {
         assert!(cmd_output.stderr.is_empty());
     }
 
-    #[cfg(unix)]
+    #[cfg_attr(not(unix), ignore = "Can't test Unix permissions")]
     #[test]
     fn permission_error_test() -> io::Result<()> {
         use fs::{copy as copy_file, OpenOptions};
@@ -349,19 +349,19 @@ mod cli_tests {
         test_truthmachine_cmd(base_dir.join("truthmachine.unopt"));
     }
 
-    #[cfg(can_run_arm64)]
+    #[cfg_attr(not(can_run_arm64), ignore = "can't run arm64 Linux ELF binaries")]
     #[test]
     fn test_arm64() {
         test_arch("arm64");
     }
 
-    #[cfg(can_run_s390x)]
+    #[cfg_attr(not(can_run_s390x), ignore = "can't run s390x Linux ELF binaries")]
     #[test]
     fn test_s390x() {
         test_arch("s390x");
     }
 
-    #[cfg(can_run_x86_64)]
+    #[cfg_attr(not(can_run_x86_64), ignore = "can't run x86_64 Linux ELF binaries")]
     #[test]
     fn test_x86_64() {
         test_arch("x86_64");
