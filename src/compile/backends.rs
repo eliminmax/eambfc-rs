@@ -29,11 +29,14 @@ mod test_utils {
     use std::ffi::CStr;
     use std::sync::OnceLock;
 
+    /// a dummy value to ensure that the LLVM Disassembler functions are
     static LLVM_TARGET_INIT: OnceLock<()> = OnceLock::new();
 
-    /// call the needed functions to set up the LLVM disassembler
+    /// cross the ffi boundry to call functions to set up the LLVM disassembler interface
     fn init_llvm() {
         use llvm_sys::target;
+        // SAFETY: the `llvm_sys::target` functions are all opaque initialization functions that
+        // are entirely on the LLVM side of the FFI boundry. They are
         LLVM_TARGET_INIT.get_or_init(|| unsafe {
             target::LLVM_InitializeAllAsmPrinters();
             target::LLVM_InitializeAllTargets();
@@ -43,14 +46,18 @@ mod test_utils {
         });
     }
 
+    /// return a tuple containing the LLVM target triple and the LLVM CPU id to target.
     fn target_info(arch: ElfArch) -> (&'static CStr, &'static CStr) {
         match arch {
             #[cfg(feature = "arm64")]
+            // use a generic CPU for the arm64 and x86_64 backends.
             ElfArch::Arm64 => (c"aarch64-linux-gnu", c"generic"),
-            #[cfg(feature = "s390x")]
-            ElfArch::S390x => (c"systemz-linux-gnu", c"z196"),
             #[cfg(feature = "x86_64")]
             ElfArch::X86_64 => (c"x86_64-linux-gnu", c"x86-64"),
+            // for s390x, use the z196 CPU to have access to the high-word facility needed for some
+            // instructions used for larger values
+            #[cfg(feature = "s390x")]
+            ElfArch::S390x => (c"systemz-linux-gnu", c"z196"),
         }
     }
 
@@ -82,6 +89,7 @@ mod test_utils {
                         disassembler::LLVMDisassembler_Option_AsmPrinterVariant,
                     );
                 }
+                // use hex for immediates
                 disassembler::LLVMSetDisasmOptions(
                     p,
                     disassembler::LLVMDisassembler_Option_PrintImmHex,
