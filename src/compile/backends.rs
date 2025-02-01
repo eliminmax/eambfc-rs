@@ -38,6 +38,7 @@ mod test_utils {
         // SAFETY: the `llvm_sys::target` functions are all opaque initialization functions that
         // are entirely on the LLVM side of the FFI boundry. They are
         LLVM_TARGET_INIT.get_or_init(|| unsafe {
+            assert!(llvm_sys::core::LLVMIsMultithreaded() != 0);
             target::LLVM_InitializeAllTargetInfos();
             target::LLVM_InitializeAllTargetMCs();
             target::LLVM_InitializeAllDisassemblers();
