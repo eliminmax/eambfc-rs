@@ -20,6 +20,8 @@ pub(crate) use x86_64::X86_64Inter;
 use super::arch_inter;
 use super::elf_tools;
 
+/// Provides a safe way to use LLVM's disassembler for backends to use for unit testing, using the
+/// `Disassembler` struct.
 #[cfg(not(tarpaulin_include))]
 #[cfg(test)]
 mod test_utils {
@@ -64,10 +66,21 @@ mod test_utils {
     pub struct Disassembler(disassembler::LLVMDisasmContextRef);
 
     impl Disassembler {
-        /// Create a new Disassembler for the target architecture
-        pub fn new(isa: ElfArch) -> Self {
+        /// Create a new Disassembler for the target architecture. The Disassembler is configured
+        /// with `LLVMDisassembler_Option_PrintImmHex`, so immediates will typically be expressed in
+        /// hexadecimal. If `target` is `ElfArch::X86_64`, then
+        /// `LLVMDisassembler_Option_AsmPrinterVariant` will also be passed, to use Intel syntax
+        /// for the disassembly.
+        pub fn new(target: ElfArch) -> Self {
             init_llvm();
-            let (triple, cpu) = target_info(isa);
+            let (triple, cpu) = target_info(target);
+            // SAFETY: LLVMCreateDisasmCPU takes the target triple, cpu, disassembly info block, tag
+            // type, and 2 optional callback functions. The disassembly info block and callback
+            // functions are explicitly documented as being allowed to be null, and the tag type is
+            // set to zero as it's not used. If the `LLVMCreateDisasmCPU` call returns a null
+            // pointer, it's unsafe to proceed, but the assert ensures that it will crash instead.
+            // The `LLVMSetDisasmOptions` function must take a valid `LLVMDisasmContextRef`, but
+            // otherwise do not have any safety concerns.
             unsafe {
                 let p = disassembler::LLVMCreateDisasmCPU(
                     triple.as_ptr(),
@@ -82,40 +95,55 @@ mod test_utils {
                 // If this were after the PrintImmHex call or bitmasked in with it, it would
                 // override it, resulting in decimal immediates, so it needs to be a separate call.
                 #[cfg(feature = "x86_64")]
-                if isa == ElfArch::X86_64 {
-                    disassembler::LLVMSetDisasmOptions(
-                        p,
-                        disassembler::LLVMDisassembler_Option_AsmPrinterVariant,
+                if target == ElfArch::X86_64 {
+                    assert_eq!(
+                        1,
+                        disassembler::LLVMSetDisasmOptions(
+                            p,
+                            disassembler::LLVMDisassembler_Option_AsmPrinterVariant,
+                        )
                     );
                 }
                 // use hex for immediates
-                disassembler::LLVMSetDisasmOptions(
-                    p,
-                    disassembler::LLVMDisassembler_Option_PrintImmHex,
+                assert_eq!(
+                    1,
+                    disassembler::LLVMSetDisasmOptions(
+                        p,
+                        disassembler::LLVMDisassembler_Option_PrintImmHex,
+                    )
                 );
                 Self(p)
             }
         }
 
+        /// disassemble `bytes` into a Vec of assembly instructions. Panics if bytes can't be
+        /// disassebled fully.
         pub fn disassemble(&mut self, mut bytes: Vec<u8>) -> Vec<String> {
             let mut disasm: Vec<String> = Vec::with_capacity(64);
 
             while !bytes.is_empty() {
                 let mut output: [std::ffi::c_char; 128] = [0; 128];
                 let old_len = bytes.len();
-                let len = u64::try_from(old_len).unwrap();
-                let disassembly_size = unsafe {
-                    disassembler::LLVMDisasmInstruction(
+                let len = u64::try_from(old_len).expect("length must fit within 64 bits");
+                // SAFETY: The final parameter ensures that will only write up to 128 bytes to
+                // `output`.
+                // The second parameter (`len`) is size of the input, and LLVM won't read more than
+                // that internally.
+                unsafe {
+                    let disassembly_size = disassembler::LLVMDisasmInstruction(
                         self.0,
                         bytes.as_mut_ptr(),
                         len,
                         0,
                         output.as_mut_ptr(),
                         128,
-                    )
+                    );
+                    // Drain the disassembled bytes from the byte vector - their value is no longer
+                    // known, and they are no longer needed, so they should be dropped before
+                    // anything else can happen.
+                    bytes.drain(..disassembly_size);
                 };
 
-                bytes.drain(..disassembly_size);
                 assert_ne!(old_len, bytes.len(), "Failed to decompile {bytes:02x?}");
 
                 disasm.push(
@@ -139,6 +167,8 @@ mod test_utils {
 
     impl Drop for Disassembler {
         fn drop(&mut self) {
+            // SAFETY: this is the documented cleanup procedure for `LLVMDisasmContextRef`. It'll
+            // only be called once, when `self` is dropped, so there's no risk of use-after-free
             unsafe {
                 disassembler::LLVMDisasmDispose(self.0);
             }
