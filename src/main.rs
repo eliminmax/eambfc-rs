@@ -69,7 +69,7 @@ fn main() -> ExitCode {
                             rc.keep,
                             rc.tape_blocks,
                         )
-                    }}
+                    }};
                 }
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]

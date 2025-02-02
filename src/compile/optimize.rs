@@ -69,7 +69,7 @@ fn loops_match(code_bytes: &[u8]) -> Result<(), BFCompileError> {
 
 /// This function does a few things repeatedly.
 ///
-/// first, it strips out any occurances of `b"+-"`, `b"-+"`, `b"<>"`, and `b"><"`, as those
+/// first, it strips out any occurrences of `b"+-"`, `b"-+"`, `b"<>"`, and `b"><"`, as those
 /// instructions directly cancel themselves out. Once it can't find any of them, it tries to strip
 /// out any sequences of exactly 256 consecutive `b'+'` or `b'-'` instructions, as those would
 /// overflow back to where they started.

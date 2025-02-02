@@ -34,11 +34,11 @@ mod test_utils {
     /// a dummy value to ensure that the LLVM Disassembler functions are
     static LLVM_TARGET_INIT: OnceLock<()> = OnceLock::new();
 
-    /// cross the ffi boundry to call functions to set up the LLVM disassembler interface
+    /// cross the ffi boundary to call functions to set up the LLVM disassembler interface
     fn init_llvm() {
         use llvm_sys::target;
         // SAFETY: the `llvm_sys::target` functions are all opaque initialization functions that
-        // are entirely on the LLVM side of the FFI boundry. They are
+        // are entirely on the LLVM side of the FFI boundary. They are
         LLVM_TARGET_INIT.get_or_init(|| unsafe {
             assert!(llvm_sys::core::LLVMIsMultithreaded() != 0);
             target::LLVM_InitializeAllTargetInfos();
@@ -117,7 +117,7 @@ mod test_utils {
         }
 
         /// disassemble `bytes` into a Vec of assembly instructions. Panics if bytes can't be
-        /// disassebled fully.
+        /// disassembled fully.
         pub fn disassemble(&mut self, mut bytes: Vec<u8>) -> Vec<String> {
             let mut disasm: Vec<String> = Vec::with_capacity(64);
 
