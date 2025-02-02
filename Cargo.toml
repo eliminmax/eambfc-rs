@@ -39,9 +39,6 @@ dbg_macro = "warn"
 same_name_method = "warn"
 semicolon_outside_block = "warn"
 exit = "warn"
-# these two together warn on all literal suffixes. I just think it's cleaner to
-# avoid them overall
-unseparated_literal_suffix = "warn"
 separated_literal_suffix = "warn"
 
 [profile.release]
