@@ -14,17 +14,20 @@ pub(crate) enum OutMode {
 }
 
 impl OutMode {
+    /// Set `self` to `OutMode::Json`
     pub fn json(&mut self) {
         *self = OutMode::Json;
     }
+    /// If `self` is not `OutMode::Json`, sets `self` to `OutMode::Quiet`
+    /// for consistency with original C version, quiet doesn't override JSON mode
     pub fn quiet(&mut self) {
-        // for consistency with original C version, quiet doesn't override JSON mode
         if *self == OutMode::Basic {
             *self = OutMode::Quiet;
         }
     }
 }
 
+#[non_exhaustive]
 #[derive(PartialEq, Clone, Copy)]
 pub(crate) enum BFErrorID {
     BadExtension,
@@ -80,13 +83,14 @@ type ErrMsg = Cow<'static, str>;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct BFCompileError {
-    pub kind: BFErrorID,
+    pub(crate) kind: BFErrorID,
     msg: ErrMsg,
     instr: Option<u8>,
     loc: Option<CodePosition>,
 }
 
 impl BFCompileError {
+    /// Construct a new `BFCompileError` with the provided information.
     #[must_use]
     pub fn new<M: Into<ErrMsg>>(
         kind: BFErrorID,
@@ -102,6 +106,7 @@ impl BFCompileError {
         }
     }
 
+    /// Construct a new `BFCompileError` with the provided information.
     #[must_use]
     pub fn basic<M: Into<ErrMsg>>(kind: BFErrorID, msg: M) -> Self {
         Self {
@@ -146,6 +151,24 @@ impl BFCompileError {
         println!("{report_string},\"message\":\"{}\"}}", self.msg);
     }
 
+    /// Report error to user in manner determined by `out_mode`.
+    ///
+    /// * If it's `OutMode::Quiet`, then it does nothing
+    /// * If it's `OutMode::Basic`, then it prints a human-readable message to stderr
+    /// * If it's `OutMode::Json`, then it prints a JSON object to stdout, suitable to pipe into
+    ///   tools like `jq`. It has the following structure:
+    ///   ```plain
+    ///   {
+    ///     "errorId": string,
+    ///     "message": string,
+    ///     "instruction": string,
+    ///     "line": int,
+    ///     "column": int
+    ///   }
+    ///   ```
+    ///   * "instruction" will be omitted if `self.instr` is `None`,
+    ///   * "line" and "column" will be omitted if `self.loc` is `None`,
+    ///
     pub fn report(&self, out_mode: OutMode) {
         match out_mode {
             OutMode::Quiet => (),
