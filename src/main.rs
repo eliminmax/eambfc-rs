@@ -54,31 +54,24 @@ fn main() -> ExitCode {
         }
         Ok(RunConfig::StandardRun(rc)) => {
             for f in rc.source_files {
+                macro_rules! compile_with {
+                    ($inter: ident) => {{
+                        $inter::compile_file(
+                            f.as_ref(),
+                            &rc.extension,
+                            rc.optimize,
+                            rc.keep,
+                            rc.tape_blocks,
+                        )
+                    }}
+                }
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]
-                    ElfArch::Arm64 => Arm64Inter::compile_file(
-                        f.as_ref(),
-                        &rc.extension,
-                        rc.optimize,
-                        rc.keep,
-                        rc.tape_blocks,
-                    ),
+                    ElfArch::Arm64 => compile_with!(Arm64Inter),
                     #[cfg(feature = "s390x")]
-                    ElfArch::S390x => S390xInter::compile_file(
-                        f.as_ref(),
-                        &rc.extension,
-                        rc.optimize,
-                        rc.keep,
-                        rc.tape_blocks,
-                    ),
+                    ElfArch::S390x => compile_with!(S390xInter),
                     #[cfg(feature = "x86_64")]
-                    ElfArch::X86_64 => X86_64Inter::compile_file(
-                        f.as_ref(),
-                        &rc.extension,
-                        rc.optimize,
-                        rc.keep,
-                        rc.tape_blocks,
-                    ),
+                    ElfArch::X86_64 => compile_with!(X86_64Inter),
                 };
                 if let Err(errs) = comp_result {
                     errs.into_iter().for_each(|e| e.report(rc.out_mode));
