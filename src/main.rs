@@ -2,6 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+//! An (optionally) optimizing brainfuck compiler targeting `arm64`, `s390x`, and `x86_64` Linux
+//! systems\*.
+//!
+//! \* Each supported platform has an associated feature, and will only be compiled in if that
+//! feature is enabled. By default, all backends are enabled*
+
 mod arg_parse;
 mod compile;
 mod err;
