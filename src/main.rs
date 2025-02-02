@@ -54,10 +54,6 @@ fn main() -> ExitCode {
         }
         Ok(RunConfig::StandardRun(rc)) => {
             for f in rc.source_files {
-                #[allow(
-                    unreachable_patterns,
-                    reason = "Pattern is only unreachable if all backends are compiled in"
-                )]
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]
                     ElfArch::Arm64 => Arm64Inter::compile_file(
@@ -83,7 +79,6 @@ fn main() -> ExitCode {
                         rc.keep,
                         rc.tape_blocks,
                     ),
-                    _ => unreachable!(), // if architecture is disabled, it won't be included here
                 };
                 if let Err(errs) = comp_result {
                     errs.into_iter().for_each(|e| e.report(rc.out_mode));
