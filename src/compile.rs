@@ -12,10 +12,7 @@ pub(crate) mod backends;
 pub(crate) mod elf_tools;
 
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
-use elf_tools::{
-    ByteOrdering, EIdent, Ehdr, ElfArch, ElfClass, ElfOsAbi, ElfType, ElfVersion, PType, Phdr,
-    EHDR_SIZE, PHDR_SIZE,
-};
+use elf_tools::{ElfArch, PType, EHDR_SIZE, PHDR_SIZE};
 
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
@@ -35,7 +32,7 @@ fn write_headers(
     output: &mut impl Write,
     codesize: usize,
     tape_blocks: u64,
-    ei_data: ByteOrdering,
+    ei_data: elf_tools::ByteOrdering,
     elf_arch: ElfArch,
     e_flags: u32,
 ) -> Result<(), BFCompileError> {
@@ -43,15 +40,15 @@ fn write_headers(
     let tape_size: u64 = tape_blocks * 0x1000;
     let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffff)) + 0x10000;
     let start_virt_addr: u64 = START_ADDR + load_vaddr;
-    let ehdr = Ehdr {
-        ident: EIdent {
-            class: ElfClass::ELFClass64,
+    let ehdr = elf_tools::Ehdr {
+        ident: elf_tools::EIdent {
+            class: elf_tools::ElfClass::ELFClass64,
             data: ei_data,
-            osabi: ElfOsAbi::None,
+            osabi: elf_tools::ElfOsAbi::None,
         },
-        elf_type: ElfType::Exec,
+        elf_type: elf_tools::ElfType::Exec,
         machine: elf_arch,
-        version: ElfVersion::EvCurrent, // The only valid version number
+        version: elf_tools::ElfVersion::EvCurrent, // The only valid version number
         phnum: PHNUM,
         shnum: 0,
         phoff: u64::from(EHDR_SIZE),
@@ -63,7 +60,7 @@ fn write_headers(
         entry: start_virt_addr,
         flags: e_flags,
     };
-    let tape_segment = Phdr {
+    let tape_segment = elf_tools::Phdr {
         byte_order: ei_data,
         header_type: PType::Load, // loadable segment
         flags: 4 | 2,             // PF_R | PF_W (readable and writable)
@@ -74,7 +71,7 @@ fn write_headers(
         memsz: tape_size,         // allocate this many bytes of memory for this segment
         align: 0x1000,            // align with this power of 2
     };
-    let code_segment = Phdr {
+    let code_segment = elf_tools::Phdr {
         byte_order: ei_data,
         header_type: PType::Load,             // loadable segment
         flags: 4 | 1,                         // PF_R | PF_X (readable and executable)
