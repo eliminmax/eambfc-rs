@@ -16,7 +16,7 @@ mod cli_tests {
     use std::sync::OnceLock;
     use std::{fs, io};
 
-    const PATH: &str = "./target/debug/eambfc-rs";
+    const PATH: &str = env!("CARGO_BIN_EXE_eambfc-rs");
 
     const TEST_FILES: [&str; 10] = [
         "alternative_extension.brnfck",
