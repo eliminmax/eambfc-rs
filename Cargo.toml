@@ -40,6 +40,9 @@ same_name_method = "warn"
 semicolon_outside_block = "warn"
 exit = "warn"
 separated_literal_suffix = "warn"
+redundant_type_annotations = "warn"
+field_scoped_visibility_modifiers = "warn"
+missing_assert_message = "warn"
 
 [profile.release]
 lto = "thin"
