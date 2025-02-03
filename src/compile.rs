@@ -166,14 +166,14 @@ pub(crate) trait BFCompile {
 }
 
 trait BFCompileHelper: ArchInter {
-    // The brainfuck instructions "." and "," are similar from an implementation
-    // perspective. Both require making system calls for I/O, and the system calls
-    // have 3 nearly identical arguments:
-    //  - arg1 is the file descriptor
-    //  - arg2 is the memory address of the data source (write)/dest (read)
-    //  - arg3 is the number of bytes to write/read
-    //
-    // Due to their similarity, ',' and '.' are both implemented with bf_io.
+    /// The brainfuck instructions `b'.'` and `b','` are similar from an implementation
+    /// perspective. Both require making system calls for I/O, and the system calls
+    /// have 3 nearly identical arguments:
+    ///  - arg1 is the file descriptor
+    ///  - arg2 is the memory address of the data source (write)/dest (read)
+    ///  - arg3 is the number of bytes to write/read
+    ///
+    /// Due to their similarity, `b','` and b`'.'` are both implemented with `bf_io`.
     fn bf_io(code_buf: &mut Vec<u8>, sc: i64, fd: i64) {
         Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc);
         Self::set_reg(code_buf, Self::REGISTERS.arg1, fd);
@@ -182,6 +182,14 @@ trait BFCompileHelper: ArchInter {
         Self::syscall(code_buf);
     }
 
+    /// Compile `instr`, appending the machine code to `code_buf`. `jump_stack` is used to track
+    /// the jump locations.
+    ///
+    /// If `loc` is `Some`, then it will be updated with the current position within the brainfuck
+    /// source code, which is used for more detailed error messages.
+    ///
+    /// If the compilation of jump instructions results in an error, it's passed along, and if
+    /// `instr` is `b']'` and `jump_stack` is empty, it returns an error.
     fn compile_instr(
         instr: u8,
         code_buf: &mut Vec<u8>,
@@ -243,6 +251,9 @@ trait BFCompileHelper: ArchInter {
         Ok(())
     }
 
+    /// Compile a sequence of `count` copies of `instr` in a row. If `count` is more than 1, and
+    /// `instr` is one of `b'+'`, `b'-'`, `b'<'`, or `b'>'`, it's able to combine them into more
+    /// efficient machine code. If `instr` is `b'@'`, then it
     fn compile_condensed_instr(
         instr: u8,
         count: usize,
