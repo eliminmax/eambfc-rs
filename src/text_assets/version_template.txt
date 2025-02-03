@@ -1,4 +1,4 @@
-{}: eambfc-rs version {}
+{}: {} version {}
 
 Copyright (c) 2024 - 2025 Eli Array Minkoff
 License: GNU GPL version 3 <https://gnu.org/licenses/gpl.html>

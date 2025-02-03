@@ -372,12 +372,15 @@ mod cli_tests {
 
     #[test]
     fn test_version_output() {
+        let bin_path = PathBuf::from(env!("CARGO_BIN_EXE_eambfc-rs"));
+        let bin_name = bin_path.file_name().unwrap().to_string_lossy();
         let expected = format!(
             concat!(
                 include_str!("../src/text_assets/version_template.txt"),
                 '\n'
             ),
             PATH,
+            bin_name,
             env!("CARGO_PKG_VERSION"),
             env!("EAMBFC_RS_GIT_COMMIT"),
         );

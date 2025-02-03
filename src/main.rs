@@ -32,8 +32,8 @@ use crate::compile::backends::X86_64Inter;
 fn main() -> ExitCode {
     let mut exit_code = ExitCode::SUCCESS;
     let mut args = args_os();
-    // if not present, it's sensible to fall back to a sane default of "eambfc-rs".
-    let progname: Cow<'static, str> = args.next().map_or("eambfc-rs".into(), |c| {
+    // if args[0] is not present, it's sensible to fall back to the name cargo is using
+    let progname: Cow<'static, str> = args.next().map_or(env!("CARGO_BIN_NAME").into(), |c| {
         c.to_string_lossy().to_string().into()
     });
     match arg_parse::parse_args(args) {
@@ -92,6 +92,7 @@ fn main() -> ExitCode {
             println!(
                 include_str!("text_assets/version_template.txt"),
                 progname,
+                env!("CARGO_BIN_NAME"),
                 env!("CARGO_PKG_VERSION"),
                 env!("EAMBFC_RS_GIT_COMMIT")
             );
