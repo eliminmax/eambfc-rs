@@ -365,6 +365,12 @@ mod tests {
     }
 
     #[test]
+    #[should_panic = "32 is invalid for shift level"]
+    fn test_add_sub_imm_guard() {
+        add_sub_imm(&mut vec![], Arm64Register::X8, 32, ArithOp::Add, true);
+    }
+
+    #[test]
     fn test_reg_multiple() {
         let mut v: Vec<u8> = Vec::new();
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
