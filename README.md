@@ -59,8 +59,6 @@ Rust `#[cfg(unix)]` targets. If that is not the case, it's a bug.
 ```sh
 # install with cargo
 cargo install --path .
-# run test suite
-cargo test
 ```
 
 ## Development Process and Standards
@@ -77,6 +75,29 @@ goal has been met.
 
 Since then, I've used feature branches for large refactors or new features, and
 dev branches for new versions.
+
+## Testing
+
+The test suite is run with `cargo test`, as is typical of Rust projects. The
+tests require the `llvm_sys` crate, which has a bit of a complicated setup
+process - [see its docs](https://github.com/tari/llvm-sys.rs#build-requirements)
+for more info. In order for it to build properly on my system
+(Debian Bookworm with `llvm-19-dev` installed), I had to create the following
+`.cargo/config.toml` file:
+
+```toml
+[env]
+LLVM_SYS_191_PREFIX = "/usr/lib/llvm-19"
+```
+
+(`.cargo/config.toml` is for local configuration and is not supposed to be
+checked into version control, so if you need to do something similar, that's the
+place to do it).
+
+Some tests will only run if it's possible for the host system to directly run
+the binaries that this compiler outputs, either because they're native, or
+because there's a binary compaitibility shim that automatically gets envoked,
+such as with the Linux kernel's `binfmt_misc` system.
 
 ## Legal Stuff
 
