@@ -15,6 +15,10 @@ fi
 
 # check for spelling mistakes
 codespell
+# check for missing or malformed license info - run silently by default, but on
+# failure, run again with output
+reuse lint -q || reuse lint
+
 # ensure formatted
 cargo fmt --check
 # run general test suite
