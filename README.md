@@ -75,7 +75,8 @@ The goal was to support all of the C version's features and pass the C version's
 test suite, and work on any Rust target that provides `std::os::unix`, and that
 goal has been met.
 
-Since then, I've used feature branches for large refactors or new features.
+Since then, I've used feature branches for large refactors or new features, and
+dev branches for new versions.
 
 ## Legal Stuff
 
