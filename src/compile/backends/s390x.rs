@@ -463,7 +463,7 @@ impl ArchInter for S390xInter {
         // program), simply make sure that if imm is i64::MIN, pass it directly, otherwise, pass
         // `-imm`
         // check that "-imm" won't cause problems, then call add_reg with negative imm.
-        S390xInter::add_reg(code_buf, reg, if imm == i64::MIN { i64::MIN } else { -imm });
+        S390xInter::add_reg(code_buf, reg, imm.wrapping_neg());
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
