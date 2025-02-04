@@ -425,7 +425,7 @@ mod tests {
     fn unmatched_open() {
         assert!(
             TestInter::compile(b"[".as_slice(), Vec::<u8>::new(), false, 8,)
-                .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedOpen)
+                .is_err_and(|e| e[0].error_id() == BFErrorID::UnmatchedOpen)
         );
     }
 
@@ -433,7 +433,7 @@ mod tests {
     fn unmatched_close() {
         assert!(
             TestInter::compile(b"]".as_slice(), Vec::<u8>::new(), false, 8,)
-                .is_err_and(|e| e[0].kind == BFErrorID::UnmatchedClose)
+                .is_err_and(|e| e[0].error_id() == BFErrorID::UnmatchedClose)
         );
     }
 
@@ -466,12 +466,12 @@ mod tests {
         // partial write failure while writing headers
         assert!(
             TestInter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 60 }, true, 8)
-                .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite)
+                .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
         // total write failure while writing headers
         assert!(
             TestInter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 0 }, true, 8)
-                .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite)
+                .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
         // partial write failure while writing code
         assert!(TestInter::compile(
@@ -482,7 +482,7 @@ mod tests {
             true,
             8
         )
-        .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite));
+        .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite));
         // total write failure after writing headers
         assert!(TestInter::compile(
             b"[-]".as_slice(),
@@ -492,6 +492,6 @@ mod tests {
             true,
             8
         )
-        .is_err_and(|e| e[0].kind == BFErrorID::FailedWrite));
+        .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite));
     }
 }

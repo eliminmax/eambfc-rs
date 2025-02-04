@@ -337,7 +337,7 @@ mod tests {
             ConditionCode::Zero,
         )
         .unwrap_err();
-        assert_eq!(err.kind, BFErrorID::JumpTooLong);
+        assert_eq!(err.error_id(), BFErrorID::JumpTooLong);
     }
 
     #[test]

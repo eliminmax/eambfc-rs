@@ -568,7 +568,7 @@ mod tests {
     fn out_of_bounds_jumps_test() {
         assert!(
             Arm64Inter::jump_open(&mut [0; 12], 0, Arm64Register::X0, i64::MAX ^ 0b11)
-                .is_err_and(|e| e.kind == BFErrorID::JumpTooLong)
+                .is_err_and(|e| e.error_id() == BFErrorID::JumpTooLong)
         );
     }
 

@@ -40,6 +40,6 @@ mod tests {
     #[test]
     fn rmext_fail() {
         assert!(rm_ext("ee.e".as_ref(), ".bf".as_ref())
-            .is_err_and(|e| e.kind == BFErrorID::BadExtension));
+            .is_err_and(|e| e.error_id() == BFErrorID::BadExtension));
     }
 }

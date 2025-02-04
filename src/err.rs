@@ -83,7 +83,7 @@ type ErrMsg = Cow<'static, str>;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct BFCompileError {
-    pub(crate) kind: BFErrorID,
+    kind: BFErrorID,
     msg: ErrMsg,
     instr: Option<u8>,
     loc: Option<CodePosition>,
@@ -175,6 +175,13 @@ impl BFCompileError {
             OutMode::Basic => self.report_basic(),
             OutMode::Json => self.report_json(),
         }
+    }
+
+    /// Return the error ID of `self` (a `BFErrorID`)
+    /// (Used for internal unit testing only, thus the `#[cfg(test)]`
+    #[cfg(test)]
+    pub fn error_id(&self) -> BFErrorID {
+        self.kind
     }
 }
 

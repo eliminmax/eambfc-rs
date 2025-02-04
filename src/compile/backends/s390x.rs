@@ -626,7 +626,7 @@ mod tests {
         assert_eq!(
             S390xInter::jump_open(&mut [0; 18], 0, S390xRegister::R3, 0x1_2345_6789_abcd)
                 .unwrap_err()
-                .kind,
+                .error_id(),
             BFErrorID::JumpTooLong
         );
         let mut v: Vec<u8> = vec![0; 18];

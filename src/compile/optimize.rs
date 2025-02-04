@@ -222,17 +222,17 @@ mod tests {
     fn read_failure_handled() {
         let unreadable = Unreadable;
 
-        assert!(filtered_read(unreadable).is_err_and(|e| e.kind == BFErrorID::FailedRead));
+        assert!(filtered_read(unreadable).is_err_and(|e| e.error_id() == BFErrorID::FailedRead));
     }
 
     #[test]
     fn unmatched_loops_detected() {
         assert_eq!(
-            loops_match(b"[").unwrap_err().kind,
+            loops_match(b"[").unwrap_err().error_id(),
             BFErrorID::UnmatchedOpen,
         );
         assert_eq!(
-            loops_match(b"]").unwrap_err().kind,
+            loops_match(b"]").unwrap_err().error_id(),
             BFErrorID::UnmatchedClose,
         );
     }

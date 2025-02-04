@@ -82,47 +82,47 @@ fn version_returned() {
 #[test]
 fn handle_empty_args() {
     let (bf_err, _) = parse_args(vec![].into_iter()).unwrap_err();
-    assert_eq!(bf_err.kind, BFErrorID::NoSourceFiles);
+    assert_eq!(bf_err.error_id(), BFErrorID::NoSourceFiles);
 }
 
 #[test]
 fn non_numeric_tape_size() {
     let (err, ..) = parse_args(vec![arg("-t"), arg("###")].into_iter()).unwrap_err();
-    assert_eq!(err.kind, BFErrorID::NotNumeric);
+    assert_eq!(err.error_id(), BFErrorID::NotNumeric);
 }
 
 #[test]
 fn multiple_tape_size() {
     let args_set = vec![arg("-t1"), arg("-t1024")].into_iter();
     let (err, ..) = parse_args(args_set).unwrap_err();
-    assert_eq!(err.kind, BFErrorID::MultipleTapeBlockCounts);
+    assert_eq!(err.error_id(), BFErrorID::MultipleTapeBlockCounts);
 }
 
 #[test]
 fn tape_size_zero() {
     let args_set = vec![arg("-t0")].into_iter();
     let (err, ..) = parse_args(args_set).unwrap_err();
-    assert_eq!(err.kind, BFErrorID::NoTape);
+    assert_eq!(err.error_id(), BFErrorID::NoTape);
 }
 
 #[test]
 fn tape_too_large() {
     let args_set = vec![arg("-t9223372036854775807")].into_iter();
     let (err, ..) = parse_args(args_set).unwrap_err();
-    assert_eq!(err.kind, BFErrorID::TapeTooLarge);
+    assert_eq!(err.error_id(), BFErrorID::TapeTooLarge);
 }
 
 #[test]
 fn missing_operand() {
     let args_set = vec![arg("-t")].into_iter();
     let (err, ..) = parse_args(args_set).unwrap_err();
-    assert_eq!(err.kind, BFErrorID::MissingOperand);
+    assert_eq!(err.error_id(), BFErrorID::MissingOperand);
     let args_set = vec![arg("-e")].into_iter();
     let (err, ..) = parse_args(args_set).unwrap_err();
-    assert_eq!(err.kind, BFErrorID::MissingOperand);
+    assert_eq!(err.error_id(), BFErrorID::MissingOperand);
     let args_set = vec![arg("-a")].into_iter();
     let (err, ..) = parse_args(args_set).unwrap_err();
-    assert_eq!(err.kind, BFErrorID::MissingOperand);
+    assert_eq!(err.error_id(), BFErrorID::MissingOperand);
 }
 
 #[test]
@@ -165,15 +165,14 @@ fn single_args_parsed() {
 fn multiple_extensions_err() {
     assert!(
         parse_args(vec![arg("-e.brainfuck"), arg("-e"), arg(".bf")].into_iter())
-            .is_err_and(|e| e.0.kind == BFErrorID::MultipleExtensions)
+            .is_err_and(|e| e.0.error_id() == BFErrorID::MultipleExtensions)
     );
 }
 
 #[test]
 fn bad_args_error_out() {
-    assert!(
-        parse_args(vec![arg("-u")].into_iter()).is_err_and(|e| e.0.kind == BFErrorID::UnknownArg)
-    );
+    assert!(parse_args(vec![arg("-u")].into_iter())
+        .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArg));
 }
 
 #[test]
@@ -206,7 +205,7 @@ fn arch_selection() {
         };
     } else {
         assert!(parse_args(vec![arg("-aarm64"), arg("foo.bf")].into_iter())
-            .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
+            .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
     }
     if cfg!(feature = "s390x") {
         #[cfg(feature = "s390x")]
@@ -226,7 +225,7 @@ fn arch_selection() {
         };
     } else {
         assert!(parse_args(vec![arg("-as390x"), arg("foo.bf")].into_iter())
-            .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
+            .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
     }
     if cfg!(feature = "x86_64") {
         #[cfg(feature = "x86_64")]
@@ -250,10 +249,10 @@ fn arch_selection() {
         };
     } else {
         assert!(parse_args(vec![arg("-ax86_64"), arg("foo.bf")].into_iter())
-            .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
+            .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
     }
     assert!(parse_args(vec![arg("-apdp11"), arg("foo.bf")].into_iter())
-        .is_err_and(|e| e.0.kind == BFErrorID::UnknownArch));
+        .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
 }
 
 #[test]
@@ -261,7 +260,7 @@ fn multiple_arches_error() {
     if cfg!(all(feature = "x86_64", feature = "arm64")) {
         assert!(
             parse_args(vec![arg("-ax86_64"), arg("-aarm64"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.kind == BFErrorID::MultipleArches)
+                .is_err_and(|e| e.0.error_id() == BFErrorID::MultipleArches)
         );
     }
 }
