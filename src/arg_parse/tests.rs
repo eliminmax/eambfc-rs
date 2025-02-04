@@ -189,7 +189,7 @@ fn list_arch_processed() {
 
 #[test]
 fn arch_selection() {
-    // use these ugly double-checking constructs to avoid trying to construct nonexisttent enum
+    // use these ugly double-checking constructs to avoid trying to construct nonexistent enum
     // variants when architectures are disabled.
     if cfg!(feature = "arm64") {
         #[cfg(feature = "arm64")]
