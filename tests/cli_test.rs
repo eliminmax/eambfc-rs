@@ -95,7 +95,7 @@ mod cli_tests {
         fn expected_formatting(errs: &[Self]) -> String {
             use std::fmt::Write;
 
-            let mut s: String = String::new();
+            let mut s = String::new();
             for err in errs {
                 write!(s, "Error {}", err.error_id).unwrap();
                 if let Some(instr) = err.instruction.as_ref() {
