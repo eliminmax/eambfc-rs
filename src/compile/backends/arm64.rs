@@ -223,10 +223,10 @@ impl ArchInter for Arm64Inter {
         ]); // SUB reg, reg, 1
     }
 
-    fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) {
         add_sub(code_buf, reg, imm, ArithOp::Add);
     }
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) {
         add_sub(code_buf, reg, imm, ArithOp::Sub);
     }
 
@@ -236,17 +236,17 @@ impl ArchInter for Arm64Inter {
         code_buf.extend(store_to_byte(reg, aux));
     }
 
-    fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i8) {
+    fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
         let aux = aux_reg(reg);
         code_buf.extend(load_from_byte(reg, aux));
-        add_sub(code_buf, aux, (imm as u8).into(), ArithOp::Add);
+        add_sub(code_buf, aux, u64::from(imm), ArithOp::Add);
         code_buf.extend(store_to_byte(reg, aux));
     }
 
-    fn sub_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i8) {
+    fn sub_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
         let aux = aux_reg(reg);
         code_buf.extend(load_from_byte(reg, aux));
-        add_sub(code_buf, aux, (imm as u8).into(), ArithOp::Sub);
+        add_sub(code_buf, aux, u64::from(imm), ArithOp::Sub);
         code_buf.extend(store_to_byte(reg, aux));
     }
 
@@ -296,7 +296,7 @@ enum ArithOp {
     Sub = 0xd1,
 }
 
-fn add_sub_imm(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp, shift: bool) {
+fn add_sub_imm(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp, shift: bool) {
     assert!(
         (shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0),
         "{imm} is invalid for shift level"
@@ -312,7 +312,7 @@ fn add_sub_imm(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp
     ]);
 }
 
-fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp) {
+fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp) {
     match imm {
         i if i < 0x1_000 => add_sub_imm(code_buf, reg, imm, op, false),
         i if i < 0x1_000_000 => {
@@ -327,7 +327,7 @@ fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp) {
                 ArithOp::Sub => 0xcb,
             };
             let aux = aux_reg(reg);
-            Arm64Inter::set_reg(code_buf, aux, i);
+            Arm64Inter::set_reg(code_buf, aux, i as i64);
             // either ADD reg, reg, aux or SUB reg, reg, aux
             code_buf.extend(inject_reg_operands(reg, reg, [0, 0, aux as u8, op_byte]));
         }
@@ -473,8 +473,8 @@ mod tests {
     #[test]
     fn test_add_sub_byte() {
         let mut v: Vec<u8> = Vec::new();
-        Arm64Inter::add_byte(&mut v, Arm64Register::X19, i8::from_le_bytes([0xa5]));
-        Arm64Inter::sub_byte(&mut v, Arm64Register::X19, i8::from_le_bytes([0xa5]));
+        Arm64Inter::add_byte(&mut v, Arm64Register::X19, 0xa5);
+        Arm64Inter::sub_byte(&mut v, Arm64Register::X19, 0xa5);
         assert_eq!(
             disassembler().disassemble(v),
             [

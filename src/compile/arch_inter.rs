@@ -64,13 +64,13 @@ pub(super) trait ArchInter {
     /// append machine code to `code_buf` to decrement the byte pointed to by `reg` by 1
     fn dec_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
     /// append machine code to `code_buf` to add `imm` to the value in `reg`
-    fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
+    fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64);
     /// append machine code to `code_buf` to add `imm` to the byte pointed to by `reg`
-    fn add_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i8);
+    fn add_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8);
     /// append machine code to `code_buf` to subtract `imm` from the value in `reg`
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64);
     /// append machine code to `code_buf` to subtract `imm` from the byte pointed to by `reg`
-    fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i8);
+    fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8);
     /// append machine code to `code_buf` to set the byte pointed to by `reg` to `0`
     fn zero_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
 }

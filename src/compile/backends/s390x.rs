@@ -243,10 +243,6 @@ macro_rules! encode_ri_op {
     }};
     ($code_buf:ident, $opcode:literal, $reg:ident, $imm:literal) => {{
         encode_ri_op!($code_buf, $opcode, $reg);
-        #[allow(
-            clippy::unseparated_literal_suffix,
-            reason = "Need to specify type for literal"
-        )]
         $code_buf.extend($imm.to_be_bytes());
     }};
     ($code_buf:ident, $opcode:literal, $reg:ident, $imm:expr) => {{
@@ -306,6 +302,23 @@ fn branch_cond(
     code_buf[14..].clone_from_slice(&offset.to_be_bytes());
 
     Ok(code_buf)
+}
+
+fn add_reg_signed(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
+    if let Ok(imm16) = i16::try_from(imm) {
+        // AGHI reg, imm {RI-a}
+        encode_ri_op!(code_buf, 0xa7b, reg, imm16);
+    } else if let Ok(imm32) = i32::try_from(imm) {
+        // AGFI reg, imm {RIL-a}
+        encode_ri_op!(code_buf, 0xc28, reg, imm32);
+    } else {
+        let (imm_h, imm_l) = (imm >> 32, imm as i32);
+        if imm_l != 0 {
+            add_reg_signed(code_buf, reg, i64::from(imm_l));
+        }
+        // AIH reg, imm {RIL-a}
+        encode_ri_op!(code_buf, 0xcc8, reg, i32, imm_h);
+    }
 }
 
 pub(crate) struct S390xInter;
@@ -414,7 +427,7 @@ impl ArchInter for S390xInter {
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        S390xInter::add_reg(code_buf, reg, 1);
+        add_reg_signed(code_buf, reg, 1);
     }
 
     fn inc_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
@@ -422,53 +435,36 @@ impl ArchInter for S390xInter {
     }
 
     fn dec_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        S390xInter::add_reg(code_buf, reg, -1);
+        add_reg_signed(code_buf, reg, -1);
     }
 
     fn dec_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        S390xInter::add_byte(code_buf, reg, -1);
+        S390xInter::sub_byte(code_buf, reg, 1);
     }
 
-    fn add_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
-        match imm {
-            i if (i64::from(i16::MIN)..=i64::from(i16::MAX)).contains(&i) => {
-                // AGHI reg, imm {RI-a}
-                encode_ri_op!(code_buf, 0xa7b, reg, i16, imm);
-            }
-            i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
-                // AGFI reg, imm {RIL-a}
-                encode_ri_op!(code_buf, 0xc28, reg, i32, imm);
-            }
-            _ => {
-                let (imm_h, imm_l) = (imm >> 32, imm as i32);
-                if imm_l != 0 {
-                    S390xInter::add_reg(code_buf, reg, i64::from(imm_l));
-                }
-                // AIH reg, imm {RIL-a}
-                encode_ri_op!(code_buf, 0xcc8, reg, i32, imm_h);
-            }
-        }
+    fn add_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u64) {
+        add_reg_signed(code_buf, reg, imm as i64);
     }
 
-    fn add_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
+    fn add_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u8) {
         code_buf.extend(load_from_byte(reg));
-        S390xInter::add_reg(code_buf, TMP_REG, i64::from(imm));
+        add_reg_signed(code_buf, TMP_REG, i64::from(imm));
         code_buf.extend(store_to_byte(reg, TMP_REG));
     }
 
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u64) {
         // There are no equivalent sub instructions to any of the add instructions used.
         // Given that in 2's complement with wrapping, adding i64::MIN and subtracting i64::MIN are
         // equivalent (except possibly for effect on overflow flag, which is never checked in this
         // program), simply make sure that if imm is i64::MIN, pass it directly, otherwise, pass
         // `-imm`
         // check that "-imm" won't cause problems, then call add_reg with negative imm.
-        S390xInter::add_reg(code_buf, reg, imm.wrapping_neg());
+        add_reg_signed(code_buf, reg, (imm as i64).wrapping_neg());
     }
 
-    fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i8) {
+    fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u8) {
         code_buf.extend(load_from_byte(reg));
-        S390xInter::add_reg(code_buf, TMP_REG, i64::from(-imm));
+        add_reg_signed(code_buf, TMP_REG, -i64::from(imm as i8));
         code_buf.extend(store_to_byte(reg, TMP_REG));
     }
 
@@ -706,7 +702,7 @@ mod tests {
         // check that dec_reg is the same as sub_reg(.., 1)
         assert_eq!(a, b);
         b.clear();
-        S390xInter::add_reg(&mut b, S390xRegister::R8, -1);
+        S390xInter::add_reg(&mut b, S390xRegister::R8, -1_i64 as u64);
         // check that sub_reg(.., 1) is the same as add_reg(.., -1)
         assert_eq!(a, b);
         // make sure that the disassembly is as expected.
@@ -717,8 +713,8 @@ mod tests {
         S390xInter::add_reg(&mut a, S390xRegister::R8, 12345);
         S390xInter::sub_reg(&mut a, S390xRegister::R8, 12345);
 
-        S390xInter::sub_reg(&mut b, S390xRegister::R8, -12345);
-        S390xInter::add_reg(&mut b, S390xRegister::R8, -12345);
+        S390xInter::sub_reg(&mut b, S390xRegister::R8, -12345_i64 as u64);
+        S390xInter::add_reg(&mut b, S390xRegister::R8, -12345_i64 as u64);
         assert_eq!(a, b);
         assert_eq!(ds.disassemble(a), ["aghi %r8, 12345", "aghi %r8, -12345"]);
     }
@@ -734,10 +730,7 @@ mod tests {
         assert_eq!(ds.disassemble(v), ["agfi %r8, 1193046"]);
 
         let mut a: Vec<u8> = Vec::new();
-        let mut b: Vec<u8> = Vec::new();
         S390xInter::sub_reg(&mut a, S390xRegister::R8, 0x123_456);
-        S390xInter::add_reg(&mut b, S390xRegister::R8, -0x123_456);
-        assert_eq!(a, b);
         assert_eq!(ds.disassemble(a), ["agfi %r8, -1193046"]);
     }
 
@@ -753,16 +746,13 @@ mod tests {
         assert_eq!(ds.disassemble(v), ["agfi %r8, 1286608618", "aih %r8, 2"]);
 
         let mut a: Vec<u8> = Vec::new();
-        let mut b: Vec<u8> = Vec::new();
         S390xInter::sub_reg(&mut a, S390xRegister::R8, 9_876_543_210);
-        S390xInter::add_reg(&mut b, S390xRegister::R8, -9_876_543_210);
-        assert_eq!(a, b);
         given_that!(-9_876_543_210_i32 == -1286608618);
         given_that!((-9_876_543_210_i64 >> 32) == -3);
-        assert_eq!(ds.disassemble(b), ["agfi %r8, -1286608618", "aih %r8, -3"]);
+        assert_eq!(ds.disassemble(a), ["agfi %r8, -1286608618", "aih %r8, -3"]);
 
         // make sure that if the lower bits are zero, the `agfi` instruction is skipped
-        a.clear();
+        let mut a: Vec<u8> = Vec::new();
         S390xInter::add_reg(&mut a, S390xRegister::R8, 0x1234_abcd_0000_0000);
         given_that!(0x1234_abcd_0000_0000_i64 >> 32 == 305441741);
         assert_eq!(ds.disassemble(a), ["aih %r8, 305441741"]);
@@ -773,8 +763,8 @@ mod tests {
     fn sub_reg_int_min() {
         let mut a: Vec<u8> = Vec::new();
         let mut b: Vec<u8> = Vec::new();
-        S390xInter::add_reg(&mut a, S390xRegister::R4, i64::MIN);
-        S390xInter::sub_reg(&mut b, S390xRegister::R4, i64::MIN);
+        S390xInter::add_reg(&mut a, S390xRegister::R4, i64::MIN as u64);
+        S390xInter::sub_reg(&mut b, S390xRegister::R4, i64::MIN as u64);
         assert_eq!(a, b);
     }
 

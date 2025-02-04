@@ -265,10 +265,10 @@ trait BFCompileHelper: ArchInter {
         }
         match instr {
             b'@' => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
-            b'+' => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as i8),
-            b'-' => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as i8),
-            b'<' => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as i64),
-            b'>' => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as i64),
+            b'+' => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
+            b'-' => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
+            b'<' => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as u64),
+            b'>' => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as u64),
             b',' | b'.' | b'[' | b']' => {
                 for _ in 0..count {
                     Self::compile_instr(instr, dst, None, jump_stack)?;

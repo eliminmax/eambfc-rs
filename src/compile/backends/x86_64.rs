@@ -214,7 +214,7 @@ impl ArchInter for X86_64Inter {
         // DEC byte [reg]
         x86_offset(code_buf, OffsetOp::Dec, OffsetMode::BytePtr, reg);
     }
-    fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u64) {
         if let Ok(imm8) = i8::try_from(imm) {
             add_reg_imm8(code_buf, reg, imm8);
         } else if let Ok(imm32) = i32::try_from(imm) {
@@ -223,24 +223,22 @@ impl ArchInter for X86_64Inter {
             add_reg_imm64(code_buf, reg, imm);
         }
     }
-    fn add_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
+    fn add_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u8) {
         // ADD byte [reg], imm8
-        code_buf.extend([0x80, reg as u8, imm as u8]);
+        code_buf.extend([0x80, reg as u8, imm]);
     }
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) {
-        match imm {
-            i if (i64::from(i8::MIN)..=i64::from(i8::MAX)).contains(&i) => {
-                sub_reg_imm8(code_buf, reg, imm as i8);
-            }
-            i if (i64::from(i32::MIN)..=i64::from(i32::MAX)).contains(&i) => {
-                sub_reg_imm32(code_buf, reg, imm as i32);
-            }
-            _ => sub_reg_imm64(code_buf, reg, imm),
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u64) {
+        if let Ok(imm8) = i8::try_from(imm) {
+            sub_reg_imm8(code_buf, reg, imm8);
+        } else if let Ok(imm32) = i32::try_from(imm) {
+            sub_reg_imm32(code_buf, reg, imm32);
+        } else {
+            sub_reg_imm64(code_buf, reg, imm);
         }
     }
-    fn sub_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i8) {
+    fn sub_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u8) {
         // SUB byte [reg], imm8
-        code_buf.extend([0x80, 0x28 | (reg as u8), imm as u8]);
+        code_buf.extend([0x80, 0x28 | (reg as u8), imm]);
     }
     fn zero_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // MOV byte [reg], 0
@@ -271,7 +269,7 @@ fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
 // the 64-bit immediate to that register, ADD/SUB that register to the
 // target register, then POP that temporary register, to restore its
 // original value.
-fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64, op: ArithOp) {
+fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: u64, op: ArithOp) {
     // cast reg in advanced as it's used multiple times
     // the temporary register shouldn't be the target register, so using RCX, which is a volatile
     // register not used anywhere else in eambfc, encoded as 0b001.
@@ -290,11 +288,11 @@ fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64, op: Arith
     ]);
 }
 
-fn add_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64) {
+fn add_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: u64) {
     add_sub_qw(code_buf, reg, imm64, ArithOp::Add);
 }
 
-fn sub_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: i64) {
+fn sub_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: u64) {
     add_sub_qw(code_buf, reg, imm64, ArithOp::Sub);
 }
 
