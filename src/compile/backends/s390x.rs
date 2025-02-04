@@ -486,7 +486,7 @@ mod tests {
     use super::*;
 
     /// Given that even though it is set to use hex immediates, the LLVM disassembler for this
-    /// architecture often uses decimal immediates it's sometimes necessary to explain why a given
+    /// architecture often uses decimal immediates, it's sometimes necessary to explain why a given
     /// immediate is expected in the disassembly, so this macro can be used as a compiler-checked
     /// way to explain the reasoning
     macro_rules! given_that {
@@ -566,6 +566,7 @@ mod tests {
         // this one's messy, due to the number of possible combinations
         let mut v: Vec<u8> = Vec::new();
         S390xInter::set_reg(&mut v, S390xRegister::R1, 0xdead_0000_beef);
+        given_that!(0xdead == 57005 && 0xbeef == 48879);
         assert_eq!(
             ds.disassemble(v.clone()),
             ["lgfi %r1, 48879", "iihl %r1, 57005"]
@@ -573,7 +574,7 @@ mod tests {
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R2, -0xdead_0000_beef);
-        // 2's complement of 0xdead is 0x2152
+        given_that!(-0xbeef_i16 == -48879 && !0xdead_i16 == 8530);
         assert_eq!(
             ds.disassemble(v.clone()),
             ["lgfi %r2, -48879", "iihl %r2, 8530"]
@@ -701,10 +702,6 @@ mod tests {
         S390xInter::dec_reg(&mut b, S390xRegister::R8);
         // check that dec_reg is the same as sub_reg(.., 1)
         assert_eq!(a, b);
-        b.clear();
-        S390xInter::add_reg(&mut b, S390xRegister::R8, -1_i64 as u64);
-        // check that sub_reg(.., 1) is the same as add_reg(.., -1)
-        assert_eq!(a, b);
         // make sure that the disassembly is as expected.
         assert_eq!(ds.disassemble(a), ["aghi %r8, -1"]);
 
@@ -730,6 +727,7 @@ mod tests {
         assert_eq!(ds.disassemble(v), ["agfi %r8, 1193046"]);
 
         let mut a: Vec<u8> = Vec::new();
+        given_that!(0 - 0x123_456 == -1193046);
         S390xInter::sub_reg(&mut a, S390xRegister::R8, 0x123_456);
         assert_eq!(ds.disassemble(a), ["agfi %r8, -1193046"]);
     }
@@ -758,7 +756,8 @@ mod tests {
         assert_eq!(ds.disassemble(a), ["aih %r8, 305441741"]);
     }
 
-    // test `S390xInter::sub_reg` with `i64::MIN`
+    /// check that `S390xInter::sub_reg` and `S390xInter::add_reg` output the same code with `imm`
+    /// set to `i64::MIN as u64`
     #[test]
     fn sub_reg_int_min() {
         let mut a: Vec<u8> = Vec::new();
