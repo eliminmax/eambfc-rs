@@ -297,7 +297,10 @@ enum ArithOp {
 }
 
 fn add_sub_imm(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64, op: ArithOp, shift: bool) {
-    assert!((shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0));
+    assert!(
+        (shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0),
+        "{imm} is invalid for shift level"
+    );
     let reg = reg as u8; // helpful as it's used multiple times.
     let imm = if shift { imm >> 12 } else { imm };
     // either ADD reg, reg, imm or SUB reg, reg, imm, depending on op
