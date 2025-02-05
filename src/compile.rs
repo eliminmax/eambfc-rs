@@ -255,26 +255,26 @@ trait BFCompileHelper: ArchInter {
     /// `instr` is one of `b'+'`, `b'-'`, `b'<'`, or `b'>'`, it's able to combine them into more
     /// efficient machine code. If `instr` is `b'@'`, then it
     fn compile_condensed_instr(
-        instr: u8,
+        instr: optimize::FilteredInstr,
         count: usize,
         dst: &mut Vec<u8>,
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
-        if instr != b'@' && count == 1 {
-            return Self::compile_instr(instr, dst, None, jump_stack);
+        use optimize::FilteredInstr as FI;
+        if instr != FI::SetZero && count == 1 {
+            return Self::compile_instr(instr as u8, dst, None, jump_stack);
         }
         match instr {
-            b'@' => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
-            b'+' => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
-            b'-' => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
-            b'<' => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as u64),
-            b'>' => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as u64),
-            b',' | b'.' | b'[' | b']' => {
+            FI::SetZero => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
+            FI::Add => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
+            FI::Sub => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
+            FI::MoveL => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as u64),
+            FI::MoveR => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as u64),
+            _ => {
                 for _ in 0..count {
-                    Self::compile_instr(instr, dst, None, jump_stack)?;
+                    Self::compile_instr(instr as u8, dst, None, jump_stack)?;
                 }
             }
-            _ => unreachable!("Other bytes have been filtered out"),
         }
         Ok(())
     }
@@ -282,7 +282,7 @@ trait BFCompileHelper: ArchInter {
     fn compile_condensed(
         dst: &mut Vec<u8>,
         jump_stack: &mut Vec<JumpLocation>,
-        filtered_code: Vec<u8>,
+        filtered_code: Vec<optimize::FilteredInstr>,
     ) -> Result<(), Vec<BFCompileError>> {
         let mut filtered_code = filtered_code.into_iter();
         let Some(mut prev_instr) = filtered_code.next() else {
