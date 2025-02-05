@@ -4,7 +4,7 @@
 
 [package]
 name = "eambfc-rs"
-version = "3.4.0-next"
+version = "3.4.0"
 edition = "2021"
 
 [features]
