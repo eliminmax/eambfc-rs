@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+#
+# SPDX-License-Identifier: 0BSD
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+if git diff --cached --name-only | grep -q -E "^Cargo.(toml|lock)$"; then
+    pkg_name="$(tomlq .package.name Cargo.toml)"
+    version="$(tomlq .package.version Cargo.toml)"
+    query=".package[] | select(.name == $pkg_name).version"
+    locked_version="$(tomlq "$query" Cargo.lock)"
+    if [ "$version" != "$locked_version" ]; then
+        printf 'Version in Cargo.lock is out of sync with Cargo.toml!\n' >&2
+        exit 1
+    fi
+fi
