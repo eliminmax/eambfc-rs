@@ -429,7 +429,8 @@ mod cli_tests {
     #[test]
     #[cfg_attr(not(unix), ignore = "CommandExt::arg0 is unix-only")]
     fn test_alt_argv0_help() {
-        #[cfg(unix)] {
+        #[cfg(unix)]
+        {
             use std::os::unix::process::CommandExt;
             let expected_help = format!(
                 concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
