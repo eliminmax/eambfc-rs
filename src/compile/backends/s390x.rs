@@ -476,15 +476,26 @@ impl ArchInter for S390xInter {
 // This test suite was made far more difficult by the fact that some of the mnemonics used by
 // real-world assemblers are different from the opcodes used in the documentation cited above.
 #[cfg(test)]
-#[expect(
-    clippy::separated_literal_suffix,
-    overflowing_literals,
-    reason = "needed to demonstrate bitwise equivalence"
+#[cfg_attr(
+    unix,
+    expect(
+        overflowing_literals,
+        reason = "needed to demonstrate bitwise equivalence"
+    )
 )]
 mod tests {
+    use super::super::disasm_test_macro::disasm_test;
+    #[cfg(unix)]
     use super::super::test_utils::Disassembler;
     use super::*;
 
+    #[cfg_attr(
+        not(unix),
+        expect(
+            unused_macros,
+            reason = "macro only used in (unix-only) disassembly tests"
+        )
+    )]
     /// Given that even though it is set to use hex immediates, the LLVM disassembler for this
     /// architecture often uses decimal immediates, it's sometimes necessary to explain why a given
     /// immediate is expected in the disassembly, so this macro can be used as a compiler-checked
@@ -501,224 +512,237 @@ mod tests {
         };
     }
 
+    #[cfg(unix)]
     fn disassembler() -> Disassembler {
         Disassembler::new(ElfArch::S390x)
     }
 
-    #[test]
-    fn test_store_load() {
-        let mut ds = disassembler();
-        assert_eq!(
-            ds.disassemble(load_from_byte(S390xRegister::R8).into()),
-            ["llgc %r5, 0(%r8,0)"]
-        );
-        assert_eq!(
-            ds.disassemble(store_to_byte(S390xRegister::R8, S390xRegister::R5).into()),
-            ["stc %r5, 0(%r8,0)"]
-        );
-        assert_eq!(
-            ds.disassemble(store_to_byte(S390xRegister::R5, S390xRegister::R8).into()),
-            ["stc %r8, 0(%r5,0)"]
-        );
-    }
-
-    #[test]
-    fn test_reg_copy() {
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::reg_copy(&mut v, S390xRegister::R2, S390xRegister::R1);
-        assert_eq!(disassembler().disassemble(v), ["lgr %r2, %r1"]);
-    }
-
-    #[test]
-    fn test_set_reg_zero() {
-        let (mut a, mut b): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
-        S390xInter::set_reg(&mut a, S390xRegister::R2, 0);
-        S390xInter::reg_copy(&mut b, S390xRegister::R2, S390xRegister::R0);
-        assert_eq!(a, b);
-        assert_eq!(disassembler().disassemble(a), ["lgr %r2, %r0"]);
-    }
-
-    #[test]
-    fn test_reg_set_small_imm() {
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::set_reg(&mut v, S390xRegister::R5, 12345);
-        S390xInter::set_reg(&mut v, S390xRegister::R8, -12345);
-        assert_eq!(
-            disassembler().disassemble(v),
-            ["lghi %r5, 12345", "lghi %r8, -12345"]
-        );
-    }
-
-    #[test]
-    fn test_set_medium_imm() {
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::set_reg(&mut v, S390xRegister::R4, 0x1234_abcd);
-        S390xInter::set_reg(&mut v, S390xRegister::R4, -0x1234_abcd);
-        assert_eq!(
-            disassembler().disassemble(v),
-            ["lgfi %r4, 305441741", "lgfi %r4, -305441741"]
-        );
-    }
-
-    #[test]
-    fn test_set_large_imm() {
-        let mut ds = Disassembler::new(ElfArch::S390x);
-        // this one's messy, due to the number of possible combinations
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::set_reg(&mut v, S390xRegister::R1, 0xdead_0000_beef);
-        given_that!(0xdead == 57005 && 0xbeef == 48879);
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            ["lgfi %r1, 48879", "iihl %r1, 57005"]
-        );
-        v.clear();
-
-        S390xInter::set_reg(&mut v, S390xRegister::R2, -0xdead_0000_beef);
-        given_that!(-0xbeef_i16 == -48879 && !0xdead_i16 == 8530);
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            ["lgfi %r2, -48879", "iihl %r2, 8530"]
-        );
-        v.clear();
-
-        S390xInter::set_reg(&mut v, S390xRegister::R3, 0xdead_0000_0000);
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            ["lgr %r3, %r0", "iihl %r3, 57005"]
-        );
-        v.clear();
-
-        S390xInter::set_reg(&mut v, S390xRegister::R4, i64::MAX ^ (0xffff << 32));
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            ["lghi %r4, -1", "iihh %r4, 32767"]
-        );
-        v.clear();
-
-        S390xInter::set_reg(&mut v, S390xRegister::R5, i64::MIN ^ (0xffff << 32));
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            ["lgr %r5, %r0", "iihh %r5, 32768"]
-        );
-        v.clear();
-
-        S390xInter::set_reg(&mut v, S390xRegister::R8, 0x1234_5678_9abc_def0);
-        given_that!(0x1234_5678 == 305419896);
-        given_that!(0x9abc_def0_u32 as i32 == -1698898192);
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            ["lgfi %r8, -1698898192", "iihf %r8, 305419896"]
-        );
-        v.clear();
-
-        S390xInter::set_reg(&mut v, S390xRegister::R8, -0x1234_5678_9abc_def0);
-        assert_eq!(
-            ds.disassemble(v.clone()),
-            ["lgfi %r8, 1698898192", "iihf %r8, 3989547399"]
-        );
-    }
-
-    #[test]
-    fn jump_tests() {
-        assert_eq!(
-            S390xInter::jump_open(&mut [0; 18], 0, S390xRegister::R3, 0x1_2345_6789_abcd)
-                .unwrap_err()
-                .error_id(),
-            BFErrorID::JumpTooLong
-        );
-        let mut v: Vec<u8> = vec![0; 18];
-        S390xInter::jump_open(&mut v, 0, S390xRegister::R3, 18).unwrap();
-        S390xInter::jump_close(&mut v, S390xRegister::R3, -36).unwrap();
-        S390xInter::nop_loop_open(&mut v);
-        // it took a while, but I found a comment in the LLVM source code* that explained that it
-        // uses "jge" instead of the IBM-documented "jle" extended mnemonic for `brcl 8,addr`
-        // because "jl" is also "jump if less". Thinking that Capstone was getting this wrong is
-        // part of what motivated me to switch to LLVM disassembler in the first place.
-        //
-        // Argh!
-        //
-        // * I ran `apt source llvm-19` on Debian Bookworm and found it in the file within the
-        // source tree at llvm/lib/Target/SystemZ/SystemZInstrInfo.td
-        let mut disasm_lines = Disassembler::new(ElfArch::S390x).disassemble(v).into_iter();
-        assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
-        assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
-        assert_eq!(disasm_lines.next().unwrap(), "jge 0x12");
-        assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
-        assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
-        // lh for low | high (i.e. not equal).
-        // For some reason, treats operand as an unsigned immediate after sign extending it to the
-        // full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
-        given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
-        assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
-        // LLVM apparently also flips the nop and nopr mnemonics, and requires that they have
-        // arguments. I double-checked the IBM docs on this one after seeing this, and I got it the
-        // right way around, so I'm confused here.
-        for i in 0..4 {
+    disasm_test! {
+        fn test_store_load() {
+            let mut ds = disassembler();
             assert_eq!(
-                disasm_lines.next().unwrap(),
-                "nop 0",
-                "only {i}/4 nopr instructions were matched"
+                ds.disassemble(load_from_byte(S390xRegister::R8).into()),
+                ["llgc %r5, 0(%r8,0)"]
+            );
+            assert_eq!(
+                ds.disassemble(store_to_byte(S390xRegister::R8, S390xRegister::R5).into()),
+                ["stc %r5, 0(%r8,0)"]
+            );
+            assert_eq!(
+                ds.disassemble(store_to_byte(S390xRegister::R5, S390xRegister::R8).into()),
+                ["stc %r8, 0(%r5,0)"]
             );
         }
-        assert_eq!(disasm_lines.next().unwrap(), "nopr %r0");
-        assert!(disasm_lines.next().is_none());
     }
 
-    #[test]
-    fn syscall_test() {
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::syscall(&mut v);
-        assert_eq!(Disassembler::new(ElfArch::S390x).disassemble(v), ["svc 0"]);
+    disasm_test! {
+        fn test_reg_copy() {
+            let mut v: Vec<u8> = Vec::new();
+            S390xInter::reg_copy(&mut v, S390xRegister::R2, S390xRegister::R1);
+            assert_eq!(disassembler().disassemble(v), ["lgr %r2, %r1"]);
+        }
     }
 
-    #[test]
-    fn zero_byte_test() {
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::zero_byte(&mut v, S390xInter::REGISTERS.bf_ptr);
-        assert_eq!(
-            v,
-            store_to_byte(S390xInter::REGISTERS.bf_ptr, S390xRegister::R0)
-        );
-        assert_eq!(disassembler().disassemble(v), ["stc %r0, 0(%r8,0)"]);
+    disasm_test! {
+        fn test_set_reg_zero() {
+            let (mut a, mut b): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+            S390xInter::set_reg(&mut a, S390xRegister::R2, 0);
+            S390xInter::reg_copy(&mut b, S390xRegister::R2, S390xRegister::R0);
+            assert_eq!(a, b);
+            assert_eq!(disassembler().disassemble(a), ["lgr %r2, %r0"]);
+        }
     }
 
-    /// test `S390xInter::inc_reg`, `S390xInter::dec_reg`, and test `S390xInter::add_reg` and
-    /// `S390xInter::sub_reg` for immediates that can be expressed with 16 bits
-    #[test]
-    fn reg_arith_small_imms() {
-        let mut ds = disassembler();
-
-        let mut a: Vec<u8> = Vec::new();
-        let mut b: Vec<u8> = Vec::new();
-        S390xInter::add_reg(&mut a, S390xRegister::R8, 1);
-        S390xInter::inc_reg(&mut b, S390xRegister::R8);
-        // check that inc_reg is the same as add_reg(.., 1)
-        assert_eq!(a, b);
-        assert_eq!(ds.disassemble(a), ["aghi %r8, 1"]);
-
-        let mut a: Vec<u8> = Vec::new();
-        b.clear();
-        S390xInter::sub_reg(&mut a, S390xRegister::R8, 1);
-        S390xInter::dec_reg(&mut b, S390xRegister::R8);
-        // check that dec_reg is the same as sub_reg(.., 1)
-        assert_eq!(a, b);
-        // make sure that the disassembly is as expected.
-        assert_eq!(ds.disassemble(a), ["aghi %r8, -1"]);
-
-        let mut a: Vec<u8> = Vec::new();
-        b.clear();
-        S390xInter::add_reg(&mut a, S390xRegister::R8, 12345);
-        S390xInter::sub_reg(&mut a, S390xRegister::R8, 12345);
-
-        S390xInter::sub_reg(&mut b, S390xRegister::R8, -12345_i64 as u64);
-        S390xInter::add_reg(&mut b, S390xRegister::R8, -12345_i64 as u64);
-        assert_eq!(a, b);
-        assert_eq!(ds.disassemble(a), ["aghi %r8, 12345", "aghi %r8, -12345"]);
+    disasm_test! {
+        fn test_reg_set_small_imm() {
+            let mut v: Vec<u8> = Vec::new();
+            S390xInter::set_reg(&mut v, S390xRegister::R5, 12345);
+            S390xInter::set_reg(&mut v, S390xRegister::R8, -12345);
+            assert_eq!(
+                disassembler().disassemble(v),
+                ["lghi %r5, 12345", "lghi %r8, -12345"]
+            );
+        }
     }
 
-    /// test `S390xInter::add_reg` and `S390xInter::sub_reg` for immediates that fit within 32 bits
-    #[test]
-    fn reg_arith_medium_imms() {
+    disasm_test! {
+        fn test_set_medium_imm() {
+            let mut v: Vec<u8> = Vec::new();
+            S390xInter::set_reg(&mut v, S390xRegister::R4, 0x1234_abcd);
+            S390xInter::set_reg(&mut v, S390xRegister::R4, -0x1234_abcd);
+            assert_eq!(
+                disassembler().disassemble(v),
+                ["lgfi %r4, 305441741", "lgfi %r4, -305441741"]
+            );
+        }
+    }
+
+    disasm_test! {
+        fn test_set_large_imm() {
+            let mut ds = Disassembler::new(ElfArch::S390x);
+            // this one's messy, due to the number of possible combinations
+            let mut v: Vec<u8> = Vec::new();
+            S390xInter::set_reg(&mut v, S390xRegister::R1, 0xdead_0000_beef);
+            given_that!(0xdead == 57005 && 0xbeef == 48879);
+            assert_eq!(
+                ds.disassemble(v.clone()),
+                ["lgfi %r1, 48879", "iihl %r1, 57005"]
+            );
+            v.clear();
+
+            S390xInter::set_reg(&mut v, S390xRegister::R2, -0xdead_0000_beef);
+            given_that!(-0xbeef_i16 == -48879 && !0xdead_i16 == 8530);
+            assert_eq!(
+                ds.disassemble(v.clone()),
+                ["lgfi %r2, -48879", "iihl %r2, 8530"]
+            );
+            v.clear();
+
+            S390xInter::set_reg(&mut v, S390xRegister::R3, 0xdead_0000_0000);
+            assert_eq!(
+                ds.disassemble(v.clone()),
+                ["lgr %r3, %r0", "iihl %r3, 57005"]
+            );
+            v.clear();
+
+            S390xInter::set_reg(&mut v, S390xRegister::R4, i64::MAX ^ (0xffff << 32));
+            assert_eq!(
+                ds.disassemble(v.clone()),
+                ["lghi %r4, -1", "iihh %r4, 32767"]
+            );
+            v.clear();
+
+            S390xInter::set_reg(&mut v, S390xRegister::R5, i64::MIN ^ (0xffff << 32));
+            assert_eq!(
+                ds.disassemble(v.clone()),
+                ["lgr %r5, %r0", "iihh %r5, 32768"]
+            );
+            v.clear();
+
+            S390xInter::set_reg(&mut v, S390xRegister::R8, 0x1234_5678_9abc_def0);
+            given_that!(0x1234_5678 == 305419896);
+            given_that!(0x9abc_def0_u32 as i32 == -1698898192);
+            assert_eq!(
+                ds.disassemble(v.clone()),
+                ["lgfi %r8, -1698898192", "iihf %r8, 305419896"]
+            );
+            v.clear();
+
+            S390xInter::set_reg(&mut v, S390xRegister::R8, -0x1234_5678_9abc_def0);
+            assert_eq!(
+                ds.disassemble(v.clone()),
+                ["lgfi %r8, 1698898192", "iihf %r8, 3989547399"]
+            );
+        }
+    }
+
+    disasm_test! {
+        fn jump_tests() {
+            assert_eq!(
+                S390xInter::jump_open(&mut [0; 18], 0, S390xRegister::R3, 0x1_2345_6789_abcd)
+                    .unwrap_err()
+                    .error_id(),
+                BFErrorID::JumpTooLong
+            );
+            let mut v: Vec<u8> = vec![0; 18];
+            S390xInter::jump_open(&mut v, 0, S390xRegister::R3, 18).unwrap();
+            S390xInter::jump_close(&mut v, S390xRegister::R3, -36).unwrap();
+            S390xInter::nop_loop_open(&mut v);
+            // it took a while, but I found a comment in the LLVM source code* that explained that
+            // it uses "jge" instead of the IBM-documented "jle" extended mnemonic for
+            // `brcl 8,addr` because "jl" is also "jump if less". Thinking that Capstone was
+            // getting this wrong is part of what motivated me to switch to LLVM disassembler in
+            // the first place.
+            //
+            // Argh!
+            //
+            // * I ran `apt source llvm-19` on Debian Bookworm and found it in the file within the
+            // source tree at llvm/lib/Target/SystemZ/SystemZInstrInfo.td
+            let mut disasm_lines = Disassembler::new(ElfArch::S390x).disassemble(v).into_iter();
+            assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
+            assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
+            assert_eq!(disasm_lines.next().unwrap(), "jge 0x12");
+            assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
+            assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
+            // lh for low | high (i.e. not equal).
+            // For some reason, treats operand as an unsigned immediate after sign extending it to
+            // the full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
+            given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
+            assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
+            // LLVM apparently also flips the nop and nopr mnemonics, and requires that they have
+            // arguments. I double-checked the IBM docs on this one after seeing this, and I got it
+            // the right way around, so I'm confused here.
+            for i in 0..4 {
+                assert_eq!(
+                    disasm_lines.next().unwrap(),
+                    "nop 0",
+                    "only {i}/4 nopr instructions were matched"
+                );
+            }
+            assert_eq!(disasm_lines.next().unwrap(), "nopr %r0");
+            assert!(disasm_lines.next().is_none());
+        }
+    }
+
+    disasm_test! {
+        fn syscall_test() {
+            let mut v: Vec<u8> = Vec::new();
+            S390xInter::syscall(&mut v);
+            assert_eq!(Disassembler::new(ElfArch::S390x).disassemble(v), ["svc 0"]);
+        }
+    }
+
+    disasm_test! {
+        fn zero_byte_test() {
+            let mut v: Vec<u8> = Vec::new();
+            S390xInter::zero_byte(&mut v, S390xInter::REGISTERS.bf_ptr);
+            assert_eq!(
+                v,
+                store_to_byte(S390xInter::REGISTERS.bf_ptr, S390xRegister::R0)
+            );
+            assert_eq!(disassembler().disassemble(v), ["stc %r0, 0(%r8,0)"]);
+        }
+    }
+
+    disasm_test! {
+        /// test `S390xInter::inc_reg`, `S390xInter::dec_reg`, and test `S390xInter::add_reg` and
+        /// `S390xInter::sub_reg` for immediates that can be expressed with 16 bits
+        fn reg_arith_small_imms() {
+            let mut ds = disassembler();
+
+            let mut a: Vec<u8> = Vec::new();
+            let mut b: Vec<u8> = Vec::new();
+            S390xInter::add_reg(&mut a, S390xRegister::R8, 1);
+            S390xInter::inc_reg(&mut b, S390xRegister::R8);
+            // check that inc_reg is the same as add_reg(.., 1)
+            assert_eq!(a, b);
+            assert_eq!(ds.disassemble(a), ["aghi %r8, 1"]);
+
+            let mut a: Vec<u8> = Vec::new();
+            b.clear();
+            S390xInter::sub_reg(&mut a, S390xRegister::R8, 1);
+            S390xInter::dec_reg(&mut b, S390xRegister::R8);
+            // check that dec_reg is the same as sub_reg(.., 1)
+            assert_eq!(a, b);
+            // make sure that the disassembly is as expected.
+            assert_eq!(ds.disassemble(a), ["aghi %r8, -1"]);
+
+            let mut a: Vec<u8> = Vec::new();
+            b.clear();
+            S390xInter::add_reg(&mut a, S390xRegister::R8, 12345);
+            S390xInter::sub_reg(&mut a, S390xRegister::R8, 12345);
+
+            S390xInter::sub_reg(&mut b, S390xRegister::R8, -12345_i64 as u64);
+            S390xInter::add_reg(&mut b, S390xRegister::R8, -12345_i64 as u64);
+            assert_eq!(a, b);
+            assert_eq!(ds.disassemble(a), ["aghi %r8, 12345", "aghi %r8, -12345"]);
+        }
+    }
+
+    disasm_test! {
+        /// test `S390xInter::add_reg` and `S390xInter::sub_reg` for immediates that fit within 32
+        /// bits
+        fn reg_arith_medium_imms() {
         let mut ds = disassembler();
 
         let mut v: Vec<u8> = Vec::new();
@@ -730,30 +754,31 @@ mod tests {
         given_that!(0 - 0x123_456 == -1193046);
         S390xInter::sub_reg(&mut a, S390xRegister::R8, 0x123_456);
         assert_eq!(ds.disassemble(a), ["agfi %r8, -1193046"]);
-    }
+    }}
 
-    /// test `S390xInter::add_reg` and `S390x::sub_reg` for immediates too large to fit within 32
-    /// bits
-    #[test]
-    fn reg_arith_large_imms() {
-        let mut ds = disassembler();
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::add_reg(&mut v, S390xRegister::R8, 9_876_543_210);
-        given_that!(9_876_543_210_i64 as i32 == 1286608618);
-        given_that!((9_876_543_210_i64 >> 32) == 2);
-        assert_eq!(ds.disassemble(v), ["agfi %r8, 1286608618", "aih %r8, 2"]);
+    disasm_test! {
+        /// test `S390xInter::add_reg` and `S390x::sub_reg` for immediates too large to fit within
+        /// 32 bits
+        fn reg_arith_large_imms() {
+            let mut ds = disassembler();
+            let mut v: Vec<u8> = Vec::new();
+            S390xInter::add_reg(&mut v, S390xRegister::R8, 9_876_543_210);
+            given_that!(9_876_543_210_i64 as i32 == 1286608618);
+            given_that!((9_876_543_210_i64 >> 32) == 2);
+            assert_eq!(ds.disassemble(v), ["agfi %r8, 1286608618", "aih %r8, 2"]);
 
-        let mut a: Vec<u8> = Vec::new();
-        S390xInter::sub_reg(&mut a, S390xRegister::R8, 9_876_543_210);
-        given_that!(-9_876_543_210_i32 == -1286608618);
-        given_that!((-9_876_543_210_i64 >> 32) == -3);
-        assert_eq!(ds.disassemble(a), ["agfi %r8, -1286608618", "aih %r8, -3"]);
+            let mut a: Vec<u8> = Vec::new();
+            S390xInter::sub_reg(&mut a, S390xRegister::R8, 9_876_543_210);
+            given_that!(-9_876_543_210_i32 == -1286608618);
+            given_that!((-9_876_543_210_i64 >> 32) == -3);
+            assert_eq!(ds.disassemble(a), ["agfi %r8, -1286608618", "aih %r8, -3"]);
 
-        // make sure that if the lower bits are zero, the `agfi` instruction is skipped
-        let mut a: Vec<u8> = Vec::new();
-        S390xInter::add_reg(&mut a, S390xRegister::R8, 0x1234_abcd_0000_0000);
-        given_that!(0x1234_abcd_0000_0000_i64 >> 32 == 305441741);
-        assert_eq!(ds.disassemble(a), ["aih %r8, 305441741"]);
+            // make sure that if the lower bits are zero, the `agfi` instruction is skipped
+            let mut a: Vec<u8> = Vec::new();
+            S390xInter::add_reg(&mut a, S390xRegister::R8, 0x1234_abcd_0000_0000);
+            given_that!(0x1234_abcd_0000_0000_i64 >> 32 == 305441741);
+            assert_eq!(ds.disassemble(a), ["aih %r8, 305441741"]);
+        }
     }
 
     /// check that `S390xInter::sub_reg` and `S390xInter::add_reg` output the same code with `imm`
@@ -767,55 +792,56 @@ mod tests {
         assert_eq!(a, b);
     }
 
-    // test `S390xInter::add_byte`, `S390xInter::sub_byte`, `S390xInter::inc_byte`, and
-    // `S390xInter::dec_byte`
-    #[test]
-    fn test_byte_arith() {
-        let mut ds = disassembler();
+    disasm_test! {
+        /// test `S390xInter::add_byte`, `S390xInter::sub_byte`, `S390xInter::inc_byte`, and
+        /// `S390xInter::dec_byte`
+        fn test_byte_arith() {
+            let mut ds = disassembler();
 
-        let mut expected = Vec::from(load_from_byte(S390xRegister::R8));
-        S390xInter::inc_reg(&mut expected, TMP_REG);
-        expected.extend(store_to_byte(S390xRegister::R8, TMP_REG));
+            let mut expected = Vec::from(load_from_byte(S390xRegister::R8));
+            S390xInter::inc_reg(&mut expected, TMP_REG);
+            expected.extend(store_to_byte(S390xRegister::R8, TMP_REG));
 
-        let mut a: Vec<u8> = Vec::new();
-        let mut b: Vec<u8> = Vec::new();
+            let mut a: Vec<u8> = Vec::new();
+            let mut b: Vec<u8> = Vec::new();
 
-        S390xInter::inc_byte(&mut a, S390xRegister::R8);
-        S390xInter::add_byte(&mut b, S390xRegister::R8, 1);
-        assert_eq!(a, b);
-        assert_eq!(a, expected);
-        assert_eq!(
-            ds.disassemble(b),
-            ["llgc %r5, 0(%r8,0)", "aghi %r5, 1", "stc %r5, 0(%r8,0)"]
-        );
+            S390xInter::inc_byte(&mut a, S390xRegister::R8);
+            S390xInter::add_byte(&mut b, S390xRegister::R8, 1);
+            assert_eq!(a, b);
+            assert_eq!(a, expected);
+            assert_eq!(
+                ds.disassemble(b),
+                ["llgc %r5, 0(%r8,0)", "aghi %r5, 1", "stc %r5, 0(%r8,0)"]
+            );
 
-        expected = Vec::from(load_from_byte(S390xRegister::R8));
-        S390xInter::dec_reg(&mut expected, TMP_REG);
-        expected.extend(store_to_byte(S390xRegister::R8, TMP_REG));
-        a.clear();
-        let mut b: Vec<u8> = Vec::new();
-        S390xInter::dec_byte(&mut a, S390xRegister::R8);
-        S390xInter::sub_byte(&mut b, S390xRegister::R8, 1);
-        assert_eq!(a, b);
-        assert_eq!(a, expected);
-        assert_eq!(
-            ds.disassemble(b),
-            ["llgc %r5, 0(%r8,0)", "aghi %r5, -1", "stc %r5, 0(%r8,0)"]
-        );
+            expected = Vec::from(load_from_byte(S390xRegister::R8));
+            S390xInter::dec_reg(&mut expected, TMP_REG);
+            expected.extend(store_to_byte(S390xRegister::R8, TMP_REG));
+            a.clear();
+            let mut b: Vec<u8> = Vec::new();
+            S390xInter::dec_byte(&mut a, S390xRegister::R8);
+            S390xInter::sub_byte(&mut b, S390xRegister::R8, 1);
+            assert_eq!(a, b);
+            assert_eq!(a, expected);
+            assert_eq!(
+                ds.disassemble(b),
+                ["llgc %r5, 0(%r8,0)", "aghi %r5, -1", "stc %r5, 0(%r8,0)"]
+            );
 
-        a.clear();
-        S390xInter::add_byte(&mut a, S390xRegister::R8, 32);
-        S390xInter::sub_byte(&mut a, S390xRegister::R8, 32);
-        assert_eq!(
-            ds.disassemble(a),
-            [
-                "llgc %r5, 0(%r8,0)",
-                "aghi %r5, 32",
-                "stc %r5, 0(%r8,0)",
-                "llgc %r5, 0(%r8,0)",
-                "aghi %r5, -32",
-                "stc %r5, 0(%r8,0)"
-            ]
-        );
+            a.clear();
+            S390xInter::add_byte(&mut a, S390xRegister::R8, 32);
+            S390xInter::sub_byte(&mut a, S390xRegister::R8, 32);
+            assert_eq!(
+                ds.disassemble(a),
+                [
+                    "llgc %r5, 0(%r8,0)",
+                    "aghi %r5, 32",
+                    "stc %r5, 0(%r8,0)",
+                    "llgc %r5, 0(%r8,0)",
+                    "aghi %r5, -32",
+                    "stc %r5, 0(%r8,0)"
+                ]
+            );
+        }
     }
 }

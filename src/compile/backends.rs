@@ -19,11 +19,11 @@ pub(crate) use x86_64::X86_64Inter;
 
 use super::arch_inter;
 use super::elf_tools;
-
 /// Provides a safe way to use LLVM's disassembler for backends to use for unit testing, using the
 /// `Disassembler` struct.
 #[cfg(not(tarpaulin_include))]
 #[cfg(test)]
+#[cfg(unix)]
 mod test_utils {
 
     use super::elf_tools::ElfArch;
@@ -174,4 +174,60 @@ mod test_utils {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod disasm_test_macro {
+    /// Disassembly test functions require the LLVM-powered disassembler, which is only tested on
+    /// unix targets, so they should have the proper attributes, and their bodies should be within
+    /// cfg(unix) blocks, so that the code is only compiled in on unix targets.
+    ///
+    ///
+    /// ```no_run
+    /// disasm_test! {
+    ///     fn foo() {
+    ///         // test stuff
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// expands to
+    ///
+    /// ```no_run
+    /// #[cfg_attr(not(unix), ignore = "Disassembly tests only supported on unix targets")]
+    /// #[test]
+    /// fn foo() {
+    ///     #[cfg(unix)]
+    ///     {
+    ///         // test stuff
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// It optionally supports docstrings using a method based on /u/Quxxy's technique discussed
+    /// in [this Reddit thread](https://www.reddit.com/r/rust/comments/ppx94j/comment/hd6v5i6/),
+    /// as well as the enhancement suggested in
+    /// [/u/chris-morgan's reply](https://www.reddit.com/r/rust/comments/ppx94j/comment/hdbg44q/).
+    #[cfg(test)]
+    macro_rules! disasm_test {
+        {fn $name: ident() $body: block} => {
+            #[cfg_attr(not(unix), ignore = "Disassembly tests only supported on unix targets")]
+            #[test]
+            fn $name () {
+                #[cfg(unix)]
+                $body
+            }
+        };
+        {$(#[$($docstr: meta)*])* fn $name: ident() $body: block} => {
+            $(#[$($docstr)*])*
+            #[cfg_attr(not(unix), ignore = "Disassembly tests only supported on unix targets")]
+            #[test]
+            fn $name () {
+                #[cfg(unix)]
+                $body
+            }
+
+        }
+    }
+    pub(super) use disasm_test;
 }
