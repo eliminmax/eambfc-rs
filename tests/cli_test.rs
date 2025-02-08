@@ -425,4 +425,20 @@ mod cli_tests {
         assert!(output.status.success());
         assert_eq!(output.stdout, expected.as_bytes());
     }
+
+    #[test]
+    #[cfg_attr(not(unix), ignore = "CommandExt::arg0 is unix-only")]
+    fn test_alt_argv0_help() {
+        #[cfg(unix)] {
+            use std::os::unix::process::CommandExt;
+            let expected_help = format!(
+                concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
+                "bfc",
+                env!("EAMBFC_DEFAULT_ARCH"),
+            );
+            let output = eambfc_with_args!("-h").arg0("bfc").output().unwrap();
+            assert!(output.status.success());
+            assert_eq!(output.stdout, expected_help.as_bytes());
+        }
+    }
 }
