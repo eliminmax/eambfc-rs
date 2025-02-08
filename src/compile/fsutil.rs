@@ -51,12 +51,12 @@ pub(super) fn rm_ext<'a>(
             extension.to_string_lossy()
         ),
     ))?;
-    Ok(OsStr::new(filename
-        .strip_suffix(extension)
-        .ok_or(BFCompileError::basic(
+    Ok(OsStr::new(filename.strip_suffix(extension).ok_or(
+        BFCompileError::basic(
             BFErrorID::BadExtension,
             format!("{filename} does not end with expected extension"),
-        ))?))
+        ),
+    )?))
 }
 
 #[cfg(test)]
