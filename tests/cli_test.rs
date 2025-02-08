@@ -363,21 +363,30 @@ mod cli_tests {
     }
 
     #[cfg_attr(not(feature = "arm64"), ignore = "arm64 support disabled")]
-    #[cfg_attr(not(can_run_arm64), ignore = "can't run arm64 Linux ELF binaries")]
+    #[cfg_attr(
+        any(windows, not(can_run_arm64)),
+        ignore = "can't run arm64 Linux ELF binaries"
+    )]
     #[test]
     fn test_arm64() {
         test_arch("arm64");
     }
 
     #[cfg_attr(not(feature = "s390x"), ignore = "s390x support disabled")]
-    #[cfg_attr(not(can_run_s390x), ignore = "can't run s390x Linux ELF binaries")]
+    #[cfg_attr(
+        any(windows, not(can_run_s390x)),
+        ignore = "can't run s390x Linux ELF binaries"
+    )]
     #[test]
     fn test_s390x() {
         test_arch("s390x");
     }
 
     #[cfg_attr(not(feature = "x86_64"), ignore = "x86_64 support disabled")]
-    #[cfg_attr(not(can_run_x86_64), ignore = "can't run x86_64 Linux ELF binaries")]
+    #[cfg_attr(
+        any(windows, not(can_run_x86_64)),
+        ignore = "can't run x86_64 Linux ELF binaries"
+    )]
     #[test]
     fn test_x86_64() {
         test_arch("x86_64");
@@ -386,7 +395,12 @@ mod cli_tests {
     #[test]
     fn test_version_output() {
         let bin_path = PathBuf::from(env!("CARGO_BIN_EXE_eambfc-rs"));
-        let bin_name = bin_path.file_name().unwrap().to_string_lossy();
+        let bin_name = if cfg!(windows) {
+            // use file_stem to remove the `.exe` extension on Windows
+            bin_path.file_stem().unwrap().to_string_lossy()
+        } else {
+            bin_path.file_name().unwrap().to_string_lossy()
+        };
         let expected = format!(
             concat!(
                 include_str!("../src/text_assets/version_template.txt"),
@@ -399,7 +413,12 @@ mod cli_tests {
         );
         let output = eambfc_with_args!("-V").output().unwrap();
         assert!(output.status.success());
-        assert_eq!(output.stdout, expected.as_bytes());
+        assert_eq!(
+            output.stdout,
+            expected.as_bytes(),
+            "\n\n{:?}\n\n{expected:?}\n\n",
+            output.stdout.escape_ascii().to_string()
+        );
     }
 
     #[test]
