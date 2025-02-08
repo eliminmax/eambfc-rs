@@ -2,6 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+#[cfg(not(unix))]
+trait FakeOpenOptionsExt {
+    fn mode(&self, _perms: u32) {}
+}
+#[cfg(not(unix))]
+impl FakeOpenOptionsExt for std::fs::OpenOptions {}
 #[cfg(test)]
 mod cli_tests {
     extern crate serde;
@@ -187,11 +193,18 @@ mod cli_tests {
         assert!(cmd_output.stderr.is_empty());
     }
 
-    #[cfg_attr(not(unix), ignore = "Can't test Unix permissions")]
+    #[cfg_attr(not(unix), ignore = "Can't test Unix permissions on non-Unix platform")]
     #[test]
     fn permission_error_test() -> io::Result<()> {
         use fs::{copy as copy_file, OpenOptions};
+
+        // function still needs to be compilable for non-unix targets, so use conditional
+        // compilation to make that possible
+        #[cfg(unix)]
         use std::os::unix::fs::OpenOptionsExt;
+        // for non-unix targets, implement a dummy trait with a do-nothing "mode" function
+        #[cfg(not(unix))]
+        use super::FakeOpenOptionsExt;
 
         let mut open_options = OpenOptions::new();
         open_options
