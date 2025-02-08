@@ -143,7 +143,7 @@ pub(crate) trait BFCompile {
                 ),
             )]
         })?;
-        let outfile = open_options.open(&outfile_name).map_err(|_| {
+        let outfile = open_options.open(outfile_name).map_err(|_| {
             vec![BFCompileError::basic(
                 BFErrorID::OpenWriteFailed,
                 format!(
