@@ -294,11 +294,11 @@ fn branch_cond(
     code_buf[..6].clone_from_slice(&load_from_byte(reg));
     // CFI aux, 0 {RIL-a}
     code_buf[6] = 0xc2;
-    code_buf[7] = (TMP_REG as u8) << 4 | 0x0d;
+    code_buf[7] = ((TMP_REG as u8) << 4) | 0x0d;
     code_buf[8..12].clone_from_slice(&[0; 4]);
     // BRCL mask, offset
     code_buf[12] = 0xc0;
-    code_buf[13] = (comp_mask as u8) << 4 | 0x04;
+    code_buf[13] = ((comp_mask as u8) << 4) | 0x04;
     code_buf[14..].clone_from_slice(&offset.to_be_bytes());
 
     Ok(code_buf)

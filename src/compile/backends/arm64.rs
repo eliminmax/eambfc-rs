@@ -129,8 +129,8 @@ fn branch_cond(
     code_buf[..4].clone_from_slice(&load_from_byte(reg, aux));
     code_buf[4..].clone_from_slice(&[
         // TST reg, 0xff (technically an alias for ANDS xzr, reg, 0xff)
-        0x1f | (aux as u8) << 5,
-        (aux as u8) >> 3 | 0x1c,
+        0x1f | ((aux as u8) << 5),
+        ((aux as u8) >> 3) | 0x1c,
         0x40,
         0xf2,
         // B.cond {offset}

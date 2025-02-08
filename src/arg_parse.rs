@@ -257,7 +257,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                     break;
                 }
                 flag => pcfg.parse_standalone_flag(flag)?,
-            };
+            }
         }
     }
     Ok(RunConfig::StandardRun(pcfg.try_into()?))

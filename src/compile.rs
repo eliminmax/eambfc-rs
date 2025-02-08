@@ -387,7 +387,7 @@ impl<B: BFCompileHelper> BFCompile for B {
                 BFErrorID::FailedWrite,
                 "Failed to write internal code buffer to output file",
             )),
-        };
+        }
         if errs.is_empty() {
             Ok(())
         } else {
