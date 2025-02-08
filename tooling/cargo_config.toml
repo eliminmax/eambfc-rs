@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+#
+# SPDX-License-Identifier: 0BSD
+
+# Non-portable extensions to Cargo.toml symlinked into .cargo/config.toml
+[env]
+LLVM_SYS_191_PREFIX = "/usr/lib/llvm-19"
+
+[target.x86_64-pc-windows-gnu]
+runner = "wine"
+
+[target.wasm32-wasip1]
+runner = "wasmtime"
