@@ -7,6 +7,7 @@ use crate::err::{BFCompileError, BFErrorID};
 use crate::OutMode;
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
+#[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
 #[derive(PartialEq, Debug)]
@@ -116,6 +117,7 @@ impl PartialRunConfig {
         Ok(())
     }
 
+    #[cfg(unix)]
     fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.extension.is_some() {
             return Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"));
@@ -124,36 +126,46 @@ impl PartialRunConfig {
         Ok(())
     }
 
+    #[cfg(not(unix))]
+    fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
+        if self.extension.is_some() {
+            return Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"));
+        }
+        if let Ok(s) = String::from_utf8(param) {
+            self.extension = Some(OsString::from(s));
+            Ok(())
+        } else {
+            Err(self.gen_err(
+                BFErrorID::NonUTF8,
+                "Can't handle non-unicode file extensions on non-unix platforms",
+            ))
+        }
+    }
+
     fn set_tape_size(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
+        use std::str::FromStr;
         if self.tape_blocks.is_some() {
             return Err(self.gen_err(
                 BFErrorID::MultipleTapeBlockCounts,
                 "passed -t multiple times",
             ));
         }
-        match OsString::from_vec(param).to_string_lossy().parse::<u64>() {
-            Ok(0) => Err((
-                BFCompileError::basic(BFErrorID::NoTape, "Tape value for -t must be at least 1"),
-                self.out_mode,
+        let Ok(Ok(tape_size)) = String::from_utf8(param).map(|s| u64::from_str(&s)) else {
+            return Err(self.gen_err(
+                BFErrorID::NotNumeric,
+                "tape size could not be parsed as a numeric value",
+            ));
+        };
+        match tape_size {
+            0 => Err(self.gen_err(BFErrorID::NoTape, "Tape value for -t must be at least 1")),
+            i if i >= u64::MAX >> 12 => Err(self.gen_err(
+                BFErrorID::TapeTooLarge,
+                "tape size exceeds 64-bit integer limit",
             )),
-            Ok(i) if i >= u64::MAX >> 12 => Err((
-                BFCompileError::basic(
-                    BFErrorID::TapeTooLarge,
-                    "tape size exceeds 64-bit integer limit",
-                ),
-                self.out_mode,
-            )),
-            Ok(i) => {
+            i => {
                 self.tape_blocks = Some(i);
                 Ok(())
             }
-            Err(_) => Err((
-                BFCompileError::basic(
-                    BFErrorID::NotNumeric,
-                    "tape size could not be parsed as a numeric value",
-                ),
-                self.out_mode,
-            )),
         }
     }
 }
@@ -172,20 +184,36 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
     let mut pcfg = PartialRunConfig::default();
 
     while let Some(arg) = args.next() {
+        #[cfg(not(unix))]
+        let arg = arg.into_string().map_err(|a| {
+            pcfg.gen_err(
+                BFErrorID::NonUTF8,
+                format!("Non-Unicode argument {:?} provided", a.to_string_lossy()),
+            )
+        })?;
         // handle non-flag values
         if arg == "--" {
             pcfg.source_files = Some(args.collect());
             break;
         }
+        #[cfg(unix)]
         let arg_bytes = arg.into_vec();
+        #[cfg(not(unix))]
+        let arg_bytes = arg.as_bytes();
         if arg_bytes[0] != b'-' {
+            #[cfg(unix)]
             let mut sf = vec![OsString::from_vec(arg_bytes)];
+            #[cfg(not(unix))]
+            let mut sf = vec![OsString::from(arg)];
             sf.extend(args);
             pcfg.source_files = Some(sf);
             break;
         }
 
+        #[cfg(unix)]
         let mut arg_byte_iter = arg_bytes.into_iter().skip(1);
+        #[cfg(not(unix))]
+        let mut arg_byte_iter = arg.bytes().skip(1);
 
         while let Some(b) = arg_byte_iter.next() {
             match b {
@@ -196,7 +224,23 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                     let mut remainder: Vec<u8> = arg_byte_iter.collect();
                     if remainder.is_empty() {
                         if let Some(next_arg) = args.next() {
+                            #[cfg(unix)]
                             remainder.extend_from_slice(next_arg.as_bytes());
+                            #[cfg(not(unix))]
+                            remainder.extend(
+                                next_arg
+                                    .into_string()
+                                    .map_err(|a| {
+                                        pcfg.gen_err(
+                                            BFErrorID::NonUTF8,
+                                            format!(
+                                                "Non-Unicode argument {:?} provided",
+                                                a.to_string_lossy()
+                                            ),
+                                        )
+                                    })?
+                                    .into_bytes(),
+                            );
                         } else {
                             return Err(pcfg.gen_err(
                                 BFErrorID::MissingOperand,
