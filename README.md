@@ -50,9 +50,12 @@ will raise an error.
 
 ## Supported platforms
 
-Portability to other *target* platforms is outside of the scope of this project,
-but it should be possible to compile properly-working `eambfc-rs` itself for any
-Rust `#[cfg(unix)]` targets. If that is not the case, it's a bug.
+Portability to non-Linux *target* platforms is outside of the scope of this
+project, as Linux is unique in providing a stable syscall ABI. That said, it
+should be possible to compile a properly-working build of `eambfc-rs` itself for
+any fully-supported Rust target, though the test suite has non-portable
+dependencies, and non-`cfg(unix)` targets are not able to handle non-Unicode
+arguments properly, or mark the output binaries as executable.
 
 ## Building and Installing
 
@@ -96,8 +99,14 @@ place to do it).
 
 Some tests will only run if it's possible for the host system to directly run
 the binaries that this compiler outputs, either because they're native, or
-because there's a binary compaitibility shim that automatically gets envoked,
-such as with the Linux kernel's `binfmt_misc` system.
+because there's a compaitibility layer that's automatically invoked, such as
+Linux's `binfmt_misc` with QEMU binfmt support set up, or FreeBSD's
+"Linuxulator" system call translation layer.
+
+On non-`cfg(unix)` platforms, tests that use the `llvm-sys` crate to disassemble
+compiled code will be skipped, as will tests that require Unix-specific
+functionality. Around half of the test suite is skipped on platforms that are
+both non-unix and lacking in support for the binaries compiled by `eambfc-rs`.
 
 ## Legal Stuff
 
@@ -106,7 +115,7 @@ such as with the Linux kernel's `binfmt_misc` system.
 assets are licensed under the Zero-Clause BSD license,
 a public-domain-equivalent license.
 
-One test compiles a snipped of brainfuck code taken from the esolangs.org page
+One test compiles a snippet of brainfuck code taken from the esolangs.org page
 [brainfuck constants](https://esolangs.org/wiki/Brainfuck_constants). The
 contents of that page are available under the public-domain-equivalent CC0
 license.
@@ -119,6 +128,7 @@ and every file has an SPDX License header identifying the license(s) it's under,
 either near the top of the file, or in an associated `.license` file.
 
 ### Disclaimer
+
 \* *Blazingly 🔥 Fast 🚀 version may or may not actually run faster than the
 original implementation. "Blazingly 🔥 Fast 🚀" is not intended to be
 interpreted as any assertion of improved performance efficiency or ability to
