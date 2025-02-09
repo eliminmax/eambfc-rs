@@ -38,7 +38,11 @@ fn main() -> ExitCode {
     });
     match arg_parse::parse_args(args) {
         Ok(RunConfig::ListArches) => {
-            println!("This build of {progname} supports the following architectures:\n");
+            println!(concat!(
+                "This build of ",
+                env!("CARGO_PKG_NAME"),
+                " supports the following architectures:\n"
+            ));
             #[cfg(feature = "x86_64")]
             println!("- x86_64 (aliases: x64, amd64, x86-64)");
             #[cfg(feature = "arm64")]
@@ -92,7 +96,7 @@ fn main() -> ExitCode {
             println!(
                 include_str!("text_assets/version_template.txt"),
                 progname,
-                env!("CARGO_BIN_NAME"),
+                env!("CARGO_PKG_NAME"),
                 env!("CARGO_PKG_VERSION"),
                 env!("EAMBFC_RS_GIT_COMMIT")
             );
