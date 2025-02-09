@@ -45,13 +45,9 @@ pub(super) fn rm_ext<'a>(
                 filename.to_string_lossy()
             ),
         ))?;
-        let extension = extension.to_str().ok_or(BFCompileError::basic(
-            BFErrorID::NonUTF8,
-            format!(
-                "extension {} is not valid Unicode{SUPPORT_MSG}",
-                extension.to_string_lossy()
-            ),
-        ))?;
+        let extension = extension
+            .to_str()
+            .unwrap_or_else(|| unreachable!("extension validated when parsing args"));
         Ok(OsStr::new(filename.strip_suffix(extension).ok_or(
             BFCompileError::basic(
                 BFErrorID::BadExtension,
