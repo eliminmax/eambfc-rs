@@ -19,17 +19,29 @@ codespell
 # failure, run again with output
 reuse lint -q || reuse lint
 
-# ensure formatted
+# ensure that code is properly formatted
 cargo fmt --check
+
+# this jq filter takes the JSON output of the nextest command, and resolves it
+# to a boolean indicating if any tests are markrd as ignored
+filter='[."rust-suites"[].testcases[].ignored] | any'
+
+# make sure that all tests will be run
+if [ "$(cargo nextest list -T json | jq "$filter")" = 'true' ]; then
+    printf 'Tests would be ignored by `cargo test`!\n' >&2
+    exit 1
+fi
+
 # run general test suite
 cargo test
 # check for clippy issues
-cargo clippy --tests -- -D warnings
+cargo clippy --all-targets --tests -- -D warnings
 # ensure that code coverage is at least 90%
 cargo tarpaulin --fail-under 90
+# test windows build using cargo-nextest
+cargo nextest run --target x86_64-pc-windows-gnu
 
 # test all single-backend builds one-by-one
 for backend in arm64 s390x x86_64; do
-    cargo clippy --no-default-features --features "$backend" -- -D warnings
     cargo test --no-default-features --features "$backend"
 done
