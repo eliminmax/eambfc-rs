@@ -2,12 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#[cfg(not(unix))]
-trait FakeOpenOptionsExt {
-    fn mode(&self, _perms: u32) {}
-}
-#[cfg(not(unix))]
-impl FakeOpenOptionsExt for std::fs::OpenOptions {}
 #[cfg(test)]
 mod cli_tests {
     extern crate serde;
