@@ -407,6 +407,30 @@ mod cli_tests {
         test_arch("x86_64");
     }
 
+    #[test]
+    fn continue_and_keep_flags() {
+        fs::copy("test_assets/unmatched_close.bf", temp_asset("err.bf")).unwrap();
+        fs::copy("test_assets/templates/hello.bf", temp_asset("ok.bf")).unwrap();
+        // first make sure that ok.bf was still compiled even though err.bf failed
+        assert!(eambfc_with_args!("-q", "-c")
+            .args([temp_asset("err.bf"), temp_asset("ok.bf")])
+            .status()
+            // exit code should indicate failure
+            .is_ok_and(|s| !s.success()));
+        assert!(temp_asset("ok").exists());
+        // because -k was not passed, err should have been deleted
+        assert!(!temp_asset("err").exists());
+
+        // try compiling err.bf again with -k
+        assert!(eambfc_with_args!("-q", "-k", "--")
+            .arg(temp_asset("err.bf"))
+            .status()
+            // exit code should indicate failure
+            .is_ok_and(|s| !s.success()));
+        // now, the file should exist even though compilation failed
+        assert!(temp_asset("err").exists());
+    }
+
     #[cfg_attr(
         any(target_os = "windows", not(can_run_default)),
         ignore = "can't run default architecture"
