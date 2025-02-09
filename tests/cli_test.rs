@@ -185,6 +185,33 @@ mod cli_tests {
     }
 
     #[test]
+    fn arch_list() {
+        use std::fmt::Write;
+        let mut expected = format!(
+            "This build of {} supports the following architectures:\n\n",
+            env!("CARGO_PKG_NAME")
+        );
+        if cfg!(feature = "x86_64") {
+            writeln!(expected, "- x86_64 (aliases: x64, amd64, x86-64)").unwrap();
+        }
+        if cfg!(feature = "arm64") {
+            writeln!(expected, "- arm64 (aliases: aarch64)").unwrap();
+        }
+        if cfg!(feature = "s390x") {
+            writeln!(expected, "- s390x (aliases: s390, z/architecture)").unwrap();
+        }
+        writeln!(
+            expected,
+            "\nIf no architecture is specified, it defaults to {}.",
+            env!("EAMBFC_DEFAULT_ARCH")
+        )
+        .unwrap();
+        let cmd_output = eambfc_with_args!("-A").output().unwrap();
+        assert!(cmd_output.status.success());
+        assert_eq!(String::from_utf8(cmd_output.stdout), Ok(expected));
+    }
+
+    #[test]
     fn quiet_means_quiet() {
         let cmd_output = eambfc_with_args!("-q", "these", "are", "quite", "bad", "args", "-t0")
             .output()
