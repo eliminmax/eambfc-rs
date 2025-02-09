@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: 0BSD
 
+use std::collections::HashSet;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::Command;
@@ -11,6 +12,23 @@ compile_error!("Must have at least one architecture enabled");
 fn main() {
     println!("cargo::rerun-if-changed=.git/index");
     println!("cargo::rerun-if-env-changed=EAMBFC_DEFAULT_ARCH");
+
+    let mut runnable_arches = HashSet::new();
+    macro_rules! check_exec_support {
+        ($platform: literal) => {
+            if Command::new(concat!("./test_assets/exec_support/", $platform))
+                .status()
+                .is_ok_and(|status| status.success())
+            {
+                runnable_arches.insert($platform);
+                println!(concat!("cargo::rustc-cfg=can_run_", $platform));
+            }
+        };
+    }
+
+    check_exec_support!("arm64");
+    check_exec_support!("s390x");
+    check_exec_support!("x86_64");
 
     macro_rules! arch_check {
         ($arch: literal) => {{
@@ -41,21 +59,9 @@ fn main() {
     };
     println!("cargo::rustc-env=EAMBFC_DEFAULT_ARCH={arch}");
     println!("cargo::rustc-cfg=eambfc_default_arch={arch:?}");
-
-    macro_rules! check_exec_support {
-        ($platform: literal) => {
-            if Command::new(concat!("./test_assets/exec_support/", $platform))
-                .status()
-                .is_ok_and(|status| status.success())
-            {
-                println!(concat!("cargo::rustc-cfg=can_run_", $platform));
-            }
-        };
+    if runnable_arches.contains(&arch) {
+        println!("cargo::rustc-cfg=can_run_default");
     }
-
-    check_exec_support!("arm64");
-    check_exec_support!("s390x");
-    check_exec_support!("x86_64");
 
     if !PathBuf::from(".git").exists() {
         println!("cargo::rustc-env=EAMBFC_RS_GIT_COMMIT=unknown: not built from git repository");
