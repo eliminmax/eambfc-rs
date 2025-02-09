@@ -35,6 +35,7 @@ pub(super) fn rm_ext<'a>(
             ))
         }
     }
+    #[cfg(not(tarpaulin_include))]
     #[cfg(not(unix))]
     {
         const SUPPORT_MSG: &str = " - non-Unicode filenames are only supported on Unix targets";

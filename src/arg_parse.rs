@@ -126,6 +126,7 @@ impl PartialRunConfig {
         Ok(())
     }
 
+    #[cfg(not(tarpaulin_include))]
     #[cfg(not(unix))]
     fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.extension.is_some() {
@@ -184,6 +185,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
     let mut pcfg = PartialRunConfig::default();
 
     while let Some(arg) = args.next() {
+        #[cfg(not(tarpaulin_include))]
         #[cfg(not(unix))]
         let arg = arg.into_string().map_err(|a| {
             pcfg.gen_err(
@@ -198,11 +200,13 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
         }
         #[cfg(unix)]
         let arg_bytes = arg.into_vec();
+        #[cfg(not(tarpaulin_include))]
         #[cfg(not(unix))]
         let arg_bytes = arg.as_bytes();
         if arg_bytes[0] != b'-' {
             #[cfg(unix)]
             let mut sf = vec![OsString::from_vec(arg_bytes)];
+            #[cfg(not(tarpaulin_include))]
             #[cfg(not(unix))]
             let mut sf = vec![OsString::from(arg)];
             sf.extend(args);
@@ -212,6 +216,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
 
         #[cfg(unix)]
         let mut arg_byte_iter = arg_bytes.into_iter().skip(1);
+        #[cfg(not(tarpaulin_include))]
         #[cfg(not(unix))]
         let mut arg_byte_iter = arg.bytes().skip(1);
 
@@ -226,6 +231,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                         if let Some(next_arg) = args.next() {
                             #[cfg(unix)]
                             remainder.extend_from_slice(next_arg.as_bytes());
+                            #[cfg(not(tarpaulin_include))]
                             #[cfg(not(unix))]
                             remainder.extend(
                                 next_arg
