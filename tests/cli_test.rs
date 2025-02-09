@@ -18,8 +18,8 @@ mod cli_tests {
 
     const PATH: &str = env!("CARGO_BIN_EXE_eambfc-rs");
 
-    const TEST_FILES: [&str; 10] = [
-        "alternative_extension.brnfck",
+    const ALT_EXT_TEST_FILE: &str = "alternative_extension.brnfck";
+    const TEST_FILES: [&str; 9] = [
         "colortest.bf",
         "dead_code.bf",
         "hello.bf",
@@ -57,6 +57,16 @@ mod cli_tests {
             init_arch_dir(WORKING_DIR.read().path().join("s390x"));
             #[cfg(can_run_x86_64)]
             init_arch_dir(WORKING_DIR.read().path().join("x86_64"));
+            #[cfg(can_run_default)]
+            fs::copy(
+                PathBuf::from("./test_assets/templates").join(ALT_EXT_TEST_FILE),
+                WORKING_DIR
+                    .read()
+                    .path()
+                    .join(env!("EAMBFC_DEFAULT_ARCH"))
+                    .join(ALT_EXT_TEST_FILE),
+            )
+            .unwrap();
             IsInit
         });
         WORKING_DIR.read()
@@ -243,7 +253,8 @@ mod cli_tests {
             copy_file(
                 "test_assets/templates/hello.bf",
                 temp_asset("unwritable.bf"),
-            ).unwrap();
+            )
+            .unwrap();
             let mut open_options = OpenOptions::new();
             open_options
                 .write(true)
@@ -316,16 +327,9 @@ mod cli_tests {
         use fs::File;
         use io::Read;
         let base_dir = working_dir().path().join(arch);
-        let alt_ext_result = Command::new(PATH)
-            .args(["-a", arch])
-            .arg("-e.brnfck")
-            .arg(base_dir.join("alternative_extension.brnfck"))
-            .status()
-            .unwrap();
-        assert!(alt_ext_result.success());
         let general_result = Command::new(PATH)
             .args(["-a", arch])
-            .args(TEST_FILES[1..].iter().map(|f| base_dir.join(f)))
+            .args(TEST_FILES.iter().map(|f| base_dir.join(f)))
             .status()
             .unwrap();
         assert!(general_result.success());
@@ -333,21 +337,13 @@ mod cli_tests {
             let path = base_dir.join(file).with_extension("");
             fs::rename(&path, path.with_extension("unopt")).unwrap();
         }
-        let alt_ext_optimized_result = Command::new(PATH)
-            .args(["-O", "-a", arch])
-            .arg("-e.brnfck")
-            .arg(base_dir.join("alternative_extension.brnfck"))
-            .status()
-            .unwrap();
-        assert!(alt_ext_optimized_result.success());
         let optimized_result = Command::new(PATH)
             .arg("-O")
-            .args(TEST_FILES[1..].iter().map(|f| base_dir.join(f)))
+            .args(TEST_FILES.iter().map(|f| base_dir.join(f)))
             .status()
             .unwrap();
         assert!(optimized_result.success());
 
-        test_fixed_output(base_dir.join("alternative_extension"), b"Hello, world!\n");
         test_fixed_output(base_dir.join("hello"), b"Hello, world!\n");
         test_fixed_output(base_dir.join("dead_code"), b"");
         test_fixed_output(base_dir.join("null"), b"");
@@ -409,6 +405,33 @@ mod cli_tests {
     #[test]
     fn test_x86_64() {
         test_arch("x86_64");
+    }
+
+    #[cfg_attr(
+        any(target_os = "windows", not(can_run_default)),
+        ignore = "can't run default architecture"
+    )]
+    #[test]
+    fn alternative_extension() {
+        let path = working_dir()
+            .path()
+            .join(env!("EAMBFC_DEFAULT_ARCH"))
+            .join(ALT_EXT_TEST_FILE);
+        assert!(Command::new(PATH)
+            .arg("-e.brnfck")
+            .arg(&path)
+            .status()
+            .unwrap()
+            .success());
+        fs::rename(path.with_extension(""), path.with_extension("unopt")).unwrap();
+        assert!(Command::new(PATH)
+            .arg("-O")
+            .arg("-e.brnfck")
+            .arg(&path)
+            .status()
+            .unwrap()
+            .success());
+        test_fixed_output(path.with_extension(""), b"Hello, world!\n");
     }
 
     #[test]
