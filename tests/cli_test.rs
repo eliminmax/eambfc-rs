@@ -222,48 +222,46 @@ mod cli_tests {
 
     #[cfg_attr(not(unix), ignore = "Can't test Unix permissions on non-Unix platform")]
     #[test]
-    fn permission_error_test() -> io::Result<()> {
-        use fs::{copy as copy_file, OpenOptions};
-
+    fn permission_error_test() {
         // function still needs to be compilable for non-unix targets, so use conditional
         // compilation to make that possible
         #[cfg(unix)]
-        use std::os::unix::fs::OpenOptionsExt;
-        // for non-unix targets, implement a dummy trait with a do-nothing "mode" function
-        #[cfg(not(unix))]
-        use super::FakeOpenOptionsExt;
+        {
+            use fs::{copy as copy_file, OpenOptions};
 
-        let mut open_options = OpenOptions::new();
-        open_options
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o044);
-        let unreadable_src = temp_asset("unreadable.bf");
-        drop(open_options.open(&unreadable_src)?);
-        test_err!(
-            "OPEN_R_FAILED",
-            unreadable_src.as_os_str().to_str().unwrap()
-        );
+            use std::os::unix::fs::OpenOptionsExt;
 
-        let unwritable_dest = temp_asset("unwritable");
-        let unwritable_src = temp_asset("unwritable.bf");
-        copy_file(
-            "test_assets/templates/hello.bf",
-            temp_asset("unwritable.bf"),
-        )?;
-        let mut open_options = OpenOptions::new();
-        open_options
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o555);
-        drop(open_options.open(&unwritable_dest)?);
-        test_err!(
-            "OPEN_W_FAILED",
-            unwritable_src.as_os_str().to_str().unwrap()
-        );
-        Ok(())
+            let mut open_options = OpenOptions::new();
+            open_options
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .mode(0o044);
+            let unreadable_src = temp_asset("unreadable.bf");
+            drop(open_options.open(&unreadable_src).unwrap());
+            test_err!(
+                "OPEN_R_FAILED",
+                unreadable_src.as_os_str().to_str().unwrap()
+            );
+
+            let unwritable_dest = temp_asset("unwritable");
+            let unwritable_src = temp_asset("unwritable.bf");
+            copy_file(
+                "test_assets/templates/hello.bf",
+                temp_asset("unwritable.bf"),
+            ).unwrap();
+            let mut open_options = OpenOptions::new();
+            open_options
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .mode(0o555);
+            drop(open_options.open(&unwritable_dest).unwrap());
+            test_err!(
+                "OPEN_W_FAILED",
+                unwritable_src.as_os_str().to_str().unwrap()
+            );
+        }
     }
 
     fn test_fixed_output(file: impl AsRef<Path>, expected: &[u8]) {
