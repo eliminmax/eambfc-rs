@@ -30,7 +30,6 @@ use crate::compile::backends::S390xInter;
 use crate::compile::backends::X86_64Inter;
 
 fn main() -> ExitCode {
-    let mut exit_code = ExitCode::SUCCESS;
     let mut args = args_os();
     // if args[0] is not present, it's sensible to fall back to the name cargo is using
     let progname: Cow<'static, str> = args.next().map_or(env!("CARGO_BIN_NAME").into(), |c| {
@@ -54,6 +53,7 @@ fn main() -> ExitCode {
                 env!("EAMBFC_DEFAULT_ARCH"),
                 '.'
             ));
+            ExitCode::SUCCESS
         }
         Ok(RunConfig::ShowHelp) => {
             println!(
@@ -61,8 +61,10 @@ fn main() -> ExitCode {
                 progname,
                 ElfArch::default()
             );
+            ExitCode::SUCCESS
         }
         Ok(RunConfig::StandardRun(rc)) => {
+            let mut exit_code = ExitCode::SUCCESS;
             for f in rc.source_files {
                 macro_rules! compile_with {
                     ($inter: ident) => {{
@@ -91,6 +93,7 @@ fn main() -> ExitCode {
                     exit_code = ExitCode::FAILURE;
                 }
             }
+            exit_code
         }
         Ok(RunConfig::ShowVersion) => {
             println!(
@@ -100,7 +103,7 @@ fn main() -> ExitCode {
                 env!("CARGO_PKG_VERSION"),
                 env!("EAMBFC_RS_GIT_COMMIT")
             );
-            return exit_code;
+            ExitCode::SUCCESS
         }
         Err((err, out_mode)) => {
             err.report(out_mode);
@@ -111,7 +114,7 @@ fn main() -> ExitCode {
                     ElfArch::default()
                 );
             }
+            ExitCode::FAILURE
         }
     }
-    exit_code
 }
