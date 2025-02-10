@@ -13,10 +13,18 @@ mod cli_tests {
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
     use std::{fs, io};
+    trait TempDirExt {
+        fn join(&self, file: impl AsRef<Path>) -> PathBuf;
+    }
+
+    impl TempDirExt for TempDir {
+        fn join(&self, file: impl AsRef<Path>) -> PathBuf {
+            self.path().join(file)
+        }
+    }
 
     const PATH: &str = env!("CARGO_BIN_EXE_eambfc-rs");
 
-    const ALT_EXT_TEST_FILE: &str = "alternative_extension.brnfck";
     const TEST_FILES: [&str; 9] = [
         "colortest.bf",
         "dead_code.bf",
@@ -29,14 +37,22 @@ mod cli_tests {
         "wrap.bf",
     ];
 
+    fn source_file(file: impl AsRef<Path>) -> PathBuf {
+        Path::new("test_assets/bf_sources").join(file)
+    }
+
     fn working_dir() -> TempDir {
         tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap()
     }
 
+    /// Consumes its arguments, constructing a `std::process::Command` prepared to invoke the
+    /// target binary with those arguments
     macro_rules! eambfc_with_args {
+        // internal variant
         (with_cmd $cmd:expr, $arg:expr) => {
             $cmd.arg($arg)
         };
+        // internal variant
         (with_cmd $cmd:expr, $arg:expr, $($args:expr),*) => {
             eambfc_with_args!(with_cmd $cmd.arg($arg), $($args),*)
         };
@@ -47,6 +63,45 @@ mod cli_tests {
             eambfc_with_args!(with_cmd Command::new(PATH).arg($arg), $($args),*)
         };
     }
+
+    macro_rules! invoke {
+        ($cmd: expr) => {
+            assert!($cmd.status().unwrap().success())
+        };
+        (expect_failure, $cmd: expr) => {
+            assert!(!$cmd.status().unwrap().success())
+        };
+    }
+
+    macro_rules! checked_output {
+        ($cmd: expr) => {{
+            let output = $cmd.output().unwrap();
+            assert!(output.status.success());
+            output.stdout
+        }};
+        (expect_failure, $cmd: expr, $stream: ident) => {{
+            let output = $cmd.output().unwrap();
+            assert!(!output.status.success());
+            output.$stream
+        }};
+        (expect_failure, $cmd: expr) => {{
+            checked_output!(expect_failure, $cmd, stdout)
+        }};
+    }
+
+    macro_rules! help_text {
+        ($progname: expr) => {{
+            format!(
+                concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
+                $progname,
+                env!("EAMBFC_DEFAULT_ARCH")
+            )
+        }};
+        () => {{
+            help_text!(PATH)
+        }};
+    }
+
 
     #[derive(Deserialize, PartialEq, Clone)]
     struct ErrorMsg {
@@ -73,34 +128,22 @@ mod cli_tests {
                 }
                 writeln!(s, ": {}", err.message).unwrap();
             }
-            s = s.trim().to_string();
             s
-        }
-
-        fn validate_formatting(errs: &[Self], cmd: &mut Command) {
-            let mut output = String::from_utf8(cmd.output().unwrap().stderr).unwrap();
-            output = output.replace(
-                &format!(
-                    include_str!("../src/text_assets/help_template.txt"),
-                    PATH,
-                    env!("EAMBFC_DEFAULT_ARCH")
-                ),
-                "",
-            );
-            output = output.trim().to_string();
-            assert_eq!(Self::expected_formatting(errs), output,);
         }
     }
 
     macro_rules! test_err {
         ($first_err: expr) => {
-            let errors = String::from_utf8(eambfc_with_args!("-j").output().unwrap().stdout)
-            .unwrap()
+            let errors = String::from_utf8(
+                checked_output!(expect_failure, eambfc_with_args!("-j"))
+            ).unwrap()
             .lines()
             .map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
-            ErrorMsg::validate_formatting(
-                &errors,
-                &mut Command::new(PATH),
+            assert_eq!(
+                ErrorMsg::expected_formatting(&errors).trim(),
+                String::from_utf8(
+                    checked_output!(expect_failure, Command::new(PATH), stderr)
+                ).unwrap().replace(&help_text!(), "").trim()
             );
             assert_eq!(errors[0].error_id, $first_err);
         };
@@ -110,9 +153,10 @@ mod cli_tests {
             ).unwrap()
             .lines()
             .map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
-            ErrorMsg::validate_formatting(
-                &errors,
-                eambfc_with_args!($($args),+)
+            let output = checked_output!(expect_failure, eambfc_with_args!($($args),+), stderr);
+            assert_eq!(
+                ErrorMsg::expected_formatting(&errors).trim(),
+                String::from_utf8(output).unwrap().replace(&help_text!(), "").trim()
             );
             assert_eq!(errors[0].error_id, $first_err);
         };
@@ -138,11 +182,14 @@ mod cli_tests {
             "-a",
             env!("EAMBFC_DEFAULT_ARCH")
         );
-        test_err!("UNMATCHED_OPEN", "./test_assets/unmatched_open.bf");
-        test_err!("UNMATCHED_CLOSE", "./test_assets/unmatched_close.bf");
+
+        let unmatched_open = source_file("unmatched_open.bf");
+        let unmatched_close = source_file("unmatched_close.bf");
+        test_err!("UNMATCHED_OPEN", &unmatched_open);
+        test_err!("UNMATCHED_CLOSE", &unmatched_close);
         // optimization mode uses a separate dedicated check for unbalanced loops, so check again
-        test_err!("UNMATCHED_OPEN", "-O", "./test_assets/unmatched_open.bf");
-        test_err!("UNMATCHED_CLOSE", "-O", "./test_assets/unmatched_close.bf");
+        test_err!("UNMATCHED_OPEN", "-O", &unmatched_open);
+        test_err!("UNMATCHED_CLOSE", "-O", &unmatched_close);
     }
 
     #[test]
@@ -167,9 +214,8 @@ mod cli_tests {
             env!("EAMBFC_DEFAULT_ARCH")
         )
         .unwrap();
-        let cmd_output = eambfc_with_args!("-A").output().unwrap();
-        assert!(cmd_output.status.success());
-        assert_eq!(String::from_utf8(cmd_output.stdout), Ok(expected));
+        let cmd_output = checked_output!(eambfc_with_args!("-A"));
+        assert_eq!(String::from_utf8(cmd_output), Ok(expected));
     }
 
     #[test]
@@ -177,6 +223,7 @@ mod cli_tests {
         let cmd_output = eambfc_with_args!("-q", "these", "are", "quite", "bad", "args", "-t0")
             .output()
             .unwrap();
+        assert!(!cmd_output.status.success());
         assert!(cmd_output.stdout.is_empty());
         assert!(cmd_output.stderr.is_empty());
     }
@@ -188,27 +235,27 @@ mod cli_tests {
         // compilation to make that possible
         #[cfg(unix)]
         {
-            use fs::{copy as copy_file, OpenOptions};
+            use fs::OpenOptions;
 
             use std::os::unix::fs::OpenOptionsExt;
 
-            let dir = working_dir();
+            // let dir = working_dir();
+            let dir = Box::leak(Box::new(working_dir())).path();
             let mut open_options = OpenOptions::new();
             open_options
                 .write(true)
                 .create(true)
                 .truncate(false)
                 .mode(0o044);
-            let unreadable_src = dir.path().join("unreadable.bf");
+            let unreadable_src = dir.join("unreadable.bf");
             drop(open_options.open(&unreadable_src).unwrap());
-            test_err!(
-                "OPEN_R_FAILED",
-                unreadable_src.as_os_str().to_str().unwrap()
-            );
 
-            let unwritable_dest = dir.path().join("unwritable");
-            let unwritable_src = dir.path().join("unwritable.bf");
-            copy_file("test_assets/templates/hello.bf", &unwritable_src).unwrap();
+            test_err!("OPEN_R_FAILED", &unreadable_src);
+
+            let unwritable_dest = dir.join("unwritable");
+            let unwritable_src = unwritable_dest.with_extension("bf");
+            fs::copy(source_file("hello.bf"), &unwritable_src).unwrap();
+
             let mut open_options = OpenOptions::new();
             open_options
                 .write(true)
@@ -216,22 +263,19 @@ mod cli_tests {
                 .truncate(false)
                 .mode(0o555);
             drop(open_options.open(&unwritable_dest).unwrap());
-            test_err!(
-                "OPEN_W_FAILED",
-                unwritable_src.as_os_str().to_str().unwrap()
-            );
+            test_err!("OPEN_W_FAILED", &unwritable_src);
         }
     }
 
-    fn test_fixed_output(file: impl AsRef<Path>, expected: &[u8]) {
-        let result = Command::new(file.as_ref()).output().unwrap();
-        assert!(result.status.success());
-        assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
-        let result = Command::new(file.as_ref().with_extension("unopt"))
-            .output()
-            .unwrap();
-        assert!(result.status.success());
-        assert_eq!(result.stdout, expected, "{}", expected.escape_ascii());
+    /// test that both `file` and `file.as_ref().with_extension("unopt")` output `expected` when
+    /// invoked
+    fn test_compiled_pair(file: impl AsRef<Path>, expected: &[u8]) {
+        let file = file.as_ref().canonicalize().unwrap();
+        assert_eq!(checked_output!(Command::new(&file)), expected);
+        assert_eq!(
+            checked_output!(Command::new(file.with_extension("unopt"))),
+            expected
+        );
     }
 
     fn test_rw_cmd(rw: impl AsRef<Path>) {
@@ -278,64 +322,48 @@ mod cli_tests {
     }
 
     fn test_arch(arch: &str) {
-        use fs::File;
-        use io::Read;
         let dir = working_dir();
         for file in TEST_FILES.iter().copied() {
-            fs::copy(
-                PathBuf::from("./test_assets/templates").join(file),
-                dir.path().join(file),
-            )
-            .unwrap();
+            fs::copy(source_file(file), dir.join(file)).unwrap();
         }
-        let general_result = Command::new(PATH)
-            .args(["-a", arch])
-            .args(TEST_FILES.iter().map(|f| dir.path().join(f)))
-            .status()
-            .unwrap();
-        assert!(general_result.success());
+
+        invoke!(eambfc_with_args!("-a", arch).args(TEST_FILES.iter().map(|f| dir.join(f))));
         for file in TEST_FILES {
-            let path = dir.path().join(file).with_extension("");
+            let path = dir.join(file).with_extension("");
             fs::rename(&path, path.with_extension("unopt")).unwrap();
         }
-        let optimized_result = Command::new(PATH)
-            .arg("-O")
-            .args(TEST_FILES.iter().map(|f| dir.path().join(f)))
-            .status()
-            .unwrap();
-        assert!(optimized_result.success());
 
-        test_fixed_output(dir.path().join("hello"), b"Hello, world!\n");
-        test_fixed_output(dir.path().join("dead_code"), b"");
-        test_fixed_output(dir.path().join("null"), b"");
-        test_fixed_output(dir.path().join("loop"), b"!");
-        test_fixed_output(dir.path().join("wrap2"), b"0000");
-        test_fixed_output(dir.path().join("wrap"), "🧟".as_bytes());
-        test_fixed_output(
-            dir.path().join("colortest"),
+        invoke!(eambfc_with_args!("-O", "-a", arch).args(TEST_FILES.iter().map(|f| dir.join(f))));
+
+        test_compiled_pair(dir.join("hello"), b"Hello, world!\n");
+        test_compiled_pair(dir.join("null"), b"");
+        test_compiled_pair(dir.join("loop"), b"!");
+        test_compiled_pair(dir.join("wrap2"), b"0000");
+        test_compiled_pair(dir.join("wrap"), "🧟".as_bytes());
+        test_compiled_pair(
+            dir.join("colortest"),
             include_bytes!("../test_assets/colortest_output"),
         );
-        test_rw_cmd(dir.path().join("rw"));
-        test_rw_cmd(dir.path().join("rw.unopt"));
+        test_rw_cmd(dir.join("rw"));
+        test_rw_cmd(dir.join("rw.unopt"));
+        test_truthmachine_cmd(dir.join("truthmachine"));
+        test_truthmachine_cmd(dir.join("truthmachine.unopt"));
+    }
 
+    #[test]
+    fn test_optimization() {
+        let dir = working_dir();
+        let dead_code = dir.join("dead_code.bf");
+        let null = dir.join("null.bf");
+        fs::copy(source_file("dead_code.bf"), &dead_code).unwrap();
+        fs::copy(source_file("null.bf"), &null).unwrap();
+        invoke!(eambfc_with_args!("-O", &dead_code, &null));
         // make sure that the optimized build of dead_code and the optimized build of null are
         // byte-for-byte identical
-        let mut dead_code_elf_bytes = Vec::new();
-        let mut null_elf_bytes = Vec::new();
-        let dead_code_elf_size = File::open(dir.path().join("dead_code"))
-            .unwrap()
-            .read_to_end(&mut dead_code_elf_bytes)
-            .unwrap();
-        let null_elf_size = File::open(dir.path().join("null"))
-            .unwrap()
-            .read_to_end(&mut null_elf_bytes)
-            .unwrap();
         assert_eq!(
-            (dead_code_elf_size, dead_code_elf_bytes),
-            (null_elf_size, null_elf_bytes)
+            fs::read(dir.join("dead_code")).unwrap(),
+            fs::read(dir.join("null")).unwrap()
         );
-        test_truthmachine_cmd(dir.path().join("truthmachine"));
-        test_truthmachine_cmd(dir.path().join("truthmachine.unopt"));
     }
 
     #[cfg_attr(not(feature = "arm64"), ignore = "arm64 support disabled")]
@@ -371,67 +399,45 @@ mod cli_tests {
     #[test]
     fn continue_and_keep_flags() {
         let dir = working_dir();
-        let ok_src = dir.path().join("ok.bf");
-        let err_src = dir.path().join("err.bf");
+        let ok_src = dir.join("ok.bf");
+        let ok_file = ok_src.with_extension("");
+        let err_src = dir.join("err.bf");
         let err_file = err_src.with_extension("");
-        fs::copy("test_assets/unmatched_close.bf", &err_src).unwrap();
-        fs::copy("test_assets/templates/hello.bf", &ok_src).unwrap();
-        // first make sure that ok.bf was still compiled even though err.bf failed
-        assert!(eambfc_with_args!("-q", "-c")
-            .args([&err_src, &ok_src])
-            .status()
-            // exit code should indicate failure
-            .is_ok_and(|s| !s.success()));
-        assert!(dir.path().join("ok").exists());
+        fs::copy(source_file("unmatched_close.bf"), &err_src).unwrap();
+        fs::copy(source_file("hello.bf"), &ok_src).unwrap();
+
+        // make sure that exit code is failure and ok.bf isn't compiled if -c wasn't passed
+        invoke!(expect_failure, eambfc_with_args!("-q", &err_src, &ok_src));
+        assert!(!ok_file.exists() && !err_file.exists());
+
+        // make sure that ok.bf is still compiled with -c even though err.bf failed
+        invoke!(
+            expect_failure,
+            eambfc_with_args!("-q", "-c", &err_src, &ok_src)
+        );
         // because -k was not passed, err should have been deleted
-        assert!(!err_file.exists());
+        assert!(ok_file.exists() && !err_file.exists());
 
         // try compiling err.bf again with -k
-        assert!(eambfc_with_args!("-q", "-k", "--")
-            .arg(err_src)
-            .status()
-            // exit code should indicate failure
-            .is_ok_and(|s| !s.success()));
+        invoke!(expect_failure, eambfc_with_args!("-q", "-k", err_src));
         // now, the file should exist even though compilation failed
         assert!(err_file.exists());
     }
 
-    #[cfg_attr(
-        any(target_os = "windows", not(can_run_default)),
-        ignore = "can't run default architecture"
-    )]
     #[test]
     fn alternative_extension() {
         let dir = working_dir();
-        let path = dir.path().join(ALT_EXT_TEST_FILE);
-        let hello_path = dir.path().join("hello.bf");
-        fs::copy("test_assets/templates/alternative_extension.brnfck", &path).unwrap();
-        fs::copy("test_assets/templates/hello.bf", &hello_path).unwrap();
-        assert!(Command::new(PATH)
-            .arg("-e.brnfck")
-            .arg(&path)
-            .status()
-            .unwrap()
-            .success());
-        assert!(Command::new(PATH)
-            .arg(&hello_path)
-            .status()
-            .unwrap()
-            .success());
-        let output = path.with_extension("");
-        assert_eq!(
-            fs::read(&output).unwrap(),
-            fs::read(hello_path.with_extension("")).unwrap()
-        );
-        fs::rename(output, path.with_extension("unopt")).unwrap();
-        assert!(Command::new(PATH)
-            .arg("-O")
-            .arg("-e.brnfck")
-            .arg(&path)
-            .status()
-            .unwrap()
-            .success());
-        test_fixed_output(path.with_extension(""), b"Hello, world!\n");
+        let outfile = dir.join("hello");
+        let path = outfile.with_extension("brnfck");
+        let hello_path = outfile.with_extension("bf");
+
+        fs::copy(source_file("hello.bf"), &hello_path).unwrap();
+        invoke!(eambfc_with_args!(&hello_path));
+        let expected = fs::read(&outfile).unwrap();
+
+        fs::rename(hello_path, &path).unwrap();
+        invoke!(eambfc_with_args!("-e.brnfck", path));
+        assert_eq!(expected, fs::read(&outfile).unwrap());
     }
 
     #[test]
@@ -446,14 +452,8 @@ mod cli_tests {
             env!("CARGO_PKG_VERSION"),
             env!("EAMBFC_RS_GIT_COMMIT"),
         );
-        let output = eambfc_with_args!("-V").output().unwrap();
-        assert!(output.status.success());
-        assert_eq!(
-            output.stdout,
-            expected.as_bytes(),
-            "\n\n{:?}\n\n{expected:?}\n\n",
-            output.stdout.escape_ascii().to_string()
-        );
+        let output = checked_output!(eambfc_with_args!("-V"));
+        assert_eq!(output, expected.as_bytes());
     }
 
     #[test]
@@ -463,14 +463,14 @@ mod cli_tests {
             PATH,
             env!("EAMBFC_DEFAULT_ARCH"),
         );
-        let output = eambfc_with_args!("-h").output().unwrap();
-        assert!(output.status.success());
-        assert_eq!(output.stdout, expected.as_bytes());
+        let output = checked_output!(eambfc_with_args!("-h"));
+        assert_eq!(output, expected.as_bytes());
     }
 
     #[test]
     #[cfg_attr(not(unix), ignore = "CommandExt::arg0 is unix-only")]
     fn test_alt_argv0_help() {
+        // need cfg(unix) here so that CommandExt isn't checked on non-unix targets
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
@@ -479,9 +479,8 @@ mod cli_tests {
                 "bfc",
                 env!("EAMBFC_DEFAULT_ARCH"),
             );
-            let output = eambfc_with_args!("-h").arg0("bfc").output().unwrap();
-            assert!(output.status.success());
-            assert_eq!(output.stdout, expected_help.as_bytes());
+            let output = checked_output!(eambfc_with_args!("-h").arg0("bfc"));
+            assert_eq!(output, expected_help.as_bytes());
         }
     }
 }
