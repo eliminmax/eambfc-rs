@@ -102,7 +102,6 @@ mod cli_tests {
         }};
     }
 
-
     #[derive(Deserialize, PartialEq, Clone)]
     struct ErrorMsg {
         #[serde(rename = "errorId")]
