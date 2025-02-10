@@ -8,12 +8,10 @@ mod cli_tests {
     extern crate serde_json;
     extern crate tempfile;
     use serde::Deserialize;
-    use static_init::dynamic;
     use tempfile::TempDir;
 
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
-    use std::sync::OnceLock;
     use std::{fs, io};
 
     const PATH: &str = env!("CARGO_BIN_EXE_eambfc-rs");
@@ -31,49 +29,8 @@ mod cli_tests {
         "wrap.bf",
     ];
 
-    struct IsInit;
-    static INIT: OnceLock<IsInit> = OnceLock::new();
-    /// Return the working directory. The first time it's called, it's initialized with `TempDir`,
-    /// and subdirectories for each testable arches are created, with the source files for each test
-    /// copied into them.
-    fn working_dir() -> impl std::ops::Deref<Target = TempDir> {
-        #[dynamic(lazy, drop)]
-        static mut WORKING_DIR: TempDir =
-            tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
-        fn init_arch_dir(dst: impl AsRef<Path>) {
-            fs::create_dir(&dst).unwrap();
-            for file in TEST_FILES.iter().copied() {
-                fs::copy(
-                    PathBuf::from("./test_assets/templates").join(file),
-                    dst.as_ref().join(file),
-                )
-                .unwrap();
-            }
-        }
-        INIT.get_or_init(|| {
-            #[cfg(can_run_arm64)]
-            init_arch_dir(WORKING_DIR.read().path().join("arm64"));
-            #[cfg(can_run_s390x)]
-            init_arch_dir(WORKING_DIR.read().path().join("s390x"));
-            #[cfg(can_run_x86_64)]
-            init_arch_dir(WORKING_DIR.read().path().join("x86_64"));
-            #[cfg(can_run_default)]
-            fs::copy(
-                PathBuf::from("./test_assets/templates").join(ALT_EXT_TEST_FILE),
-                WORKING_DIR
-                    .read()
-                    .path()
-                    .join(env!("EAMBFC_DEFAULT_ARCH"))
-                    .join(ALT_EXT_TEST_FILE),
-            )
-            .unwrap();
-            IsInit
-        });
-        WORKING_DIR.read()
-    }
-
-    fn temp_asset(sub_path: impl AsRef<Path>) -> PathBuf {
-        working_dir().path().join(sub_path)
+    fn working_dir() -> TempDir {
+        tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap()
     }
 
     macro_rules! eambfc_with_args {
@@ -235,26 +192,23 @@ mod cli_tests {
 
             use std::os::unix::fs::OpenOptionsExt;
 
+            let dir = working_dir();
             let mut open_options = OpenOptions::new();
             open_options
                 .write(true)
                 .create(true)
                 .truncate(false)
                 .mode(0o044);
-            let unreadable_src = temp_asset("unreadable.bf");
+            let unreadable_src = dir.path().join("unreadable.bf");
             drop(open_options.open(&unreadable_src).unwrap());
             test_err!(
                 "OPEN_R_FAILED",
                 unreadable_src.as_os_str().to_str().unwrap()
             );
 
-            let unwritable_dest = temp_asset("unwritable");
-            let unwritable_src = temp_asset("unwritable.bf");
-            copy_file(
-                "test_assets/templates/hello.bf",
-                temp_asset("unwritable.bf"),
-            )
-            .unwrap();
+            let unwritable_dest = dir.path().join("unwritable");
+            let unwritable_src = dir.path().join("unwritable.bf");
+            copy_file("test_assets/templates/hello.bf", &unwritable_src).unwrap();
             let mut open_options = OpenOptions::new();
             open_options
                 .write(true)
@@ -326,46 +280,53 @@ mod cli_tests {
     fn test_arch(arch: &str) {
         use fs::File;
         use io::Read;
-        let base_dir = working_dir().path().join(arch);
+        let dir = working_dir();
+        for file in TEST_FILES.iter().copied() {
+            fs::copy(
+                PathBuf::from("./test_assets/templates").join(file),
+                dir.path().join(file),
+            )
+            .unwrap();
+        }
         let general_result = Command::new(PATH)
             .args(["-a", arch])
-            .args(TEST_FILES.iter().map(|f| base_dir.join(f)))
+            .args(TEST_FILES.iter().map(|f| dir.path().join(f)))
             .status()
             .unwrap();
         assert!(general_result.success());
         for file in TEST_FILES {
-            let path = base_dir.join(file).with_extension("");
+            let path = dir.path().join(file).with_extension("");
             fs::rename(&path, path.with_extension("unopt")).unwrap();
         }
         let optimized_result = Command::new(PATH)
             .arg("-O")
-            .args(TEST_FILES.iter().map(|f| base_dir.join(f)))
+            .args(TEST_FILES.iter().map(|f| dir.path().join(f)))
             .status()
             .unwrap();
         assert!(optimized_result.success());
 
-        test_fixed_output(base_dir.join("hello"), b"Hello, world!\n");
-        test_fixed_output(base_dir.join("dead_code"), b"");
-        test_fixed_output(base_dir.join("null"), b"");
-        test_fixed_output(base_dir.join("loop"), b"!");
-        test_fixed_output(base_dir.join("wrap2"), b"0000");
-        test_fixed_output(base_dir.join("wrap"), "🧟".as_bytes());
+        test_fixed_output(dir.path().join("hello"), b"Hello, world!\n");
+        test_fixed_output(dir.path().join("dead_code"), b"");
+        test_fixed_output(dir.path().join("null"), b"");
+        test_fixed_output(dir.path().join("loop"), b"!");
+        test_fixed_output(dir.path().join("wrap2"), b"0000");
+        test_fixed_output(dir.path().join("wrap"), "🧟".as_bytes());
         test_fixed_output(
-            base_dir.join("colortest"),
+            dir.path().join("colortest"),
             include_bytes!("../test_assets/colortest_output"),
         );
-        test_rw_cmd(base_dir.join("rw"));
-        test_rw_cmd(base_dir.join("rw.unopt"));
+        test_rw_cmd(dir.path().join("rw"));
+        test_rw_cmd(dir.path().join("rw.unopt"));
 
         // make sure that the optimized build of dead_code and the optimized build of null are
         // byte-for-byte identical
         let mut dead_code_elf_bytes = Vec::new();
         let mut null_elf_bytes = Vec::new();
-        let dead_code_elf_size = File::open(base_dir.join("dead_code"))
+        let dead_code_elf_size = File::open(dir.path().join("dead_code"))
             .unwrap()
             .read_to_end(&mut dead_code_elf_bytes)
             .unwrap();
-        let null_elf_size = File::open(base_dir.join("null"))
+        let null_elf_size = File::open(dir.path().join("null"))
             .unwrap()
             .read_to_end(&mut null_elf_bytes)
             .unwrap();
@@ -373,8 +334,8 @@ mod cli_tests {
             (dead_code_elf_size, dead_code_elf_bytes),
             (null_elf_size, null_elf_bytes)
         );
-        test_truthmachine_cmd(base_dir.join("truthmachine"));
-        test_truthmachine_cmd(base_dir.join("truthmachine.unopt"));
+        test_truthmachine_cmd(dir.path().join("truthmachine"));
+        test_truthmachine_cmd(dir.path().join("truthmachine.unopt"));
     }
 
     #[cfg_attr(not(feature = "arm64"), ignore = "arm64 support disabled")]
@@ -409,26 +370,30 @@ mod cli_tests {
 
     #[test]
     fn continue_and_keep_flags() {
-        fs::copy("test_assets/unmatched_close.bf", temp_asset("err.bf")).unwrap();
-        fs::copy("test_assets/templates/hello.bf", temp_asset("ok.bf")).unwrap();
+        let dir = working_dir();
+        let ok_src = dir.path().join("ok.bf");
+        let err_src = dir.path().join("err.bf");
+        let err_file = err_src.with_extension("");
+        fs::copy("test_assets/unmatched_close.bf", &err_src).unwrap();
+        fs::copy("test_assets/templates/hello.bf", &ok_src).unwrap();
         // first make sure that ok.bf was still compiled even though err.bf failed
         assert!(eambfc_with_args!("-q", "-c")
-            .args([temp_asset("err.bf"), temp_asset("ok.bf")])
+            .args([&err_src, &ok_src])
             .status()
             // exit code should indicate failure
             .is_ok_and(|s| !s.success()));
-        assert!(temp_asset("ok").exists());
+        assert!(dir.path().join("ok").exists());
         // because -k was not passed, err should have been deleted
-        assert!(!temp_asset("err").exists());
+        assert!(!err_file.exists());
 
         // try compiling err.bf again with -k
         assert!(eambfc_with_args!("-q", "-k", "--")
-            .arg(temp_asset("err.bf"))
+            .arg(err_src)
             .status()
             // exit code should indicate failure
             .is_ok_and(|s| !s.success()));
         // now, the file should exist even though compilation failed
-        assert!(temp_asset("err").exists());
+        assert!(err_file.exists());
     }
 
     #[cfg_attr(
@@ -437,10 +402,9 @@ mod cli_tests {
     )]
     #[test]
     fn alternative_extension() {
-        let path = working_dir()
-            .path()
-            .join(env!("EAMBFC_DEFAULT_ARCH"))
-            .join(ALT_EXT_TEST_FILE);
+        let dir = working_dir();
+        let path = dir.path().join(ALT_EXT_TEST_FILE);
+        fs::copy("test_assets/templates/alternative_extension.brnfck", &path).unwrap();
         assert!(Command::new(PATH)
             .arg("-e.brnfck")
             .arg(&path)
