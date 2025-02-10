@@ -404,14 +404,26 @@ mod cli_tests {
     fn alternative_extension() {
         let dir = working_dir();
         let path = dir.path().join(ALT_EXT_TEST_FILE);
+        let hello_path = dir.path().join("hello.bf");
         fs::copy("test_assets/templates/alternative_extension.brnfck", &path).unwrap();
+        fs::copy("test_assets/templates/hello.bf", &hello_path).unwrap();
         assert!(Command::new(PATH)
             .arg("-e.brnfck")
             .arg(&path)
             .status()
             .unwrap()
             .success());
-        fs::rename(path.with_extension(""), path.with_extension("unopt")).unwrap();
+        assert!(Command::new(PATH)
+            .arg(&hello_path)
+            .status()
+            .unwrap()
+            .success());
+        let output = path.with_extension("");
+        assert_eq!(
+            fs::read(&output).unwrap(),
+            fs::read(hello_path.with_extension("")).unwrap()
+        );
+        fs::rename(output, path.with_extension("unopt")).unwrap();
         assert!(Command::new(PATH)
             .arg("-O")
             .arg("-e.brnfck")
