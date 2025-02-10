@@ -238,8 +238,7 @@ mod cli_tests {
 
             use std::os::unix::fs::OpenOptionsExt;
 
-            // let dir = working_dir();
-            let dir = Box::leak(Box::new(working_dir())).path();
+            let dir = working_dir();
             let mut open_options = OpenOptions::new();
             open_options
                 .write(true)
