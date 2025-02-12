@@ -9,6 +9,8 @@ use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
+#[cfg(target_os = "wasi")]
+use std::os::wasi::ffi::{OsStrExt, OsStringExt};
 
 #[derive(PartialEq, Debug)]
 pub(crate) struct StandardRunConfig {
@@ -131,17 +133,18 @@ impl PartialRunConfig {
         Ok(())
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, target_os = "wasi"))]
     fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
-        if self.extension.is_some() {
-            return Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"));
+        if self.extension.is_none() {
+            self.extension = Some(OsString::from_vec(param));
+            Ok(())
+        } else {
+            Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"))
         }
-        self.extension = Some(OsString::from_vec(param));
-        Ok(())
     }
 
     #[cfg(not(tarpaulin_include))]
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, target_os = "wasi")))]
     fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.extension.is_some() {
             return Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"));
@@ -159,19 +162,19 @@ impl PartialRunConfig {
 
     fn set_suffix(&mut self, suf: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.out_suffix.is_none() {
-            #[cfg(unix)]
+            #[cfg(any(unix, target_os = "wasi"))]
             {
                 self.out_suffix = Some(OsString::from_vec(suf));
             };
             #[cfg(not(tarpaulin_include))]
-            #[cfg(not(unix))]
+            #[cfg(not(any(unix, target_os = "wasi")))]
             {
                 self.out_suffix = Some(
                     String::from_utf8(suf)
                         .map_err(|_| {
                             self.gen_err(
                                 BFErrorID::NonUTF8,
-                                "Can't handle non-unicode suffixes on non-unix platforms",
+                                "Can't handle non-Unicode suffixes on non-unix platforms",
                             )
                         })?
                         .into(),
@@ -226,7 +229,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
 
     while let Some(arg) = args.next() {
         #[cfg(not(tarpaulin_include))]
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, target_os = "wasi")))]
         let arg = arg.into_string().map_err(|a| {
             pcfg.gen_err(
                 BFErrorID::NonUTF8,
@@ -238,27 +241,20 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
             pcfg.source_files = Some(args.collect());
             break;
         }
-        #[cfg(unix)]
-        let arg_bytes = arg.into_vec();
-        #[cfg(not(tarpaulin_include))]
-        #[cfg(not(unix))]
+        #[cfg(any(unix, target_os = "wasi"))]
         let arg_bytes = arg.as_bytes();
         if arg_bytes[0] != b'-' {
-            #[cfg(unix)]
-            let mut sf = vec![OsString::from_vec(arg_bytes)];
-            #[cfg(not(tarpaulin_include))]
-            #[cfg(not(unix))]
-            let mut sf = vec![OsString::from(arg)];
-            sf.extend(args);
-            pcfg.source_files = Some(sf);
+            #[cfg_attr(
+                any(unix, target_os = "wasi"),
+                expect(clippy::useless_conversion, reason = "not useless on other targets")
+            )]
+            let mut source_files: Vec<OsString> = vec![arg.into()];
+            source_files.extend(args);
+            pcfg.source_files = Some(source_files);
             break;
         }
 
-        #[cfg(unix)]
-        let mut arg_byte_iter = arg_bytes.into_iter().skip(1);
-        #[cfg(not(tarpaulin_include))]
-        #[cfg(not(unix))]
-        let mut arg_byte_iter = arg.bytes().skip(1);
+        let mut arg_byte_iter = arg_bytes[1..].iter().copied();
 
         while let Some(b) = arg_byte_iter.next() {
             match b {
@@ -269,10 +265,10 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                     let mut remainder: Vec<u8> = arg_byte_iter.collect();
                     if remainder.is_empty() {
                         if let Some(next_arg) = args.next() {
-                            #[cfg(unix)]
+                            #[cfg(any(unix, target_os = "wasi"))]
                             remainder.extend_from_slice(next_arg.as_bytes());
                             #[cfg(not(tarpaulin_include))]
-                            #[cfg(not(unix))]
+                            #[cfg(not(any(unix, target_os = "wasi")))]
                             remainder.extend(
                                 next_arg
                                     .into_string()

@@ -50,7 +50,7 @@ pub(crate) enum BFErrorID {
     UnknownArg,
     UnmatchedClose,
     UnmatchedOpen,
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, target_os = "wasi")))]
     NonUTF8,
 }
 
@@ -80,7 +80,7 @@ impl std::fmt::Debug for BFErrorID {
                 BFErrorID::UnknownArg => "UNKNOWN_ARG",
                 BFErrorID::UnmatchedClose => "UNMATCHED_CLOSE",
                 BFErrorID::UnmatchedOpen => "UNMATCHED_OPEN",
-                #[cfg(not(unix))]
+                #[cfg(not(any(unix, target_os = "wasi")))]
                 BFErrorID::NonUTF8 => "NonUTF8",
             }
         )
