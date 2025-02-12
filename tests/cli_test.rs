@@ -166,6 +166,7 @@ mod cli_tests {
     #[test]
     fn test_simple_errors() {
         test_err!("MULTIPLE_EXTENSIONS", "-e", ".bf", "-e", ".b");
+        test_err!("MULTIPLE_SUFFIXES", "-s", ".elf", "-s", ".out");
         test_err!("MULTIPLE_TAPE_BLOCK_COUNTS", "-t", "32", "-t", "76");
         test_err!("MISSING_OPERAND", "-t");
         test_err!("UNKNOWN_ARG", "-r");
