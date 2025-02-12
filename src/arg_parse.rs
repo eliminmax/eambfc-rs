@@ -166,12 +166,16 @@ impl PartialRunConfig {
             #[cfg(not(tarpaulin_include))]
             #[cfg(not(unix))]
             {
-                self.out_suffix = Some(String::from_utf8(suf).map_err(|_| {
-                    self.gen_err(
-                        BFErrorID::NonUTF8,
-                        "Can't handle non-unicode suffixes on non-unix platforms",
-                    )
-                })?.into());
+                self.out_suffix = Some(
+                    String::from_utf8(suf)
+                        .map_err(|_| {
+                            self.gen_err(
+                                BFErrorID::NonUTF8,
+                                "Can't handle non-unicode suffixes on non-unix platforms",
+                            )
+                        })?
+                        .into(),
+                );
             };
             Ok(())
         } else {
