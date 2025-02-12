@@ -2,17 +2,15 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#[allow(
-    unused_attributes,
-    reason = "tests can be skipped for multiple reasons"
-)]
 #[cfg(test)]
 mod cli_tests {
     extern crate serde;
     extern crate serde_json;
     extern crate tempfile;
+    extern crate test_macros;
     use serde::Deserialize;
     use tempfile::TempDir;
+    use test_macros::bin_test;
 
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
@@ -368,44 +366,17 @@ mod cli_tests {
         );
     }
 
-    #[cfg_attr(
-        not(feature = "bintests"),
-        ignore = "test requires feature = \"bintests\""
-    )]
-    #[cfg_attr(not(feature = "arm64"), ignore = "arm64 support disabled")]
-    #[cfg_attr(
-        any(target_os = "windows", not(can_run_arm64)),
-        ignore = "can't run arm64 Linux ELF binaries"
-    )]
-    #[test]
+    #[bin_test(arm64)]
     fn test_arm64() {
         test_arch("arm64");
     }
 
-    #[cfg_attr(
-        not(feature = "bintests"),
-        ignore = "test requires feature = \"bintests\""
-    )]
-    #[cfg_attr(not(feature = "s390x"), ignore = "s390x support disabled")]
-    #[cfg_attr(
-        any(target_os = "windows", not(can_run_s390x)),
-        ignore = "can't run s390x Linux ELF binaries"
-    )]
-    #[test]
+    #[bin_test(s390x)]
     fn test_s390x() {
         test_arch("s390x");
     }
 
-    #[cfg_attr(
-        not(feature = "bintests"),
-        ignore = "test requires feature = \"bintests\""
-    )]
-    #[cfg_attr(not(feature = "x86_64"), ignore = "x86_64 support disabled")]
-    #[cfg_attr(
-        any(target_os = "windows", not(can_run_x86_64)),
-        ignore = "can't run x86_64 Linux ELF binaries"
-    )]
-    #[test]
+    #[bin_test(x86_64)]
     fn test_x86_64() {
         test_arch("x86_64");
     }
