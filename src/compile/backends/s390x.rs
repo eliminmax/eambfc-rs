@@ -491,10 +491,7 @@ mod tests {
 
     #[cfg_attr(
         not(feature = "disasmtests"),
-        expect(
-            unused_macros,
-            reason = "macro only used in disassembly tests"
-        )
+        expect(unused_macros, reason = "macro only used in disassembly tests")
     )]
     /// Given that even though it is set to use hex immediates, the LLVM disassembler for this
     /// architecture often uses decimal immediates, it's sometimes necessary to explain why a given

@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#[allow(unused_attributes, reason = "tests can be skipped for multiple reasons")]
+#[allow(
+    unused_attributes,
+    reason = "tests can be skipped for multiple reasons"
+)]
 #[cfg(test)]
 mod cli_tests {
     extern crate serde;
@@ -365,7 +368,10 @@ mod cli_tests {
         );
     }
 
-    #[cfg_attr(not(feature = "bintests"), ignore = "test requires feature = \"bintests\"")]
+    #[cfg_attr(
+        not(feature = "bintests"),
+        ignore = "test requires feature = \"bintests\""
+    )]
     #[cfg_attr(not(feature = "arm64"), ignore = "arm64 support disabled")]
     #[cfg_attr(
         any(target_os = "windows", not(can_run_arm64)),
@@ -376,7 +382,10 @@ mod cli_tests {
         test_arch("arm64");
     }
 
-    #[cfg_attr(not(feature = "bintests"), ignore = "test requires feature = \"bintests\"")]
+    #[cfg_attr(
+        not(feature = "bintests"),
+        ignore = "test requires feature = \"bintests\""
+    )]
     #[cfg_attr(not(feature = "s390x"), ignore = "s390x support disabled")]
     #[cfg_attr(
         any(target_os = "windows", not(can_run_s390x)),
@@ -387,7 +396,10 @@ mod cli_tests {
         test_arch("s390x");
     }
 
-    #[cfg_attr(not(feature = "bintests"), ignore = "test requires feature = \"bintests\"")]
+    #[cfg_attr(
+        not(feature = "bintests"),
+        ignore = "test requires feature = \"bintests\""
+    )]
     #[cfg_attr(not(feature = "x86_64"), ignore = "x86_64 support disabled")]
     #[cfg_attr(
         any(target_os = "windows", not(can_run_x86_64)),
