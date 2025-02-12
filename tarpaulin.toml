@@ -7,4 +7,5 @@ locked = true
 offline = true
 engine = "Llvm"
 test-timeout = "1m"
-count = true
+target-dir = ".tarpaulin"
+skip-clean = true
