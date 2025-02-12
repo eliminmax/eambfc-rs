@@ -336,36 +336,35 @@ fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp) {
 
 #[cfg(test)]
 mod tests {
-    use super::super::disasm_test_macro::disasm_test;
     #[cfg(feature = "disasmtests")]
     use super::super::test_utils::Disassembler;
     use super::*;
+    use test_macros::disasm_test;
 
     #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
         Disassembler::new(ElfArch::Arm64)
     }
 
-    disasm_test! {
-        fn test_set_reg_simple() {
-            let mut ds = disassembler();
-            // the following can be set with 1 instruction each.
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
-            assert_eq!(ds.disassemble(v), ["mov x0, #0x0"],);
+    #[disasm_test]
+    fn test_set_reg_simple() {
+        let mut ds = disassembler();
+        // the following can be set with 1 instruction each.
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
+        assert_eq!(ds.disassemble(v), ["mov x0, #0x0"],);
 
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::set_reg(&mut v, Arm64Register::X0, -1);
-            assert_eq!(ds.disassemble(v), ["mov x0, #-0x1"],);
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -1);
+        assert_eq!(ds.disassemble(v), ["mov x0, #-0x1"],);
 
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001);
-            assert_eq!(ds.disassemble(v), ["mov x0, #-0x100001"]);
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001);
+        assert_eq!(ds.disassemble(v), ["mov x0, #-0x100001"]);
 
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::set_reg(&mut v, Arm64Register::X1, 0xbeef);
-            assert_eq!(ds.disassemble(v), ["mov x1, #0xbeef"]);
-        }
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X1, 0xbeef);
+        assert_eq!(ds.disassemble(v), ["mov x1, #0xbeef"]);
     }
 
     #[test]
@@ -374,146 +373,138 @@ mod tests {
         add_sub_imm(&mut vec![], Arm64Register::X8, 32, ArithOp::Add, true);
     }
 
-    disasm_test! {
-        fn test_reg_multiple() {
-            let mut v: Vec<u8> = Vec::new();
-            #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-            Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
-            assert_eq!(
-                disassembler().disassemble(v),
-                ["mov x0, #0xbeef", "movk x0, #0xdead, lsl #16"],
-            );
-        }
+    #[disasm_test]
+    fn test_reg_multiple() {
+        let mut v: Vec<u8> = Vec::new();
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
+        assert_eq!(
+            disassembler().disassemble(v),
+            ["mov x0, #0xbeef", "movk x0, #0xdead, lsl #16"],
+        );
     }
 
-    disasm_test! {
-        fn test_reg_split() {
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead_0000_beef);
-            assert_eq!(
-                disassembler().disassemble(v),
-                ["mov x19, #0xbeef", "movk x19, #0xdead, lsl #32"],
-            );
-        }
+    #[disasm_test]
+    fn test_reg_split() {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead_0000_beef);
+        assert_eq!(
+            disassembler().disassemble(v),
+            ["mov x19, #0xbeef", "movk x19, #0xdead, lsl #32"],
+        );
     }
 
-    disasm_test! {
-        fn test_reg_neg() {
-            let mut v: Vec<u8> = Vec::new();
-            #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-            Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
-            assert_eq!(
-                disassembler().disassemble(v),
-                [
-                    "mov x19, #-0xbeef",
-                    // the bitwise negation of 0xdead is 0x2152
-                    "movk x19, #0x2152, lsl #16",
-                ],
-            );
-        }
+    #[disasm_test]
+    fn test_reg_neg() {
+        let mut v: Vec<u8> = Vec::new();
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
+        assert_eq!(
+            disassembler().disassemble(v),
+            [
+                "mov x19, #-0xbeef",
+                // the bitwise negation of 0xdead is 0x2152
+                "movk x19, #0x2152, lsl #16",
+            ],
+        );
     }
 
-    disasm_test! {
-        fn test_inc_dec_reg() {
-            let mut ds = disassembler();
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::inc_reg(&mut v, Arm64Register::X0);
-            assert_eq!(ds.disassemble(v), ["add x0, x0, #0x1"]);
+    #[disasm_test]
+    fn test_inc_dec_reg() {
+        let mut ds = disassembler();
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::inc_reg(&mut v, Arm64Register::X0);
+        assert_eq!(ds.disassemble(v), ["add x0, x0, #0x1"]);
 
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::inc_reg(&mut v, Arm64Register::X19);
-            assert_eq!(ds.disassemble(v), ["add x19, x19, #0x1"]);
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::inc_reg(&mut v, Arm64Register::X19);
+        assert_eq!(ds.disassemble(v), ["add x19, x19, #0x1"]);
 
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::dec_reg(&mut v, Arm64Register::X1);
-            assert_eq!(ds.disassemble(v), ["sub x1, x1, #0x1"]);
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::dec_reg(&mut v, Arm64Register::X1);
+        assert_eq!(ds.disassemble(v), ["sub x1, x1, #0x1"]);
 
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::dec_reg(&mut v, Arm64Register::X19);
-            assert_eq!(ds.disassemble(v), ["sub x19, x19, #0x1"]);
-        }
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::dec_reg(&mut v, Arm64Register::X19);
+        assert_eq!(ds.disassemble(v), ["sub x19, x19, #0x1"]);
     }
 
-    disasm_test! {
-        fn test_load_store() {
-            let mut ds = disassembler();
-            assert_eq!(
-                ds.disassemble(load_from_byte(Arm64Register::X19, Arm64Register::X16).into()),
-                ["ldrb w16, [x19], #0x0"],
-            );
+    #[disasm_test]
+    fn test_load_store() {
+        let mut ds = disassembler();
+        assert_eq!(
+            ds.disassemble(load_from_byte(Arm64Register::X19, Arm64Register::X16).into()),
+            ["ldrb w16, [x19], #0x0"],
+        );
 
-            assert_eq!(
-                ds.disassemble(store_to_byte(Arm64Register::X19, Arm64Register::X16).into()),
-                ["strb w16, [x19], #0x0"],
-            );
-        }
+        assert_eq!(
+            ds.disassemble(store_to_byte(Arm64Register::X19, Arm64Register::X16).into()),
+            ["strb w16, [x19], #0x0"],
+        );
     }
 
-    disasm_test! {
-        fn test_add_sub_reg() {
-            let mut ds = disassembler();
+    #[disasm_test]
+    fn test_add_sub_reg() {
+        let mut ds = disassembler();
 
-            // Handling of 24-bit values
-            let mut v: Vec<u8> = Vec::with_capacity(24);
-            add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add);
-            assert_eq!(
-                ds.disassemble(v),
-                ["add x16, x16, #0xabc, lsl #12", "add x16, x16, #0xdef"]
-            );
+        // Handling of 24-bit values
+        let mut v: Vec<u8> = Vec::with_capacity(24);
+        add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add);
+        assert_eq!(
+            ds.disassemble(v),
+            ["add x16, x16, #0xabc, lsl #12", "add x16, x16, #0xdef"]
+        );
 
-            // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
-            // included
-            let mut v: Vec<u8> = Vec::with_capacity(24);
-            add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub);
-            assert_eq!(ds.disassemble(v), ["sub x16, x16, #0xabc, lsl #12"]);
+        // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
+        // included
+        let mut v: Vec<u8> = Vec::with_capacity(24);
+        add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub);
+        assert_eq!(ds.disassemble(v), ["sub x16, x16, #0xabc, lsl #12"]);
 
-            let mut v: Vec<u8> = Vec::with_capacity(24);
-            #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-            Arm64Inter::add_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
-            #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-            Arm64Inter::sub_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
-            assert_eq!(
-                ds.disassemble(v),
-                [
-                    "mov x17, #0xbeef",
-                    "movk x17, #0xdead, lsl #16",
-                    "add x16, x16, x17",
-                    "mov x17, #0xbeef",
-                    "movk x17, #0xdead, lsl #16",
-                    "sub x16, x16, x17",
-                ],
-            );
-        }
+        let mut v: Vec<u8> = Vec::with_capacity(24);
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+        Arm64Inter::add_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
+        #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+        Arm64Inter::sub_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
+        assert_eq!(
+            ds.disassemble(v),
+            [
+                "mov x17, #0xbeef",
+                "movk x17, #0xdead, lsl #16",
+                "add x16, x16, x17",
+                "mov x17, #0xbeef",
+                "movk x17, #0xdead, lsl #16",
+                "sub x16, x16, x17",
+            ],
+        );
     }
 
-    disasm_test! {
-        fn test_add_sub_byte() {
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::add_byte(&mut v, Arm64Register::X19, 0xa5);
-            Arm64Inter::sub_byte(&mut v, Arm64Register::X19, 0xa5);
-            assert_eq!(
-                disassembler().disassemble(v),
-                [
-                    "ldrb w17, [x19], #0x0",
-                    "add x17, x17, #0xa5",
-                    "strb w17, [x19], #0x0",
-                    "ldrb w17, [x19], #0x0",
-                    "sub x17, x17, #0xa5",
-                    "strb w17, [x19], #0x0",
-                ],
-            );
-        }
+    #[disasm_test]
+    fn test_add_sub_byte() {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::add_byte(&mut v, Arm64Register::X19, 0xa5);
+        Arm64Inter::sub_byte(&mut v, Arm64Register::X19, 0xa5);
+        assert_eq!(
+            disassembler().disassemble(v),
+            [
+                "ldrb w17, [x19], #0x0",
+                "add x17, x17, #0xa5",
+                "strb w17, [x19], #0x0",
+                "ldrb w17, [x19], #0x0",
+                "sub x17, x17, #0xa5",
+                "strb w17, [x19], #0x0",
+            ],
+        );
     }
 
-    disasm_test! {
-        fn test_zero_byte() {
-            let mut v: Vec<u8> = Vec::new();
-            Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
-            assert_eq!(
-                disassembler().disassemble(v),
-                ["mov x17, #0x0", "strb w17, [x19], #0x0"]
-            );
-        }
+    #[disasm_test]
+    fn test_zero_byte() {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
+        assert_eq!(
+            disassembler().disassemble(v),
+            ["mov x17, #0x0", "strb w17, [x19], #0x0"]
+        );
     }
 
     #[test]
@@ -535,52 +526,48 @@ mod tests {
         assert_eq!(expected, aux_regs);
     }
 
-    disasm_test! {
-        fn test_inc_dec_wrapper() {
-            let mut v: Vec<u8> = Vec::with_capacity(24);
-            Arm64Inter::inc_byte(&mut v, Arm64Register::X1);
-            Arm64Inter::dec_byte(&mut v, Arm64Register::X17);
-            assert_eq!(
-                disassembler().disassemble(v),
-                [
-                    "ldrb w17, [x1], #0x0",
-                    "add x17, x17, #0x1",
-                    "strb w17, [x1], #0x0",
-                    "ldrb w16, [x17], #0x0",
-                    "sub x16, x16, #0x1",
-                    "strb w16, [x17], #0x0",
-                ]
-            );
-        }
+    #[disasm_test]
+    fn test_inc_dec_wrapper() {
+        let mut v: Vec<u8> = Vec::with_capacity(24);
+        Arm64Inter::inc_byte(&mut v, Arm64Register::X1);
+        Arm64Inter::dec_byte(&mut v, Arm64Register::X17);
+        assert_eq!(
+            disassembler().disassemble(v),
+            [
+                "ldrb w17, [x1], #0x0",
+                "add x17, x17, #0x1",
+                "strb w17, [x1], #0x0",
+                "ldrb w16, [x17], #0x0",
+                "sub x16, x16, #0x1",
+                "strb w16, [x17], #0x0",
+            ]
+        );
     }
 
-    disasm_test! {
-        fn test_reg_copy() {
-            let mut v: Vec<u8> = Vec::with_capacity(12);
-            Arm64Inter::reg_copy(&mut v, Arm64Register::X1, Arm64Register::X19);
-            Arm64Inter::reg_copy(&mut v, Arm64Register::X2, Arm64Register::X17);
-            Arm64Inter::reg_copy(&mut v, Arm64Register::X8, Arm64Register::X16);
-            assert_eq!(
-                disassembler().disassemble(v),
-                ["mov x1, x19", "mov x2, x17", "mov x8, x16"]
-            );
-        }
+    #[disasm_test]
+    fn test_reg_copy() {
+        let mut v: Vec<u8> = Vec::with_capacity(12);
+        Arm64Inter::reg_copy(&mut v, Arm64Register::X1, Arm64Register::X19);
+        Arm64Inter::reg_copy(&mut v, Arm64Register::X2, Arm64Register::X17);
+        Arm64Inter::reg_copy(&mut v, Arm64Register::X8, Arm64Register::X16);
+        assert_eq!(
+            disassembler().disassemble(v),
+            ["mov x1, x19", "mov x2, x17", "mov x8, x16"]
+        );
     }
 
-    disasm_test! {
-        fn test_syscall() {
-            let mut v: Vec<u8> = Vec::with_capacity(4);
-            Arm64Inter::syscall(&mut v);
-            assert_eq!(disassembler().disassemble(v), ["svc #0"]);
-        }
+    #[disasm_test]
+    fn test_syscall() {
+        let mut v: Vec<u8> = Vec::with_capacity(4);
+        Arm64Inter::syscall(&mut v);
+        assert_eq!(disassembler().disassemble(v), ["svc #0"]);
     }
 
-    disasm_test! {
-        fn test_nops() {
-            let mut v = Vec::with_capacity(12);
-            Arm64Inter::nop_loop_open(&mut v);
-            assert_eq!(disassembler().disassemble(v), ["nop", "nop", "nop"]);
-        }
+    #[disasm_test]
+    fn test_nops() {
+        let mut v = Vec::with_capacity(12);
+        Arm64Inter::nop_loop_open(&mut v);
+        assert_eq!(disassembler().disassemble(v), ["nop", "nop", "nop"]);
     }
 
     #[test]
@@ -597,22 +584,21 @@ mod tests {
         );
     }
 
-    disasm_test! {
-        fn successfull_jumps_test() {
-            let mut v = vec![0; 12];
-            Arm64Inter::jump_open(&mut v, 0, Arm64Register::X0, 32).unwrap();
-            Arm64Inter::jump_close(&mut v, Arm64Register::X0, -32).unwrap();
-            assert_eq!(
-                disassembler().disassemble(v),
-                [
-                    "ldrb w17, [x0], #0x0",
-                    "tst x17, #0xff",
-                    "b.eq #0x24",
-                    "ldrb w17, [x0], #0x0",
-                    "tst x17, #0xff",
-                    "b.ne #-0x1c",
-                ]
-            );
-        }
+    #[disasm_test]
+    fn successfull_jumps_test() {
+        let mut v = vec![0; 12];
+        Arm64Inter::jump_open(&mut v, 0, Arm64Register::X0, 32).unwrap();
+        Arm64Inter::jump_close(&mut v, Arm64Register::X0, -32).unwrap();
+        assert_eq!(
+            disassembler().disassemble(v),
+            [
+                "ldrb w17, [x0], #0x0",
+                "tst x17, #0xff",
+                "b.eq #0x24",
+                "ldrb w17, [x0], #0x0",
+                "tst x17, #0xff",
+                "b.ne #-0x1c",
+            ]
+        );
     }
 }
