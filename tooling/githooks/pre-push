@@ -7,6 +7,7 @@
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
+arches='arm64 s390x x86_64'
 # fail with uncommitted changes - porcelain output will be empty if good to go
 if git status --porcelain | grep -q .; then
     printf 'Uncommitted changes!\n' >&2
@@ -39,9 +40,10 @@ cargo clippy --all-targets --tests -- -D warnings
 # ensure that code coverage is at least 90%
 cargo tarpaulin --fail-under 90
 # test windows build using cargo-nextest
-cargo nextest run --target x86_64-pc-windows-gnu
+cargo nextest run --target x86_64-pc-windows-gnu --no-default-features \
+    --features="$arches"
 
 # test all single-backend builds one-by-one
-for backend in arm64 s390x x86_64; do
-    cargo test --no-default-features --features "$backend"
+for backend in $arches; do
+    cargo test --no-default-features --features "$backend,bintests"
 done
