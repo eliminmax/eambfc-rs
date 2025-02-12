@@ -12,6 +12,7 @@ default = ["arm64", "s390x", "x86_64"]
 arm64 = []
 s390x = []
 x86_64 = []
+disasmtests = []
 
 [lints.rust]
 # don't warn on tarpaulin code coverage cfg conditions

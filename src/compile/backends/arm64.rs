@@ -337,11 +337,11 @@ fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp) {
 #[cfg(test)]
 mod tests {
     use super::super::disasm_test_macro::disasm_test;
-    #[cfg(unix)]
+    #[cfg(feature = "disasmtests")]
     use super::super::test_utils::Disassembler;
     use super::*;
 
-    #[cfg(unix)]
+    #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
         Disassembler::new(ElfArch::Arm64)
     }

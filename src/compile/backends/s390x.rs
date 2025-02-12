@@ -477,7 +477,7 @@ impl ArchInter for S390xInter {
 // real-world assemblers are different from the opcodes used in the documentation cited above.
 #[cfg(test)]
 #[cfg_attr(
-    unix,
+    feature = "disasmtests",
     expect(
         overflowing_literals,
         reason = "needed to demonstrate bitwise equivalence"
@@ -485,15 +485,15 @@ impl ArchInter for S390xInter {
 )]
 mod tests {
     use super::super::disasm_test_macro::disasm_test;
-    #[cfg(unix)]
+    #[cfg(feature = "disasmtests")]
     use super::super::test_utils::Disassembler;
     use super::*;
 
     #[cfg_attr(
-        not(unix),
+        not(feature = "disasmtests"),
         expect(
             unused_macros,
-            reason = "macro only used in (unix-only) disassembly tests"
+            reason = "macro only used in disassembly tests"
         )
     )]
     /// Given that even though it is set to use hex immediates, the LLVM disassembler for this
@@ -512,7 +512,7 @@ mod tests {
         };
     }
 
-    #[cfg(unix)]
+    #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
         Disassembler::new(ElfArch::S390x)
     }

@@ -299,11 +299,11 @@ fn sub_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: u64) {
 #[cfg(test)]
 mod tests {
     use super::super::disasm_test_macro::disasm_test;
-    #[cfg(unix)]
+    #[cfg(feature = "disasmtests")]
     use super::super::test_utils::Disassembler;
     use super::*;
 
-    #[cfg(unix)]
+    #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
         Disassembler::new(ElfArch::X86_64)
     }

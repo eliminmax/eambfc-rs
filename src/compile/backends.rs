@@ -22,8 +22,7 @@ use super::elf_tools;
 /// Provides a safe way to use LLVM's disassembler for backends to use for unit testing, using the
 /// `Disassembler` struct.
 #[cfg(not(tarpaulin_include))]
-#[cfg(test)]
-#[cfg(unix)]
+#[cfg(all(test, unix, feature = "disasmtests"))]
 mod test_utils {
 
     use super::elf_tools::ElfArch;
@@ -194,10 +193,10 @@ mod disasm_test_macro {
     /// expands to
     ///
     /// ```no_run
-    /// #[cfg_attr(not(unix), ignore = "Disassembly tests only supported on unix targets")]
+    /// #[cfg_attr(not(feature = "disasmtests"), ignore = "Disassembly tests are not enabled")]
     /// #[test]
     /// fn foo() {
-    ///     #[cfg(unix)]
+    ///     #[cfg(feature = "disasmtests")]
     ///     {
     ///         // test stuff
     ///     }
@@ -211,19 +210,19 @@ mod disasm_test_macro {
     #[cfg(test)]
     macro_rules! disasm_test {
         {fn $name: ident() $body: block} => {
-            #[cfg_attr(not(unix), ignore = "Disassembly tests only supported on unix targets")]
+            #[cfg_attr(not(feature = "disasmtests"), ignore = "Disassembly tests are not enabled")]
             #[test]
             fn $name () {
-                #[cfg(unix)]
+                #[cfg(feature = "disasmtests")]
                 $body
             }
         };
         {$(#[$($docstr: meta)*])* fn $name: ident() $body: block} => {
             $(#[$($docstr)*])*
-            #[cfg_attr(not(unix), ignore = "Disassembly tests only supported on unix targets")]
+            #[cfg_attr(not(feature = "disasmtests"), ignore = "Disassembly tests are not enabled")]
             #[test]
             fn $name () {
-                #[cfg(unix)]
+                #[cfg(feature = "disasmtests")]
                 $body
             }
 
