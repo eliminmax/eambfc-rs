@@ -171,7 +171,7 @@ impl PartialRunConfig {
                         BFErrorID::NonUTF8,
                         "Can't handle non-unicode suffixes on non-unix platforms",
                     )
-                }))?;
+                })?.into());
             };
             Ok(())
         } else {
