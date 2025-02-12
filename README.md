@@ -37,11 +37,14 @@ Usage: eambfc-rs [options] <program.bf> [<program2.bf> ...]
  -e ext    - use 'ext' as the extension for source files instead of '.bf'
              (This program will remove this at the end of the input
              file to create the output file name)**
- -a arch   - compile for specified architecture**
+ -a arch   - compile for specified architecture
+             (defaults to x86_64 if not specified)**
+ -s ext    - use 'ext' as the extension for compiled binaries
+             (they'll have no extension if -s is not passed)**
  -A        - list supported architectures and exit
 
 * Optimization can make error reporting less precise.
-** -a, -t and -e can only be passed at most once each.
+** -a, -t, -e, and -s can only be passed at most once each.
 
 Remaining options are treated as source file names. If they don't
 end with '.bf' (or the extension specified with '-e'), the program
