@@ -21,7 +21,7 @@ codespell
 reuse lint -q || reuse lint
 
 # ensure that code is properly formatted
-cargo fmt --check
+cargo fmt --check --all
 
 # this jq filter takes the JSON output of the nextest command, and resolves it
 # to a boolean indicating if any tests are markrd as ignored
