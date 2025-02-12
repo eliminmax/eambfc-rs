@@ -60,10 +60,9 @@ lto = "thin"
 codegen-units = 1
 strip="symbols"
 
-[target.'cfg(unix)'.dev-dependencies]
-llvm-sys = { version = "191.0.0", features = ["prefer-dynamic"] }
 [dev-dependencies]
 test_macros = { path = "test_macros" }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
 tempfile = "3.15.0"
+llvm-sys = { version = "191.0.0", features = ["prefer-dynamic"] }
