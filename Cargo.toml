@@ -16,7 +16,7 @@ bintests = []
 disasmtests = []
 
 [lints.rust]
-# don't warn on tarpaulin code coverage cfg conditions
+# don't warn on tarpaulin code coverage cfg conditions or custom cfgs
 [lints.rust.unexpected_cfgs]
 level = "warn"
 check-cfg = [
