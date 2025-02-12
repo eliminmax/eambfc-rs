@@ -121,6 +121,7 @@ pub(crate) trait BFCompile {
         optimize: bool,
         keep: bool,
         tape_blocks: u64,
+        out_suffix: Option<&OsStr>,
     ) -> Result<(), Vec<BFCompileError>> {
         use std::fs::{remove_file, File, OpenOptions};
 
@@ -132,7 +133,7 @@ pub(crate) trait BFCompile {
             open_options.mode(0o755);
         };
 
-        let outfile_name = rm_ext(file_name, extension)?;
+        let outfile_name = rm_ext(file_name, extension, out_suffix)?;
 
         let infile = File::open(file_name).map_err(|_| {
             vec![BFCompileError::basic(
@@ -143,7 +144,8 @@ pub(crate) trait BFCompile {
                 ),
             )]
         })?;
-        let outfile = open_options.open(outfile_name).map_err(|_| {
+
+        let outfile = open_options.open(&outfile_name).map_err(|_| {
             vec![BFCompileError::basic(
                 BFErrorID::OpenWriteFailed,
                 format!(
