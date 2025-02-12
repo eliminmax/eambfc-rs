@@ -39,7 +39,10 @@ mod test_utils {
         // SAFETY: the `llvm_sys::target` functions are all opaque initialization functions that
         // are entirely on the LLVM side of the FFI boundary. They are
         LLVM_TARGET_INIT.get_or_init(|| unsafe {
-            assert!(llvm_sys::core::LLVMIsMultithreaded() != 0);
+            assert!(
+                llvm_sys::core::LLVMIsMultithreaded() != 0,
+                "LLVM must be build with multithreading"
+            );
             target::LLVM_InitializeAllTargetInfos();
             target::LLVM_InitializeAllTargetMCs();
             target::LLVM_InitializeAllDisassemblers();
@@ -89,7 +92,10 @@ mod test_utils {
                     None,
                     None,
                 );
-                assert!(!p.is_null());
+                assert!(
+                    !p.is_null(),
+                    "Failed to create disassembler: LLVM returned null pointer"
+                );
                 // for x86_64, use Intel syntax.
                 // If this were after the PrintImmHex call or bitmasked in with it, it would
                 // override it, resulting in decimal immediates, so it needs to be a separate call.
@@ -100,7 +106,8 @@ mod test_utils {
                         disassembler::LLVMSetDisasmOptions(
                             p,
                             disassembler::LLVMDisassembler_Option_AsmPrinterVariant,
-                        )
+                        ),
+                        "failed to switch to Intel syntax"
                     );
                 }
                 // use hex for immediates
@@ -109,7 +116,8 @@ mod test_utils {
                     disassembler::LLVMSetDisasmOptions(
                         p,
                         disassembler::LLVMDisassembler_Option_PrintImmHex,
-                    )
+                    ),
+                    "failed to configure disassembler to use hex immediates"
                 );
                 Self(p)
             }
