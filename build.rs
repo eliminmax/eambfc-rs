@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: 0BSD
 
-use std::collections::HashSet;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(feature = "bintests")]
+use std::collections::HashSet;
 
 #[cfg(not(any(feature = "x86_64", feature = "arm64", feature = "s390x")))]
 compile_error!("Must have at least one architecture enabled");
@@ -13,9 +14,11 @@ fn main() {
     println!("cargo::rerun-if-changed=.git/index");
     println!("cargo::rerun-if-env-changed=EAMBFC_DEFAULT_ARCH");
 
-    let mut runnable_arches = HashSet::new();
+    #[cfg(feature = "bintests")]
+    let mut runnable_arches: HashSet<&'static str> = HashSet::new();
     macro_rules! check_exec_support {
         ($platform: literal) => {
+            #[cfg(feature = "bintests")]
             if Command::new(concat!("./test_assets/exec_support/", $platform))
                 .status()
                 .is_ok_and(|status| status.success())
@@ -59,6 +62,8 @@ fn main() {
     };
     println!("cargo::rustc-env=EAMBFC_DEFAULT_ARCH={arch}");
     println!("cargo::rustc-cfg=eambfc_default_arch={arch:?}");
+
+    #[cfg(feature = "bintests")]
     if runnable_arches.contains(&arch) {
         println!("cargo::rustc-cfg=can_run_default");
     }
