@@ -22,7 +22,7 @@ use super::elf_tools;
 /// Provides a safe way to use LLVM's disassembler for backends to use for unit testing, using the
 /// `Disassembler` struct.
 #[cfg(not(tarpaulin_include))]
-#[cfg(all(test, unix, feature = "disasmtests"))]
+#[cfg(all(test, feature = "disasmtests"))]
 mod test_utils {
 
     use super::elf_tools::ElfArch;
