@@ -8,10 +8,11 @@ version = "3.5.0-next"
 edition = "2021"
 
 [features]
-default = ["arm64", "s390x", "x86_64"]
+default = ["arm64", "s390x", "x86_64", "bintests", "disasmtests"]
 arm64 = []
 s390x = []
 x86_64 = []
+bintests = []
 disasmtests = []
 
 [lints.rust]
