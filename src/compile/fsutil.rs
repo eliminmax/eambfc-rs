@@ -7,6 +7,8 @@ use std::borrow::Cow;
 use std::ffi::OsStr;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
+#[cfg(target_os = "wasi")]
+use std::os::wasi::ffi::OsStrExt;
 
 /// if `filename` ends with `extension`, return `Ok(f)`, where `f` is `filename` without
 /// `extension` at the end.
@@ -20,7 +22,7 @@ pub(super) fn rm_ext<'a>(
     suffix: Option<&OsStr>,
 ) -> Result<Cow<'a, OsStr>, BFCompileError> {
     let outname: &'a OsStr;
-    #[cfg(unix)]
+    #[cfg(any(unix, target_os = "wasi"))]
     {
         let name_len: usize = filename.as_bytes().len();
         let ext_len: usize = extension.as_bytes().len();
@@ -38,7 +40,7 @@ pub(super) fn rm_ext<'a>(
     }
 
     #[cfg(not(tarpaulin_include))]
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, target_os = "wasi")))]
     {
         const SUPPORT_MSG: &str = " - non-Unicode filenames are only supported on Unix targets";
         let filename = filename.to_str().ok_or(BFCompileError::basic(
