@@ -74,6 +74,7 @@ fn main() -> ExitCode {
                             rc.optimize,
                             rc.keep,
                             rc.tape_blocks,
+                            rc.out_suffix.as_deref(),
                         )
                     }};
                 }

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::err::{BFCompileError, BFErrorID};
+use std::borrow::Cow;
 use std::ffi::OsStr;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
@@ -16,25 +17,26 @@ use std::os::unix::ffi::OsStrExt;
 pub(super) fn rm_ext<'a>(
     filename: &'a OsStr,
     extension: &OsStr,
-) -> Result<&'a OsStr, BFCompileError> {
+    suffix: Option<&OsStr>,
+) -> Result<Cow<'a, OsStr>, BFCompileError> {
+    let outname: &'a OsStr;
     #[cfg(unix)]
     {
         let name_len: usize = filename.as_bytes().len();
         let ext_len: usize = extension.as_bytes().len();
         if filename.as_bytes().ends_with(extension.as_bytes()) {
-            Ok(OsStr::from_bytes(
-                &filename.as_bytes()[..name_len - ext_len],
-            ))
+            outname = OsStr::from_bytes(&filename.as_bytes()[..name_len - ext_len]);
         } else {
-            Err(BFCompileError::basic(
+            return Err(BFCompileError::basic(
                 BFErrorID::BadExtension,
                 format!(
                     "{} does not end with expected extension",
                     filename.to_string_lossy()
                 ),
-            ))
+            ));
         }
     }
+
     #[cfg(not(tarpaulin_include))]
     #[cfg(not(unix))]
     {
@@ -49,12 +51,21 @@ pub(super) fn rm_ext<'a>(
         let extension = extension
             .to_str()
             .unwrap_or_else(|| unreachable!("extension validated when parsing args"));
-        Ok(OsStr::new(filename.strip_suffix(extension).ok_or(
-            BFCompileError::basic(
-                BFErrorID::BadExtension,
-                format!("{filename} does not end with expected extension"),
-            ),
-        )?))
+        outname = OsStr::new(
+            filename
+                .strip_suffix(extension)
+                .ok_or(BFCompileError::basic(
+                    BFErrorID::BadExtension,
+                    format!("{filename} does not end with expected extension"),
+                ))?,
+        );
+    }
+    if let Some(suf) = suffix {
+        let mut outname = outname.to_os_string();
+        outname.push(suf);
+        Ok(outname.into())
+    } else {
+        Ok(outname.into())
     }
 }
 
@@ -65,14 +76,18 @@ mod tests {
     #[test]
     fn rmext_success() {
         assert_eq!(
-            rm_ext("foobar".as_ref(), "bar".as_ref()),
-            Ok("foo".as_ref())
+            rm_ext("foobar".as_ref(), "bar".as_ref(), None),
+            Ok(OsStr::new("foo").into())
+        );
+        assert_eq!(
+            rm_ext("foobar".as_ref(), "bar".as_ref(), Some("_quux".as_ref())),
+            Ok(OsStr::new("foo_quux").into())
         );
     }
 
     #[test]
     fn rmext_fail() {
-        assert!(rm_ext("ee.e".as_ref(), ".bf".as_ref())
+        assert!(rm_ext("ee.e".as_ref(), ".bf".as_ref(), None)
             .is_err_and(|e| e.error_id() == BFErrorID::BadExtension));
     }
 }

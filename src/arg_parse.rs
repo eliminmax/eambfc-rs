@@ -19,6 +19,7 @@ pub(crate) struct StandardRunConfig {
     pub tape_blocks: u64,
     pub extension: OsString,
     pub source_files: Vec<OsString>,
+    pub out_suffix: Option<OsString>,
     pub arch: ElfArch,
 }
 
@@ -31,6 +32,7 @@ struct PartialRunConfig {
     tape_blocks: Option<u64>,
     extension: Option<OsString>,
     source_files: Option<Vec<OsString>>,
+    out_suffix: Option<OsString>,
     arch: Option<ElfArch>,
 }
 
@@ -45,8 +47,19 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
             tape_blocks,
             extension,
             source_files,
+            out_suffix,
             arch,
         } = pcfg;
+
+        if extension.as_deref().or(Some(".bf".as_ref())) == out_suffix.as_deref() {
+            return Err((
+                BFCompileError::basic(
+                    BFErrorID::InputIsOutput,
+                    "Extension can't be the same as output suffix",
+                ),
+                out_mode,
+            ));
+        }
         let source_files = source_files.ok_or((
             BFCompileError::basic(BFErrorID::NoSourceFiles, "No source files provided"),
             out_mode,
@@ -59,6 +72,7 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
             tape_blocks: tape_blocks.unwrap_or(8),
             extension: extension.unwrap_or(".bf".into()),
             source_files,
+            out_suffix,
             arch: arch.unwrap_or_default(),
         })
     }
@@ -140,6 +154,28 @@ impl PartialRunConfig {
                 BFErrorID::NonUTF8,
                 "Can't handle non-unicode file extensions on non-unix platforms",
             ))
+        }
+    }
+
+    fn set_suffix(&mut self, suf: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
+        if self.out_suffix.is_none() {
+            #[cfg(unix)]
+            {
+                self.out_suffix = Some(OsString::from_vec(suf));
+            };
+            #[cfg(not(tarpaulin_include))]
+            #[cfg(not(unix))]
+            {
+                self.out_suffix = Some(String::from_utf8(suf).map_err(|_| {
+                    self.gen_err(
+                        BFErrorID::NonUTF8,
+                        "Can't handle non-unicode suffixes on non-unix platforms",
+                    )
+                }))?;
+            };
+            Ok(())
+        } else {
+            Err(self.gen_err(BFErrorID::MultipleSuffixes, "passed -s multiple times"))
         }
     }
 
@@ -225,7 +261,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                 b'h' => return Ok(RunConfig::ShowHelp),
                 b'V' => return Ok(RunConfig::ShowVersion),
                 b'A' => return Ok(RunConfig::ListArches),
-                p if b"aet".contains(&p) => {
+                p if b"aest".contains(&p) => {
                     let mut remainder: Vec<u8> = arg_byte_iter.collect();
                     if remainder.is_empty() {
                         if let Some(next_arg) = args.next() {
@@ -257,6 +293,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                     match p {
                         b'a' => pcfg.set_arch(&remainder)?,
                         b'e' => pcfg.set_ext(remainder)?,
+                        b's' => pcfg.set_suffix(remainder)?,
                         b't' => pcfg.set_tape_size(remainder)?,
                         _ => unreachable!(),
                     }

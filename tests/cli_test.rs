@@ -184,6 +184,9 @@ mod cli_tests {
             env!("EAMBFC_DEFAULT_ARCH")
         );
 
+        test_err!("INPUT_IS_OUTPUT", "-s.bf");
+        test_err!("INPUT_IS_OUTPUT", "-s.b", "-e.b");
+
         let unmatched_open = source_file("unmatched_open.bf");
         let unmatched_close = source_file("unmatched_close.bf");
         test_err!("UNMATCHED_OPEN", &unmatched_open);
@@ -217,6 +220,16 @@ mod cli_tests {
         .unwrap();
         let cmd_output = checked_output!(eambfc_with_args!("-A"));
         assert_eq!(String::from_utf8(cmd_output), Ok(expected));
+    }
+
+    #[test]
+    fn out_suffix() -> io::Result<()> {
+        let dir = working_dir();
+        let src = dir.join("hello.bf");
+        fs::copy(source_file("hello.bf"), &src)?;
+        invoke!(eambfc_with_args!("-s", ".elf", "--", &src));
+        assert!(fs::exists(dir.join("hello.elf"))? && !fs::exists(dir.join("hello"))?);
+        Ok(())
     }
 
     #[test]
