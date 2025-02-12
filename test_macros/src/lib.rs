@@ -82,13 +82,16 @@ pub fn disasm_test(_: TokenStream, func: TokenStream) -> TokenStream {
 /// expands to
 ///
 /// ```no_run
-/// #[allow(unused_attribute, reason = "multiple possible reasons to ignore")]
 /// #[cfg_attr(not(feature = "bintests"), ignore = "Binary tests are not enabled")]
 /// #[cfg_attr(
-///     not(feature = "foo_arch"), ignore = "foo_arch support disabled"
+///     all(feature = "bintests", not(feature = "foo_arch")),
+///     ignore = "foo_arch support disabled"
 /// )]
 /// #[cfg_attr(
-///     any(target_os = "windows", not(can_run_foo_arch)),
+///     all(
+///         feature = "bintests", feature = "foo_arch",
+///         any(target_os = "windows", not(can_run_foo_arch))
+///     ),
 ///     ignore = "can't run foo_arch Linux ELF binaries"
 /// )]
 /// #[test]
@@ -105,17 +108,20 @@ pub fn bin_test(arch: TokenStream, func: TokenStream) -> TokenStream {
     let mut test_func: ItemFn = parse_macro_input!(func);
 
     let can_run_cfg = Ident::new(&format!("can_run_{arch}"), Span::call_site());
-    let arch_feature = arch.to_string();
+    let feature = arch.to_string();
+
+    let msg_disabled = format!("{arch} support disabled");
+    let msg_cant_run = format!("can't run {arch} Linux ELF binaries");
 
     let extra_attrs: Vec<Attribute> = parse_quote!(
-        #[allow(unused_attribute, reason = "multiple possible reasons to ignore")]
-        #[cfg_attr(not(feature = "bintests"), ignore = "Binary tests are not enabled")]
+        #[cfg_attr(not(feature = "bintests"), ignore = "binary tests are not enabled")]
+        #[cfg_attr(all(feature = "bintests", not(feature = #feature)), ignore = #msg_disabled)]
         #[cfg_attr(
-            not(feature = #arch_feature), ignore = concat!(#arch_feature, " support disabled")
-        )]
-        #[cfg_attr(
-            any(target_os = "windows", not(#can_run_cfg)),
-            ignore = concat!("can't run ", stringify!(#arch_feature), " Linux ELF binaries")
+            all(
+                feature = "bintests", feature = #feature,
+                any(target_os = "windows", not(#can_run_cfg))
+            ),
+            ignore = #msg_cant_run
         )]
         #[test]
     );
