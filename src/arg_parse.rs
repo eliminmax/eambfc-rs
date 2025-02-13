@@ -182,7 +182,10 @@ impl PartialRunConfig {
             };
             Ok(())
         } else {
-            Err(self.gen_err(BFErrorID::MultipleOutputExtensions, "passed -s multiple times"))
+            Err(self.gen_err(
+                BFErrorID::MultipleOutputExtensions,
+                "passed -s multiple times",
+            ))
         }
     }
 
