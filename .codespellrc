@@ -3,6 +3,6 @@
 # SPDX-License-Identifier: 0BSD
 
 [codespell]
-skip = .git,target,tarpaulin-report.html
+skip = .git,target,tarpaulin-report.html,.tarpaulin
 ignore-words-list = crate
 # vim: ft=dosini
