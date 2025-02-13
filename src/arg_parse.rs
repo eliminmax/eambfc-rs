@@ -241,7 +241,6 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
             pcfg.source_files = Some(args.collect());
             break;
         }
-        #[cfg(any(unix, target_os = "wasi"))]
         let arg_bytes = arg.as_bytes();
         if arg_bytes[0] != b'-' {
             #[cfg_attr(
