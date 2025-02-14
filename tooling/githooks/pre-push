@@ -36,7 +36,9 @@ fi
 # run general test suite
 cargo nextest run
 # check for clippy issues
-cargo clippy --all-targets --tests -- -D warnings
+cargo clippy --tests -- -D warnings
+cargo clippy --tests --no-default-features --features=all_backends \
+    --target x86_64-pc-windows-gnu -- -D warnings
 # ensure that code coverage is at least 90%
 cargo tarpaulin --fail-under 90
 # test windows build
