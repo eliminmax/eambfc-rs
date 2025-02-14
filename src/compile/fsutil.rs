@@ -16,7 +16,7 @@ use std::os::wasi::ffi::OsStrExt;
 ///
 /// On non-unix platforms, it returns an `Err` with a `.err_id()` of `BFCompileError::NonUTF8` if
 /// either `filename` or `extension` are not valid Unicode
-pub(super) fn rm_ext<'a>(
+pub(super) fn set_extension<'a>(
     filename: &'a OsStr,
     extension: &OsStr,
     suffix: Option<&OsStr>,
@@ -78,18 +78,18 @@ mod tests {
     #[test]
     fn rmext_success() {
         assert_eq!(
-            rm_ext("foobar".as_ref(), "bar".as_ref(), None),
+            set_extension("foobar".as_ref(), "bar".as_ref(), None),
             Ok(OsStr::new("foo").into())
         );
         assert_eq!(
-            rm_ext("foobar".as_ref(), "bar".as_ref(), Some("_quux".as_ref())),
+            set_extension("foobar".as_ref(), "bar".as_ref(), Some("_quux".as_ref())),
             Ok(OsStr::new("foo_quux").into())
         );
     }
 
     #[test]
     fn rmext_fail() {
-        assert!(rm_ext("ee.e".as_ref(), ".bf".as_ref(), None)
+        assert!(set_extension("ee.e".as_ref(), ".bf".as_ref(), None)
             .is_err_and(|e| e.error_id() == BFErrorID::BadExtension));
     }
 }

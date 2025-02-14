@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 mod fsutil;
-use fsutil::rm_ext;
+use fsutil::set_extension;
 mod optimize;
 use optimize::filtered_read;
 mod arch_inter;
@@ -133,7 +133,7 @@ pub(crate) trait BFCompile {
             open_options.mode(0o755);
         };
 
-        let outfile_name = rm_ext(file_name, extension, out_suffix)?;
+        let outfile_name = set_extension(file_name, extension, out_suffix)?;
 
         let infile = File::open(file_name).map_err(|_| {
             vec![BFCompileError::basic(
