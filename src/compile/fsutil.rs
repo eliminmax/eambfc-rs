@@ -61,7 +61,7 @@ pub(super) fn rm_ext<'a>(
                     format!("{filename} does not end with expected extension"),
                 ))?,
         );
-    }
+    };
     if let Some(suf) = suffix {
         let mut outname = outname.to_os_string();
         outname.push(suf);
