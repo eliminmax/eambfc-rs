@@ -355,7 +355,7 @@ impl<B: BFCompileHelper> BFCompile for B {
         }
 
         // quick check to make sure that there are no unterminated loops
-        if let Some(jl) = jump_stack.pop() {
+        while let Some(jl) = jump_stack.pop() {
             errs.push(BFCompileError::new(
                 BFErrorID::UnmatchedOpen,
                 String::from("Reached the end of the file with an unmatched '['"),
