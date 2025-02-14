@@ -7,6 +7,59 @@ use proc_macro2::Span;
 use quote::ToTokens;
 use syn::{parse_macro_input, parse_quote, Attribute, Block, Ident, ItemFn};
 
+#[proc_macro_attribute]
+/// For tests which should be `ignore`d on non-unix targets due to the use of unix-only traits like
+/// `std::os::unix::process::Command`, the bodies still must be able to compile on non-unix
+/// targets. In such cases, this macro can replace the `#[test]` and `#[ignore]` attributes:
+///
+/// ```no_run
+/// #[unix_test("<unix-only thing here>")]
+/// fn foo() {
+///     ...
+/// }
+/// ```
+///
+/// is equivalent to
+/// ```no_run
+/// #[cfg_attr(not(unix), ignore = "test \"foo\" requires unix-only <unix-only thing here>")]
+/// #[test]
+/// fn foo() {
+///     #[cfg(unix)]
+///     {
+///         ...
+///     }
+///     #[cfg(not(unix))]
+///     panic!("Test can't run on non-unix targets")
+/// }
+/// ```
+///
+/// It inserts the `panic!` for non-unix targets so that it can compile for both tests that return
+/// `()` and tests that return `Result<T, E>`, due to the type coercion from `!` to anything.
+pub fn unix_test(attr_arg: TokenStream, func: TokenStream) -> TokenStream {
+    let unix_only_thing = parse_macro_input!(attr_arg as syn::LitStr).value();
+    let mut func = parse_macro_input!(func as ItemFn);
+    let ignore_reason = format!(
+        "test {} requires unix-only {unix_only_thing}",
+        func.sig.ident
+    );
+
+    func.attrs.extend([
+        parse_quote!(#[cfg_attr(not(unix), ignore = #ignore_reason)]),
+        parse_quote!(#[test]),
+    ]);
+    let inner = func.block.to_token_stream();
+    func.block = Box::new(parse_quote! {
+        {
+            #[cfg(unix)]
+            #inner
+            #[cfg(not(unix))]
+            panic!("Test can't run on non-unix targets")
+        }
+    });
+
+    func.into_token_stream().into()
+}
+
 /// Add the appropriate attribute to a function to omit its body and add an appropriate `ignore`
 /// message if the `disasmtests` feature is disabled, and mark it with the `test` attribute
 /// ```no_run

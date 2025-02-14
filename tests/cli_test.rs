@@ -257,42 +257,63 @@ fn quiet_means_quiet() {
     assert!(cmd_output.stderr.is_empty());
 }
 
-#[cfg_attr(not(unix), ignore = "Can't test Unix permissions on non-Unix platform")]
-#[test]
+#[unix_test("PermissionsExt, OpenOptionsExt")]
+fn executable_bit_set() -> io::Result<()> {
+    use fs::OpenOptions;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let dir = working_dir()?;
+    let target = dir.join("null");
+    let source = target.with_extension("bf");
+    fs::copy(source_file("null.bf"), &source)?;
+    invoke!(eambfc_with_args!(&source));
+    let mode = fs::metadata(target)?.permissions().mode();
+
+    // create a new file with 777 permissions to check the default mode
+    let testfile_path = dir.join(".testfile");
+    drop(
+        OpenOptions::new()
+            .mode(0o777)
+            .write(true)
+            .create_new(true)
+            .open(&testfile_path)?,
+    );
+    let default_mode = fs::metadata(testfile_path)?.permissions().mode();
+
+    // make sure that the mode matches 0o755 & `mask`
+    assert_eq!(mode & 0o777, default_mode & 0o755);
+    Ok(())
+}
+
+#[unix_test("OpenOptionsExt::mode")]
 fn permission_error_test() -> io::Result<()> {
-    // function still needs to be compilable for non-unix targets, so use conditional
-    // compilation to make that possible
-    #[cfg(unix)]
-    {
-        use fs::OpenOptions;
+    use fs::OpenOptions;
 
-        use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::fs::OpenOptionsExt;
 
-        let dir = working_dir().unwrap();
-        let mut open_options = OpenOptions::new();
-        open_options
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o044);
-        let unreadable_src = dir.join("unreadable.bf");
-        drop(open_options.open(&unreadable_src).unwrap());
+    let dir = working_dir()?;
+    let mut open_options = OpenOptions::new();
+    open_options
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o044);
+    let unreadable_src = dir.join("unreadable.bf");
+    drop(open_options.open(&unreadable_src)?);
 
-        test_err!("OPEN_R_FAILED", &unreadable_src);
+    test_err!("OPEN_R_FAILED", &unreadable_src);
 
-        let unwritable_dest = dir.join("unwritable");
-        let unwritable_src = unwritable_dest.with_extension("bf");
-        fs::copy(source_file("hello.bf"), &unwritable_src).unwrap();
+    let unwritable_dest = dir.join("unwritable");
+    let unwritable_src = unwritable_dest.with_extension("bf");
+    fs::copy(source_file("hello.bf"), &unwritable_src)?;
 
-        let mut open_options = OpenOptions::new();
-        open_options
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o555);
-        drop(open_options.open(&unwritable_dest).unwrap());
-        test_err!("OPEN_W_FAILED", &unwritable_src);
-    }
+    let mut open_options = OpenOptions::new();
+    open_options
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o555);
+    drop(open_options.open(&unwritable_dest)?);
+    test_err!("OPEN_W_FAILED", &unwritable_src);
     Ok(())
 }
 
@@ -486,12 +507,8 @@ fn test_help_output() {
     assert_eq!(output, expected.as_bytes());
 }
 
-#[test]
-#[cfg_attr(not(unix), ignore = "CommandExt::arg0 is unix-only")]
+#[unix_test("CommandExt::arg0")]
 fn test_alt_argv0_help() {
-    // need cfg(unix) here so that CommandExt isn't checked on non-unix targets
-    #[cfg(unix)]
-    {
     use std::os::unix::process::CommandExt;
     let expected_help = format!(
         concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
@@ -500,5 +517,4 @@ fn test_alt_argv0_help() {
     );
     let output = checked_output!(eambfc_with_args!("-h").arg0("bfc"));
     assert_eq!(output, expected_help.as_bytes());
-    }
 }
