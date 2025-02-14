@@ -42,8 +42,8 @@ impl TempDirExt for TempDir {
 }
 
 /// return a `tempfile::TempDir` within `CARGO_TARGET_TMPDIR` that can be used for
-fn working_dir() -> TempDir {
-    tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap()
+fn working_dir() -> io::Result<TempDir> {
+    tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR"))
 }
 
 fn source_file(file: impl AsRef<Path>) -> PathBuf {
@@ -69,6 +69,17 @@ macro_rules! eambfc_with_args {
     };
 }
 
+/// Invoke a `std::process::Command` (or something with a similar API), ignoring output and
+/// panicking if the command fails.
+///
+/// Alternatively, if the command is preceded with `expect_failure, `, then it panics if the
+/// command succeeds.
+///
+/// # Examples:
+/// ```no_run
+/// invoke!(Command::new("touch file"));
+/// invoke!(expect_failure, Command::new("dd").arg("if=/dev/zero").arg("of=/dev/full"));
+/// ```
 macro_rules! invoke {
     ($cmd: expr) => {
         assert!($cmd.status().unwrap().success())
@@ -228,7 +239,7 @@ fn arch_list() {
 
 #[test]
 fn out_suffix() -> io::Result<()> {
-    let dir = working_dir();
+    let dir = working_dir()?;
     let src = dir.join("hello.bf");
     fs::copy(source_file("hello.bf"), &src)?;
     invoke!(eambfc_with_args!("-s", ".elf", "--", &src));
@@ -248,7 +259,7 @@ fn quiet_means_quiet() {
 
 #[cfg_attr(not(unix), ignore = "Can't test Unix permissions on non-Unix platform")]
 #[test]
-fn permission_error_test() {
+fn permission_error_test() -> io::Result<()> {
     // function still needs to be compilable for non-unix targets, so use conditional
     // compilation to make that possible
     #[cfg(unix)]
@@ -282,17 +293,19 @@ fn permission_error_test() {
         drop(open_options.open(&unwritable_dest).unwrap());
         test_err!("OPEN_W_FAILED", &unwritable_src);
     }
+    Ok(())
 }
 
 /// test that both `file` and `file.as_ref().with_extension("unopt")` output `expected` when
 /// invoked
-fn test_compiled_pair(file: impl AsRef<Path>, expected: &[u8]) {
-    let file = file.as_ref().canonicalize().unwrap();
+fn test_compiled_pair(file: impl AsRef<Path>, expected: &[u8]) -> io::Result<()> {
+    let file = file.as_ref().canonicalize()?;
     assert_eq!(checked_output!(Command::new(&file)), expected);
     assert_eq!(
         checked_output!(Command::new(file.with_extension("unopt"))),
         expected
     );
+    Ok(())
 }
 
 fn test_rw_cmd(rw: impl AsRef<Path>) {
@@ -338,75 +351,77 @@ fn test_truthmachine_cmd(truthmachine: impl AsRef<Path>) {
     cmd_1.kill().and_then(|()| cmd_1.wait()).unwrap();
 }
 
-fn test_arch(arch: &str) {
-    let dir = working_dir();
+fn test_arch(arch: &str) -> io::Result<()> {
+    let dir = working_dir()?;
     for file in TEST_FILES.iter().copied() {
-        fs::copy(source_file(file), dir.join(file)).unwrap();
+        fs::copy(source_file(file), dir.join(file))?;
     }
 
     invoke!(eambfc_with_args!("-a", arch).args(TEST_FILES.iter().map(|f| dir.join(f))));
     for file in TEST_FILES {
         let path = dir.join(file).with_extension("");
-        fs::rename(&path, path.with_extension("unopt")).unwrap();
+        fs::rename(&path, path.with_extension("unopt"))?;
     }
 
     invoke!(eambfc_with_args!("-O", "-a", arch).args(TEST_FILES.iter().map(|f| dir.join(f))));
 
-    test_compiled_pair(dir.join("hello"), b"Hello, world!\n");
-    test_compiled_pair(dir.join("null"), b"");
-    test_compiled_pair(dir.join("loop"), b"!");
-    test_compiled_pair(dir.join("wrap2"), b"0000");
-    test_compiled_pair(dir.join("wrap"), "🧟".as_bytes());
+    test_compiled_pair(dir.join("hello"), b"Hello, world!\n")?;
+    test_compiled_pair(dir.join("null"), b"")?;
+    test_compiled_pair(dir.join("loop"), b"!")?;
+    test_compiled_pair(dir.join("wrap2"), b"0000")?;
+    test_compiled_pair(dir.join("wrap"), "🧟".as_bytes())?;
     test_compiled_pair(
         dir.join("colortest"),
         include_bytes!("../test_assets/colortest_output"),
-    );
+    )?;
     test_rw_cmd(dir.join("rw"));
     test_rw_cmd(dir.join("rw.unopt"));
     test_truthmachine_cmd(dir.join("truthmachine"));
     test_truthmachine_cmd(dir.join("truthmachine.unopt"));
+    Ok(())
 }
 
 #[test]
-fn test_optimization() {
-    let dir = working_dir();
+fn test_optimization() -> io::Result<()> {
+    let dir = working_dir()?;
     let dead_code = dir.join("dead_code.bf");
     let null = dir.join("null.bf");
-    fs::copy(source_file("dead_code.bf"), &dead_code).unwrap();
-    fs::copy(source_file("null.bf"), &null).unwrap();
+    fs::copy(source_file("dead_code.bf"), &dead_code)?;
+    fs::copy(source_file("null.bf"), &null)?;
     invoke!(eambfc_with_args!("-O", &dead_code, &null));
     // make sure that the optimized build of dead_code and the optimized build of null are
     // byte-for-byte identical
     assert_eq!(
-        fs::read(dir.join("dead_code")).unwrap(),
-        fs::read(dir.join("null")).unwrap()
+        fs::read(dir.join("dead_code"))?,
+        fs::read(dir.join("null"))?
     );
+    Ok(())
 }
 
 #[bin_test(arm64)]
-fn test_arm64() {
-    test_arch("arm64");
+fn test_arm64() -> io::Result<()> {
+    test_arch("arm64")
 }
 
 #[bin_test(s390x)]
-fn test_s390x() {
-    test_arch("s390x");
+fn test_s390x() -> io::Result<()> {
+    test_arch("s390x")
 }
 
 #[bin_test(x86_64)]
-fn test_x86_64() {
-    test_arch("x86_64");
+fn test_x86_64() -> io::Result<()> {
+    test_arch("x86_64")
 }
 
 #[test]
-fn continue_and_keep_flags() {
-    let dir = working_dir();
+fn continue_and_keep_flags() -> io::Result<()> {
+    let dir = working_dir()?;
     let ok_src = dir.join("ok.bf");
     let ok_file = ok_src.with_extension("");
     let err_src = dir.join("err.bf");
     let err_file = err_src.with_extension("");
-    fs::copy(source_file("unmatched_close.bf"), &err_src).unwrap();
-    fs::copy(source_file("hello.bf"), &ok_src).unwrap();
+    fs::copy(source_file("unmatched_close.bf"), &err_src)?;
+    fs::copy(source_file("hello.bf"), &ok_src)?;
 
     // make sure that exit code is failure and ok.bf isn't compiled if -c wasn't passed
     invoke!(expect_failure, eambfc_with_args!("-q", &err_src, &ok_src));
@@ -424,22 +439,24 @@ fn continue_and_keep_flags() {
     invoke!(expect_failure, eambfc_with_args!("-q", "-k", err_src));
     // now, the file should exist even though compilation failed
     assert!(err_file.exists());
+    Ok(())
 }
 
 #[test]
-fn alternative_extension() {
-    let dir = working_dir();
+fn alternative_extension() -> io::Result<()> {
+    let dir = working_dir()?;
     let outfile = dir.join("hello");
     let path = outfile.with_extension("brnfck");
     let hello_path = outfile.with_extension("bf");
 
-    fs::copy(source_file("hello.bf"), &hello_path).unwrap();
+    fs::copy(source_file("hello.bf"), &hello_path)?;
     invoke!(eambfc_with_args!(&hello_path));
-    let expected = fs::read(&outfile).unwrap();
+    let expected = fs::read(&outfile)?;
 
-    fs::rename(hello_path, &path).unwrap();
+    fs::rename(hello_path, &path)?;
     invoke!(eambfc_with_args!("-e.brnfck", path));
-    assert_eq!(expected, fs::read(&outfile).unwrap());
+    assert_eq!(expected, fs::read(&outfile)?);
+    Ok(())
 }
 
 #[test]
@@ -475,13 +492,13 @@ fn test_alt_argv0_help() {
     // need cfg(unix) here so that CommandExt isn't checked on non-unix targets
     #[cfg(unix)]
     {
-        use std::os::unix::process::CommandExt;
-        let expected_help = format!(
-            concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
-            "bfc",
-            env!("EAMBFC_DEFAULT_ARCH"),
-        );
-        let output = checked_output!(eambfc_with_args!("-h").arg0("bfc"));
-        assert_eq!(output, expected_help.as_bytes());
+    use std::os::unix::process::CommandExt;
+    let expected_help = format!(
+        concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
+        "bfc",
+        env!("EAMBFC_DEFAULT_ARCH"),
+    );
+    let output = checked_output!(eambfc_with_args!("-h").arg0("bfc"));
+    assert_eq!(output, expected_help.as_bytes());
     }
 }
