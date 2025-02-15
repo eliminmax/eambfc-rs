@@ -7,6 +7,13 @@
             "can_run_s390x",
             "can_run_x86_64",
             "can_run_default"
-        ]
+        ],
+        "check": {
+            "command": "clippy",
+            "targets": [
+                "x86_64-unknown-linux-gnu",
+                "x86_64-pc-windows-gnu",
+            ]
+        }
     }
 }
