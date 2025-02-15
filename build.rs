@@ -11,10 +11,8 @@ use std::process::Command;
 
 #[cfg(not(any(feature = "x86_64", feature = "arm64", feature = "s390x")))]
 compile_error!("Must have at least one architecture enabled");
-fn main() {
-    println!("cargo::rerun-if-changed=.git/index");
-    println!("cargo::rerun-if-env-changed=EAMBFC_DEFAULT_ARCH");
 
+fn set_default_arch() {
     #[cfg(feature = "bintests")]
     let mut runnable_arches: HashSet<&'static str> = HashSet::new();
     macro_rules! check_exec_support {
@@ -43,23 +41,48 @@ fn main() {
             $arch
         }};
     }
+
     // set default arch
-    let arch = match option_env!("EAMBFC_DEFAULT_ARCH") {
+    let fallback = if cfg!(feature = "x86_64") {
+        "x86_64"
+    } else if cfg!(feature = "arm64") {
+        "arm64"
+    } else {
+        assert!(
+            cfg!(feature = "s390x"),
+            "must have at least one arch enabled"
+        );
+        "s390x"
+    };
+    let arch = match std::env::var("EAMBFC_DEFAULT_ARCH").ok().as_deref() {
         Some("arm64") => arch_check!("arm64"),
         Some("s390x") => arch_check!("s390x"),
         Some("x86_64") => arch_check!("x86_64"),
         Some(bad_arch) => panic!("Can't default to {bad_arch} as no backend exists"),
-        None => {
-            if cfg!(feature = "arm64")
-                && (cfg!(target_arch = "aarch64") || !cfg!(feature = "x86_64"))
-            {
-                "arm64"
-            } else if cfg!(feature = "x86_64") {
-                "x86_64"
-            } else {
-                "s390x"
+        None => match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
+            "aarch64" => {
+                if cfg!(feature = "arm64") {
+                    "arm64"
+                } else {
+                    fallback
+                }
             }
-        }
+            "s390x" => {
+                if cfg!(feature = "s390x") {
+                    "s390x"
+                } else {
+                    fallback
+                }
+            }
+            "x86_64" => {
+                if cfg!(feature = "x86_64") {
+                    "x86_64"
+                } else {
+                    fallback
+                }
+            }
+            _ => fallback,
+        },
     };
     println!("cargo::rustc-env=EAMBFC_DEFAULT_ARCH={arch}");
     println!("cargo::rustc-cfg=eambfc_default_arch={arch:?}");
@@ -68,7 +91,12 @@ fn main() {
     if runnable_arches.contains(&arch) {
         println!("cargo::rustc-cfg=can_run_default");
     }
+}
 
+fn main() {
+    println!("cargo::rerun-if-changed=.git/index");
+    println!("cargo::rerun-if-env-changed=EAMBFC_DEFAULT_ARCH");
+    set_default_arch();
     if !PathBuf::from(".git").exists() {
         println!("cargo::rustc-env=EAMBFC_RS_GIT_COMMIT=unknown: not built from git repository");
         return;
