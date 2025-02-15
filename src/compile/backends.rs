@@ -129,19 +129,25 @@ mod test_utils {
     }
 
     /// return a tuple containing the LLVM target triple and the LLVM CPU id to target.
-    fn target_info(arch: ElfArch) -> (&'static CStr, &'static CStr) {
+    ///
+    /// # NOTE: to find list of supported features for a target, run the following command
+    /// ```sh
+    /// llc -march="$arch" -mattr=help
+    /// ```
+    fn target_info(arch: ElfArch) -> (&'static CStr, Option<&'static CStr>) {
         match arch {
             #[cfg(feature = "arm64")]
             // use a generic CPU for the arm64 and x86_64 backends.
-            ElfArch::Arm64 => (c"aarch64-linux-gnu", c"generic"),
+            ElfArch::Arm64 => (c"aarch64-linux-gnu", None),
             #[cfg(feature = "x86_64")]
-            ElfArch::X86_64 => (c"x86_64-linux-gnu", c"x86-64"),
+            ElfArch::X86_64 => (c"x86_64-linux-gnu", None),
             #[cfg(feature = "riscv64")]
-            ElfArch::RiscV64 => (c"riscv64-linux-gnu", todo!("determine which cpu to use")),
-            // for s390x, use the z196 CPU to have access to the high-word facility needed for some
-            // instructions used for larger values
+            // for riscv64, use the `C` "(Compressed Instructions)" extension
+            ElfArch::RiscV64 => (c"riscv64-linux-gnu", Some(c"+c")),
+            // for s390x, use the `high-word` to have access to the high-word facility needed for
+            // some instructions used for larger values
             #[cfg(feature = "s390x")]
-            ElfArch::S390x => (c"systemz-linux-gnu", c"z196"),
+            ElfArch::S390x => (c"systemz-linux-gnu", Some(c"+high-word")),
         }
     }
 
@@ -156,7 +162,7 @@ mod test_utils {
         /// for the disassembly.
         pub fn new(target: ElfArch) -> Self {
             init_llvm();
-            let (triple, cpu) = target_info(target);
+            let (triple, features) = target_info(target);
             // SAFETY: LLVMCreateDisasmCPU takes the target triple, cpu, disassembly info block, tag
             // type, and 2 optional callback functions. The disassembly info block and callback
             // functions are explicitly documented as being allowed to be null, and the tag type is
@@ -165,9 +171,10 @@ mod test_utils {
             // The `LLVMSetDisasmOptions` function must take a valid `LLVMDisasmContextRef`, but
             // otherwise do not have any safety concerns.
             unsafe {
-                let p = disassembler::LLVMCreateDisasmCPU(
+                let p = disassembler::LLVMCreateDisasmCPUFeatures(
                     triple.as_ptr(),
-                    cpu.as_ptr(),
+                    c"generic".as_ptr(),
+                    features.map_or_else(core::ptr::null, CStr::as_ptr),
                     core::ptr::null_mut(),
                     0,
                     None,
