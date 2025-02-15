@@ -41,7 +41,7 @@ cargo clippy --all-targets --tests -- -D warnings
 cargo tarpaulin --fail-under 90
 # test windows build using cargo-nextest
 cargo nextest run --target x86_64-pc-windows-gnu --no-default-features \
-    --features="$arches"
+    --features=all_backends
 
 # test all single-backend builds one-by-one
 for backend in $arches; do
