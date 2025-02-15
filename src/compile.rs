@@ -403,6 +403,8 @@ mod tests {
     use super::*;
     #[cfg(eambfc_default_arch = "arm64")]
     use backends::Arm64Inter as TestInter;
+    #[cfg(eambfc_default_arch = "riscv64")]
+    use backends::RiscV64Inter as TestInter;
     #[cfg(eambfc_default_arch = "s390x")]
     use backends::S390xInter as TestInter;
     #[cfg(eambfc_default_arch = "x86_64")]

@@ -31,6 +31,8 @@ use crate::err::OutMode;
 // architecture interfaces
 #[cfg(feature = "arm64")]
 use crate::compile::backends::Arm64Inter;
+#[cfg(feature = "riscv64")]
+use crate::compile::backends::RiscV64Inter;
 #[cfg(feature = "s390x")]
 use crate::compile::backends::S390xInter;
 #[cfg(feature = "x86_64")]
@@ -53,6 +55,8 @@ fn main() -> ExitCode {
             println!("- x86_64 (aliases: x64, amd64, x86-64)");
             #[cfg(feature = "arm64")]
             println!("- arm64 (aliases: aarch64)");
+            #[cfg(feature = "riscv64")]
+            println!("- riscv64 (aliases: riscv)");
             #[cfg(feature = "s390x")]
             println!("- s390x (aliases: s390, z/architecture)");
             println!(concat!(
@@ -88,6 +92,8 @@ fn main() -> ExitCode {
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]
                     ElfArch::Arm64 => compile_with!(Arm64Inter),
+                    #[cfg(feature = "riscv64")]
+                    ElfArch::RiscV64 => compile_with!(RiscV64Inter),
                     #[cfg(feature = "s390x")]
                     ElfArch::S390x => compile_with!(S390xInter),
                     #[cfg(feature = "x86_64")]

@@ -9,7 +9,12 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::Command;
 
-#[cfg(not(any(feature = "x86_64", feature = "arm64", feature = "s390x")))]
+#[cfg(not(any(
+    feature = "x86_64",
+    feature = "arm64",
+    feature = "riscv64",
+    feature = "s390x"
+)))]
 compile_error!("Must have at least one architecture enabled");
 
 fn set_default_arch() {
@@ -29,6 +34,7 @@ fn set_default_arch() {
     }
 
     check_exec_support!("arm64");
+    check_exec_support!("riscv64");
     check_exec_support!("s390x");
     check_exec_support!("x86_64");
 
@@ -47,6 +53,8 @@ fn set_default_arch() {
         "x86_64"
     } else if cfg!(feature = "arm64") {
         "arm64"
+    } else if cfg!(feature = "riscv64") {
+        "riscv64"
     } else {
         assert!(
             cfg!(feature = "s390x"),
@@ -56,6 +64,7 @@ fn set_default_arch() {
     };
     let arch = match std::env::var("EAMBFC_DEFAULT_ARCH").ok().as_deref() {
         Some("arm64") => arch_check!("arm64"),
+        Some("riscv64") => arch_check!("riscv64"),
         Some("s390x") => arch_check!("s390x"),
         Some("x86_64") => arch_check!("x86_64"),
         Some(bad_arch) => panic!("Can't default to {bad_arch} as no backend exists"),
@@ -70,6 +79,13 @@ fn set_default_arch() {
             "s390x" => {
                 if cfg!(feature = "s390x") {
                     "s390x"
+                } else {
+                    fallback
+                }
+            }
+            "riscv64" => {
+                if cfg!(feature = "riscv64") {
+                    "riscv64"
                 } else {
                     fallback
                 }

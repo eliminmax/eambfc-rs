@@ -9,8 +9,10 @@ edition = "2021"
 
 [features]
 default = ["all_backends", "bintests", "disasmtests"]
+# TODO: Add riscv64 once it's enabled
 all_backends = ["arm64", "s390x", "x86_64"]
 arm64 = []
+riscv64 = []
 s390x = []
 x86_64 = []
 bintests = []
@@ -23,10 +25,11 @@ level = "warn"
 check-cfg = [
     'cfg(tarpaulin_include)',
     'cfg(can_run_arm64)',
+    'cfg(can_run_riscv64)',
     'cfg(can_run_s390x)',
     'cfg(can_run_x86_64)',
     'cfg(can_run_default)',
-    'cfg(eambfc_default_arch, values("arm64", "s390x", "x86_64"))'
+    'cfg(eambfc_default_arch, values("arm64", "riscv64", "s390x", "x86_64"))'
 ]
 
 [lints.clippy]

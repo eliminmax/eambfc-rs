@@ -207,6 +207,22 @@ fn arch_selection() {
         assert!(parse_args(vec![arg("-aarm64"), arg("foo.bf")].into_iter())
             .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
     }
+    if cfg!(feature = "riscv64") {
+        #[cfg(feature = "riscv64")]
+        {
+            assert_eq!(
+                parse_standard(vec![arg("-ariscv64"), arg("foo.bf")]).arch,
+                ElfArch::S390x
+            );
+            assert_eq!(
+                parse_standard(vec![arg("-ariscv"), arg("foo.bf")]).arch,
+                ElfArch::S390x
+            );
+        };
+    } else {
+        assert!(parse_args(vec![arg("-as390x"), arg("foo.bf")].into_iter())
+            .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
+    }
     if cfg!(feature = "s390x") {
         #[cfg(feature = "s390x")]
         {

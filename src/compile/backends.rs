@@ -7,6 +7,11 @@ mod arm64;
 #[cfg(feature = "arm64")]
 pub(crate) use arm64::Arm64Inter;
 
+#[cfg(feature = "riscv64")]
+mod riscv64;
+#[cfg(feature = "riscv64")]
+pub(crate) use riscv64::RiscV64Inter;
+
 #[cfg(feature = "s390x")]
 mod s390x;
 #[cfg(feature = "s390x")]
@@ -131,6 +136,8 @@ mod test_utils {
             ElfArch::Arm64 => (c"aarch64-linux-gnu", c"generic"),
             #[cfg(feature = "x86_64")]
             ElfArch::X86_64 => (c"x86_64-linux-gnu", c"x86-64"),
+            #[cfg(feature = "riscv64")]
+            ElfArch::RiscV64 => (c"riscv64-linux-gnu", todo!("determine which cpu to use")),
             // for s390x, use the z196 CPU to have access to the high-word facility needed for some
             // instructions used for larger values
             #[cfg(feature = "s390x")]

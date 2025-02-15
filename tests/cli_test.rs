@@ -224,6 +224,9 @@ fn arch_list() {
     if cfg!(feature = "arm64") {
         writeln!(expected, "- arm64 (aliases: aarch64)").unwrap();
     }
+    if cfg!(feature = "riscv64") {
+        writeln!(expected, "- riscv64 (aliases: riscv)").unwrap();
+    }
     if cfg!(feature = "s390x") {
         writeln!(expected, "- s390x (aliases: s390, z/architecture)").unwrap();
     }

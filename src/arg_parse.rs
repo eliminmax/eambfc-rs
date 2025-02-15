@@ -114,12 +114,14 @@ impl PartialRunConfig {
             return Err(self.gen_err(BFErrorID::MultipleArches, "passed -a multiple times"));
         }
         self.arch = match param {
-            #[cfg(feature = "x86_64")]
-            b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(ElfArch::X86_64),
             #[cfg(feature = "arm64")]
             b"arm64" | b"aarch64" => Some(ElfArch::Arm64),
+            #[cfg(feature = "riscv64")]
+            b"riscv64" | b"riscv" => Some(ElfArch::RiscV64),
             #[cfg(feature = "s390x")]
             b"s390x" | b"s390" | b"z/architecture" => Some(ElfArch::S390x),
+            #[cfg(feature = "x86_64")]
+            b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(ElfArch::X86_64),
             f => {
                 return Err((
                     BFCompileError::basic(

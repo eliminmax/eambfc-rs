@@ -33,7 +33,9 @@ from pathlib import PosixPath as Path
 import sys
 
 
-def gen_headers(target_id: int, instr_len: int, be=False) -> bytes:
+def gen_headers(
+    target_id: int, instr_len: int, be=False, flags: int = 0
+) -> bytes:
     """Return the bytes of the ELF header and program header table"""
 
     LOAD_ADDR = 0x10000
@@ -72,7 +74,7 @@ def gen_headers(target_id: int, instr_len: int, be=False) -> bytes:
     # e_shoff
     ret += int_encode(0, 8)  # no shdr table
     # e_flags
-    ret += int_encode(0, 4)  # no flags used in any of the 3 architectures
+    ret += int_encode(flags, 4)
     # e_ehsize
     ret += int_encode(EHDR_SIZE, 2)
     # e_phentsize
@@ -121,6 +123,19 @@ ARM64_INSTRUCTIONS = (
 )
 
 """
+validate riscv64 instruction bytes with radare2:
+rasm2 -ariscv -b64 -D '9308d005 0145 73000000'
+"""
+RISCV64_INSTRUCTIONS = (
+    # li a7, 93 (set syscall to exit)
+    bytes.fromhex("9308d005")
+    # li a0, 0 (set syscall to exit)
+    + bytes.fromhex("0145")
+    # ecall (syscall)
+    + bytes.fromhex("73000000")
+)
+
+"""
 validate s390x instruction bytes with radare2:
 rasm2 -as390 -b64 -D 'a7290000 0a01'
 """
@@ -154,6 +169,13 @@ expected_arm64_bytes = (
     + ARM64_INSTRUCTIONS
 )
 
+riscv64_bytes = Path(__file__).parent.joinpath("riscv64").read_bytes()
+expected_riscv64_bytes = (
+    # 243 is EM_RISCV, 5 is EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE
+    gen_headers(243, len(RISCV64_INSTRUCTIONS), flags=5)
+    + RISCV64_INSTRUCTIONS
+)
+
 s390x_bytes = Path(__file__).parent.joinpath("s390x").read_bytes()
 expected_s390x_bytes = (
     # 22 is EM_S390
@@ -172,6 +194,12 @@ fails = 0
 
 if arm64_bytes != expected_arm64_bytes:
     print("MISMATCH! arm64_bytes != expected_arm64_bytes")
+    fails += 1
+
+if riscv64_bytes != expected_riscv64_bytes:
+    print("MISMATCH! riscv64_bytes != expected_riscv64_bytes")
+    print(f"{expected_riscv64_bytes.hex()=}")
+    print(f"         {riscv64_bytes.hex()=}")
     fails += 1
 
 if s390x_bytes != expected_s390x_bytes:
