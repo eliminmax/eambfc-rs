@@ -29,21 +29,21 @@ filter='[."rust-suites"[].testcases[].ignored] | any'
 
 # make sure that all tests will be run
 if [ "$(cargo nextest list -T json | jq "$filter")" = 'true' ]; then
-    printf 'Tests would be ignored by `cargo test`!\n' >&2
+    printf 'Tests would be ignored!\n' >&2
     exit 1
 fi
 
 # run general test suite
-cargo test
+cargo nextest run
 # check for clippy issues
 cargo clippy --all-targets --tests -- -D warnings
 # ensure that code coverage is at least 90%
 cargo tarpaulin --fail-under 90
-# test windows build using cargo-nextest
+# test windows build
 cargo nextest run --target x86_64-pc-windows-gnu --no-default-features \
     --features=all_backends
 
 # test all single-backend builds one-by-one
 for backend in $arches; do
-    cargo test --no-default-features --features "$backend,bintests"
+    cargo nextest run --no-default-features --features "$backend,bintests"
 done
