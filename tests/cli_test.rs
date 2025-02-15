@@ -498,23 +498,13 @@ fn test_version_output() {
 
 #[test]
 fn test_help_output() {
-    let expected = format!(
-        concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
-        EXEC_PATH,
-        env!("EAMBFC_DEFAULT_ARCH"),
-    );
     let output = checked_output!(eambfc_with_args!("-h"));
-    assert_eq!(output, expected.as_bytes());
+    assert_eq!(output, help_text!().as_bytes());
 }
 
 #[unix_test("CommandExt::arg0")]
 fn test_alt_argv0_help() {
     use std::os::unix::process::CommandExt;
-    let expected_help = format!(
-        concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
-        "bfc",
-        env!("EAMBFC_DEFAULT_ARCH"),
-    );
     let output = checked_output!(eambfc_with_args!("-h").arg0("bfc"));
-    assert_eq!(output, expected_help.as_bytes());
+    assert_eq!(output, help_text!("bfc").as_bytes());
 }
