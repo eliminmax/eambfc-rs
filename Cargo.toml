@@ -8,7 +8,8 @@ version = "4.0.0-pre"
 edition = "2021"
 
 [features]
-default = ["arm64", "s390x", "x86_64", "bintests", "disasmtests"]
+default = ["all_backends", "bintests", "disasmtests"]
+all_backends = ["arm64", "s390x", "x86_64"]
 arm64 = []
 s390x = []
 x86_64 = []
