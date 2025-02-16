@@ -6,6 +6,7 @@ use crate::err::{BFCompileError, BFErrorID};
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
+use super::MinimumBits;
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit
 // forms. w8 is the 32-bit form for register #8, and x0 is the 64-bit form for register #0.
@@ -117,7 +118,7 @@ fn branch_cond(
     // Encoding uses 19 immediate bits, and treats it as having an implicit 0b00 at the
     // end, as it needs to be a multiple of 4 anyway. The result is that it must be a
     // 21-bit value. Make sure that it fits within that value.
-    if std::cmp::max(offset.leading_ones(), offset.leading_zeros()) < 44 {
+    if offset.min_bits() > 21 {
         return Err(BFCompileError::basic(
             BFErrorID::JumpTooLong,
             format!("{offset} is outside the range of possible 21-bit signed values"),
