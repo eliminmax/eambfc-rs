@@ -19,6 +19,42 @@ pub(crate) use x86_64::X86_64Inter;
 
 use super::arch_inter;
 use super::elf_tools;
+
+#[allow(dead_code, reason = "Not used by all backends")]
+trait MinimumBits {
+    fn min_bits(self) -> u32;
+}
+
+macro_rules! impl_min_bits {
+    ([unsigned] $t: ty) => {
+        impl MinimumBits for $t {
+            fn min_bits(self) -> u32 {
+                (<$t>::BITS - self.leading_zeros())
+            }
+        }
+    };
+    ([signed] $t: ty) => {
+        impl MinimumBits for $t {
+            fn min_bits(self) -> u32 {
+                if self.is_negative() {
+                    <$t>::BITS - self.leading_ones()
+                } else {
+                    <$t>::BITS - self.leading_zeros()
+                }
+            }
+        }
+    };
+}
+
+impl_min_bits!([signed] i8);
+impl_min_bits!([signed] i16);
+impl_min_bits!([signed] i32);
+impl_min_bits!([signed] i64);
+impl_min_bits!([unsigned] u8);
+impl_min_bits!([unsigned] u16);
+impl_min_bits!([unsigned] u32);
+impl_min_bits!([unsigned] u64);
+
 /// Provides a safe way to use LLVM's disassembler for backends to use for unit testing, using the
 /// `Disassembler` struct.
 #[cfg(not(tarpaulin_include))]
