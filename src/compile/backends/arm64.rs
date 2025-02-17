@@ -118,7 +118,7 @@ fn branch_cond(
     // Encoding uses 19 immediate bits, and treats it as having an implicit 0b00 at the
     // end, as it needs to be a multiple of 4 anyway. The result is that it must be a
     // 21-bit value. Make sure that it fits within that value.
-    if offset.min_bits() > 21 {
+    if !offset.fits_within_bits(21) {
         return Err(BFCompileError::basic(
             BFErrorID::JumpTooLong,
             format!("{offset} is outside the range of possible 21-bit signed values"),

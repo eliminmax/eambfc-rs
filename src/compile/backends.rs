@@ -22,25 +22,21 @@ use super::elf_tools;
 
 #[allow(dead_code, reason = "Not used by all backends")]
 trait MinimumBits {
-    fn min_bits(self) -> u32;
+    fn fits_within_bits(self, bits: u32) -> bool;
 }
 
 macro_rules! impl_min_bits {
     ([unsigned] $t: ty) => {
         impl MinimumBits for $t {
-            fn min_bits(self) -> u32 {
-                (<$t>::BITS - self.leading_zeros())
+            fn fits_within_bits(self, bits: u32) -> bool {
+                self < <$t>::pow(2, bits)
             }
         }
     };
     ([signed] $t: ty) => {
         impl MinimumBits for $t {
-            fn min_bits(self) -> u32 {
-                if self.is_negative() {
-                    <$t>::BITS - self.leading_ones()
-                } else {
-                    <$t>::BITS - self.leading_zeros()
-                }
+            fn fits_within_bits(self, bits: u32) -> bool {
+                self >= -<$t>::pow(2, bits - 1) && self < <$t>::pow(2, bits - 1)
             }
         }
     };
