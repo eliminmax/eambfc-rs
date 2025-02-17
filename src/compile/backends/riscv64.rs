@@ -5,6 +5,7 @@
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
 use super::MinimumBits;
+use crate::err::{BFCompileError, BFErrorID};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u8)]
@@ -108,16 +109,21 @@ macro_rules! encode_instr {
             "S-type expressions take 12-bit immediates"
         );
         u32::to_le_bytes(
-            (($imm as u32) & 0xfe) << 25
+            ($imm & 0xfe) << 25
                 | (($rs2 as u32) << 20)
                 | (($rs1 as u32) << 15)
-                | ($funct3 << 12)
+                | (($funct3 as u32) << 12)
                 | ($imm & 0x1f) << 7
                 | $op,
         )
     }};
     ([U] $op: literal, $rd: expr, $imm: expr) => {{
         validate_size!("opcode", 6, $op);
+        assert_eq!(
+            $imm & 0xfff,
+            0,
+            "U-type instructions must have lowest 12 immediate bits set to 0"
+        );
         u32::to_le_bytes(($imm as u32 & !0xfff) | (($rd as u32) << 7) | $op)
     }};
 }
@@ -126,6 +132,52 @@ pub(crate) struct RiscV64Inter;
 
 fn addi(reg: RiscVRegister, i: i16) -> [u8; 4] {
     encode_instr!([I] 0b001_0011, reg, reg, 0, i)
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum CompareType {
+    Eq,
+    Ne,
+}
+
+fn cond_jump(
+    reg: RiscVRegister,
+    comp_type: CompareType,
+    mut distance: i64,
+) -> Result<[u8; 8], BFCompileError> {
+    assert!(
+        distance & 1 == 0,
+        "<...>::riscv64::cond_jump distance offset must be even"
+    );
+    distance >>= 1;
+    if distance.min_bits() > 12 {
+        return Err(BFCompileError::basic(
+            BFErrorID::JumpTooLong,
+            "Jump too long for riscv64 backend",
+        ));
+    }
+    // B-type is a variant of an existing type with 2 specific immediate bits swapped, used for
+    // branch instructions.
+    let dist = distance as u32;
+    let dist = (dist & 0xbfe) | (dist & 0x400) >> 10 | (dist & 1) << 10;
+    let aux = reg.aux();
+
+    // use this macro instead of passing `$cond_code` because encode_instr uses const assert to
+    // make sure its in range, so it needs to take constant values
+    macro_rules! branch {
+        ($cond_code: literal) => {{
+            encode_instr!([S] 0b110_0011, aux, RiscVRegister::Zero, $cond_code, dist)
+        }}
+    }
+    let mut code = [0; 8];
+    // load
+    code[..4].clone_from_slice(&load_from_byte(reg, aux));
+    code[4..].clone_from_slice(&if comp_type == CompareType::Eq {
+        branch!(0)
+    } else {
+        branch!(1)
+    });
+    Ok(code)
 }
 
 fn c_addi(reg: RiscVRegister, i: i8) -> [u8; 2] {
@@ -166,7 +218,7 @@ impl ArchInter for RiscV64Inter {
         write: 64,
         exit: 93,
     };
-    const JUMP_SIZE: usize = todo!();
+    const JUMP_SIZE: usize = 8;
     const ARCH: ElfArch = ElfArch::RiscV64;
     const E_FLAGS: u32 = 5; // EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE (chosen to match Debian)
     const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
@@ -218,15 +270,9 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
-        todo!("RiscV64Inter::nop_loop_open(&mut {code_buf:?})")
-    }
-
-    fn jump_close(
-        code_buf: &mut Vec<u8>,
-        reg: Self::RegType,
-        offset: i64,
-    ) -> FailableInstrEncoding {
-        todo!("RiscV64Inter::jump_close(&mut {code_buf:?}, {reg:?}, {offset:?})")
+        // nop
+        code_buf.extend(u32::to_le_bytes(0x13));
+        code_buf.extend(u32::to_le_bytes(0x13));
     }
 
     fn jump_open(
@@ -235,7 +281,17 @@ impl ArchInter for RiscV64Inter {
         reg: Self::RegType,
         offset: i64,
     ) -> FailableInstrEncoding {
-        todo!("RiscV64Inter::jump_open(&mut {code_buf:?}, {index:?}, {reg:?}, {offset:?})")
+        code_buf[index..index + 8].clone_from_slice(&cond_jump(reg, CompareType::Eq, offset)?);
+        Ok(())
+    }
+
+    fn jump_close(
+        code_buf: &mut Vec<u8>,
+        reg: Self::RegType,
+        offset: i64,
+    ) -> FailableInstrEncoding {
+        code_buf.extend(cond_jump(reg, CompareType::Ne, offset)?);
+        Ok(())
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
