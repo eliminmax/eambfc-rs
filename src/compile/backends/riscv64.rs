@@ -79,7 +79,7 @@ macro_rules! encode_instr {
             "S-type expressions take 12-bit immediates"
         );
         u32::to_le_bytes(
-            ($imm & 0xfe) << 25
+            ($imm & 0xfe0) << 25
                 | (($rs2 as u32) << 20)
                 | (($rs1 as u32) << 15)
                 | (($funct3 as u32) << 12)
