@@ -390,7 +390,7 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) {
-        Self::add_reg(code_buf, reg, (imm as i16).wrapping_neg() as u64);
+        Self::add_reg(code_buf, reg, (imm as i64).wrapping_neg() as u64);
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
