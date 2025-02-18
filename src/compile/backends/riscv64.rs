@@ -670,14 +670,14 @@ mod test {
 
     #[disasm_test]
     fn test_syscall() {
-        let mut v: Vec<u8> = Vec::with_capacity(4);
+        let mut v = Vec::with_capacity(4);
         RiscV64Inter::syscall(&mut v);
         assert_eq!(disassembler().disassemble(v), ["ecall"]);
     }
 
     #[disasm_test]
     fn test_reg_copies() {
-        let mut v: Vec<u8> = Vec::with_capacity(4);
+        let mut v = Vec::with_capacity(4);
         RiscV64Inter::reg_copy(&mut v, RiscVRegister::A1, RiscVRegister::S0);
         RiscV64Inter::reg_copy(&mut v, RiscVRegister::S0, RiscVRegister::A7);
         assert_eq!(disassembler().disassemble(v), ["mv a1, s0", "mv s0, a7"]);
