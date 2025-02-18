@@ -751,4 +751,61 @@ mod test {
             ]
         );
     }
+
+    #[disasm_test]
+    fn add_sub_byte() {
+        let mut ds = disassembler();
+
+        let mut v = Vec::with_capacity(24);
+        RiscV64Inter::add_byte(&mut v, RiscV64Inter::REGISTERS.arg1, 0);
+        RiscV64Inter::sub_byte(&mut v, RiscV64Inter::REGISTERS.arg1, 0);
+        assert!(v.is_empty());
+        RiscV64Inter::add_byte(&mut v, RiscV64Inter::REGISTERS.arg2, 0x10);
+        RiscV64Inter::sub_byte(&mut v, RiscV64Inter::REGISTERS.arg2, 0x10);
+        assert_eq!(v.len(), 20);
+        assert_eq!(
+            ds.disassemble(v),
+            [
+                "lb t1, 0x0(a1)",
+                "addi t1, t1, 0x10",
+                "sb t1, 0x0(a1)",
+                "lb t1, 0x0(a1)",
+                "addi t1, t1, -0x10",
+                "sb t1, 0x0(a1)",
+            ]
+        );
+
+        let mut v = Vec::with_capacity(28);
+        RiscV64Inter::add_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x70);
+        RiscV64Inter::sub_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x70);
+        assert_eq!(
+            ds.disassemble(v),
+            [
+                "lb t1, 0x0(a2)",
+                "addi t1, t1, 0x70",
+                "sb t1, 0x0(a2)",
+                "lb t1, 0x0(a2)",
+                "addi t1, t1, -0x70",
+                "sb t1, 0x0(a2)",
+            ]
+        );
+
+        // if the imm is >= 0x80, it will become negative due to the casting that's done, but will
+        // have the same byte value once truncated down.
+        let mut v = Vec::with_capacity(28);
+        RiscV64Inter::add_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x80);
+        RiscV64Inter::sub_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x80);
+        const { assert!((1_i16 + 0x80) as u8 == (1_i16 - 0x80) as u8) };
+        assert_eq!(
+            ds.disassemble(v),
+            [
+                "lb t1, 0x0(a2)",
+                "addi t1, t1, -0x80",
+                "sb t1, 0x0(a2)",
+                "lb t1, 0x0(a2)",
+                "addi t1, t1, 0x80",
+                "sb t1, 0x0(a2)",
+            ]
+        );
+    }
 }
