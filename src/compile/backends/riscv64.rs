@@ -378,12 +378,12 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
-        if let Some(nzimm) = NonZeroI8::new(-(imm as i8)) {
+        if let Some(nzimm) = NonZeroI8::new(imm as i8) {
             code_buf.extend(load_from_byte(reg));
-            if nzimm.get().fits_within_bits(6) {
-                code_buf.extend(c_addi(TEMP_REG, nzimm));
+            if nzimm.wrapping_neg().get().fits_within_bits(6) {
+                code_buf.extend(c_addi(TEMP_REG, -nzimm));
             } else {
-                code_buf.extend(addi(TEMP_REG, nzimm.get().into()));
+                code_buf.extend(addi(TEMP_REG, -i16::from(nzimm.get())));
             }
             code_buf.extend(store_to_byte(reg));
         }
