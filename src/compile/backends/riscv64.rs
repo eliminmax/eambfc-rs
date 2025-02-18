@@ -1,23 +1,11 @@
 // SPDX-FileCopyrightText: 2025 Eli Array Minkoff
 //
-// SPDX-License-Identifier: GPL-3.0-only AND Apache-2.0 WITH LLVM-exception
+// SPDX-License-Identifier: GPL-3.0-only
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
 use super::MinimumBits;
 use crate::err::{BFCompileError, BFErrorID};
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u8)]
-pub(in super::super) enum RiscVRegister {
-    S0 = 8,  // X8, bf pointer register
-    A0 = 10, // X10, arg1 register
-    A1 = 11, // X11, arg2 register
-    A2 = 12, // X12, arg3 register
-    A7 = 17, // X17, syscall register
-}
-
-/// Private unrepresentable scratch register used within certain operations
-const TEMP_REG: u8 = 6;
 
 /// A `const` assertion that `$val` fits within `$size` bits. `$val` is assumed to be a positive
 /// integer.
@@ -205,6 +193,19 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: u8, val: i64) {
 }
 
 // SPDX-SnippetEnd
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u8)]
+pub(in super::super) enum RiscVRegister {
+    S0 = 8,  // X8, bf pointer register
+    A0 = 10, // X10, arg1 register
+    A1 = 11, // X11, arg2 register
+    A2 = 12, // X12, arg3 register
+    A7 = 17, // X17, syscall register
+}
+
+/// Private unrepresentable scratch register used within certain operations
+const TEMP_REG: u8 = 6;
 
 pub(crate) struct RiscV64Inter;
 
