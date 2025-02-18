@@ -88,7 +88,7 @@ macro_rules! encode_instr {
         )
     }};
     ([U] $op: literal, $rd: expr, $imm: expr) => {{
-        validate_size!("opcode", 6, $op);
+        validate_size!("opcode", 7, $op);
         assert!(
             $imm.fits_within_bits(20),
             "U-type instructions take 20-bit immediates"
