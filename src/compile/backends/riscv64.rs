@@ -684,4 +684,12 @@ mod test {
         RiscV64Inter::zero_byte(&mut v, RiscVRegister::A2);
         assert_eq!(disassembler().disassemble(v), ["sb zero, 0x0(a2)"]);
     }
+
+    #[disasm_test]
+    fn nop_pad() {
+        let mut v = Vec::with_capacity(12);
+        RiscV64Inter::nop_loop_open(&mut v);
+        assert_eq!(v.len(), 12);
+        assert_eq!(disassembler().disassemble(v), ["nop"].repeat(3));
+    }
 }
