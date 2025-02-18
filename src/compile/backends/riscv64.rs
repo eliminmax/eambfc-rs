@@ -643,6 +643,21 @@ mod test {
         );
     }
 
+    #[debug_assert_test("<…>::riscv64::cond_jump distance offset must be even")]
+    fn bad_address_guard() {
+        cond_jump(RiscV64Inter::REGISTERS.bf_ptr, CompareType::Eq, 1).unwrap();
+    }
+
+    #[test]
+    fn jump_too_long() {
+        assert_eq!(
+            cond_jump(RiscV64Inter::REGISTERS.sc_num, CompareType::Eq, 2 << 32)
+                .unwrap_err()
+                .error_id(),
+            BFErrorID::JumpTooLong
+        );
+    }
+
     #[debug_assert_test("addi immediate must fit within 12 bits")]
     fn addi_imm_guard_positive() {
         addi(RiscVRegister::A0.into(), 0x1fff);
