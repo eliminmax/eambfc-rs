@@ -526,7 +526,7 @@ mod test {
         v.extend(store_to_byte(RiscVRegister::A0));
         assert_eq!(
             disassembler().disassemble(v),
-            ["lb t2, 0x0(a0)", "sb t2, 0x0(a0)"]
+            ["lb t1, 0x0(a0)", "sb t1, 0x0(a0)"]
         );
     }
 
