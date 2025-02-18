@@ -125,11 +125,11 @@ const fn sign_extend(val: i64, amnt: u32) -> i64 {
 fn encode_li(code_buf: &mut Vec<u8>, reg: u8, val: i64) {
     let lo12 = sign_extend(val, 12);
     if val.fits_within_bits(32) {
-        let hi20 = ((val as u64).wrapping_add(0x800) >> 12) as i64 & 0xfff;
+        let hi20 = sign_extend(((val as u64).wrapping_add(0x800) >> 12) as i64, 20);
         if hi20 != 0 {
             if hi20.fits_within_bits(6) {
                 // C.LUI
-                code_buf.extend(encode_instr!([CI] 0b01, reg, 0b011, hi20 as u16));
+                code_buf.extend(encode_instr!([CI] 0b01, reg, 0b011, hi20));
             } else {
                 // LUI
                 code_buf.extend(encode_instr!([U] 0b011_0111, reg, hi20));
@@ -178,17 +178,21 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: u8, val: i64) {
     // Recursive call
     encode_li(code_buf, reg, hi52);
     // Generation of the instruction
-    if shift_amount.fits_within_bits(6) && shift_amount != 0 {
-        // C.SLLI
-        code_buf.extend(encode_instr!([CI] 0b10, reg, 0, shift_amount));
-    } else {
-        // SLLI
-        code_buf.extend(encode_instr!([I] 0b001_0011, reg, reg, 0b111, shift_amount));
+    if shift_amount != 0 {
+        if shift_amount.fits_within_bits(6) {
+            // C.SLLI
+            code_buf.extend(encode_instr!([CI] 0b10, reg, 0, shift_amount));
+        } else {
+            // SLLI
+            code_buf.extend(encode_instr!([I] 0b001_0011, reg, reg, 0b111, shift_amount));
+        }
     }
-    if lo12 != 0 && lo12.fits_within_bits(6) {
-        code_buf.extend(c_addi(reg, lo12 as i8));
-    } else if lo12 != 0 {
-        code_buf.extend(addi(reg, lo12 as i16));
+    if lo12 != 0 {
+        if lo12.fits_within_bits(6) {
+            code_buf.extend(c_addi(reg, lo12 as i8));
+        } else {
+            code_buf.extend(addi(reg, lo12 as i16));
+        }
     }
 }
 
@@ -450,15 +454,27 @@ mod test {
     }
 
     #[disasm_test]
-    fn test_set_reg() {
-        let mut v = Vec::new();
+    /// test `RiscV64Inter::set_reg` for immediates that fit within 32 bits
+    fn test_set_reg_32() {
+        let mut v = Vec::with_capacity(32);
         RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, 0);
+        assert_eq!(v.len(), 2);
         RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 1);
+        assert_eq!(v.len(), 4);
         RiscV64Inter::set_reg(&mut v, RiscVRegister::A2, -2);
+        assert_eq!(v.len(), 6);
         RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x123);
+        assert_eq!(v.len(), 10);
         RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, -0x123);
+        assert_eq!(v.len(), 14);
         RiscV64Inter::set_reg(&mut v, RiscVRegister::S0, 0x100_000);
+        assert_eq!(v.len(), 18);
         RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x123_456);
+        assert_eq!(v.len(), 26);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, 0x1000);
+        assert_eq!(v.len(), 28);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 0x1001);
+        assert_eq!(v.len(), 32);
         assert_eq!(
             disassembler().disassemble(v),
             [
@@ -470,6 +486,96 @@ mod test {
                 "lui s0, 0x100",
                 "lui a7, 0x123",
                 "addiw a7, a7, 0x456",
+                "lui a0, 0x1",
+                "lui a1, 0x1",
+                "addiw a1, a1, 0x1"
+            ]
+        );
+    }
+
+    #[disasm_test]
+    fn test_set_reg_64() {
+        use std::borrow::Cow;
+        let mut ds = disassembler();
+        let mut v = Vec::with_capacity(124);
+        let mut val = i64::from(i32::MAX) + 1;
+        let mut expected: Vec<Cow<'_, str>> = Vec::new();
+        let mut expected_len = 4;
+        while val < i64::MAX / 2 {
+            RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, val);
+            val <<= 1;
+            expected.push("li a7, 0x1".into());
+            let shift_lvl = val.trailing_zeros() - 1;
+            expected.push(format!("slli a7, a7, {shift_lvl:#x}").into());
+            assert_eq!(v.len(), expected_len);
+            expected_len += 4;
+        }
+        assert_eq!(ds.disassemble(v), expected);
+
+        // worst case scenario - alternating bits 0b0101 = 0x5, so this is every other bit in the
+        // immediate set
+        //
+        // Try with both 48 and 64 bit values
+        let mut v = Vec::with_capacity(6);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x5555 << 24);
+        assert_eq!(ds.disassemble(v), ["lui a7, 0x5555", "slli a7, a7, 0xc"]);
+
+        let mut v12 = Vec::with_capacity(40);
+        RiscV64Inter::set_reg(&mut v12, RiscVRegister::S0, 0x5555_5555_5555);
+        RiscV64Inter::set_reg(&mut v12, RiscVRegister::A7, -0x5555_5555_5555);
+        let mut v16 = Vec::with_capacity(56);
+        RiscV64Inter::set_reg(&mut v16, RiscVRegister::S0, 0x5555_5555_5555_5555);
+        RiscV64Inter::set_reg(&mut v16, RiscVRegister::A7, -0x5555_5555_5555_5555);
+        assert_eq!(
+            ds.disassemble(v12),
+            // this is what LLVM 19 generates for these instructions:
+            // ```sh
+            // llvm-mc --triple=riscv64-linux-gnu -mattr=+c --print-imm-hex - <<<EOF
+            // li s0, 0x555555555555
+            // li a7, -0x555555555555
+            // EOF
+            // ```
+            [
+                "lui s0, 0x555",
+                "addiw s0, s0, 0x555",
+                "slli s0, s0, 0xc",
+                "addi s0, s0, 0x555",
+                "slli s0, s0, 0xc",
+                "addi s0, s0, 0x555",
+                "lui a7, 0xffaab",
+                "addiw a7, a7, -0x555",
+                "slli a7, a7, 0xc",
+                "addi a7, a7, -0x555",
+                "slli a7, a7, 0xc",
+                "addi a7, a7, -0x555",
+            ]
+        );
+        assert_eq!(
+            ds.disassemble(v16),
+            // this is what LLVM 19 generates for these instructions:
+            // ```sh
+            // llvm-mc --triple=riscv64-linux-gnu -mattr=+c --print-imm-hex - <<<EOF
+            // li s0, 0x5555555555555555
+            // li a7, -0x5555555555555555
+            // EOF
+            // ```
+            [
+                "lui s0, 0x5555",
+                "addiw s0, s0, 0x555",
+                "slli s0, s0, 0xc",
+                "addi s0, s0, 0x555",
+                "slli s0, s0, 0xc",
+                "addi s0, s0, 0x555",
+                "slli s0, s0, 0xc",
+                "addi s0, s0, 0x555",
+                "lui a7, 0xfaaab",
+                "addiw a7, a7, -0x555",
+                "slli a7, a7, 0xc",
+                "addi a7, a7, -0x555",
+                "slli a7, a7, 0xc",
+                "addi a7, a7, -0x555",
+                "slli a7, a7, 0xc",
+                "addi a7, a7, -0x555",
             ]
         );
     }
@@ -499,6 +605,7 @@ mod test {
     fn test_caddi_guard_positive() {
         c_addi(RiscVRegister::A0 as u8, 0b0111_0000);
     }
+
     #[test]
     #[should_panic = "c_addi must only be called with 6-bit signed immediates"]
     fn test_caddi_guard_negative() {
