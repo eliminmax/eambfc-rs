@@ -149,7 +149,7 @@ pub fn disasm_test(_: TokenStream, func: TokenStream) -> TokenStream {
 /// )]
 /// #[test]
 /// fn test_foo_arch() {
-///     #[cfg(feature = "disasmtests")]
+///     #[cfg(feature = "bintests")]
 ///     {
 ///         ...
 ///     }
