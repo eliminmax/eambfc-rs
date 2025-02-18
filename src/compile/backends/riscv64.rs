@@ -7,6 +7,8 @@ use super::elf_tools::{ByteOrdering, ElfArch};
 use super::MinimumBits;
 use crate::err::{BFCompileError, BFErrorID};
 
+use std::num::NonZeroI8;
+
 /// A `const` assertion that `$val` fits within `$size` bits. `$val` is assumed to be a positive
 /// integer.
 macro_rules! validate_size {
@@ -122,36 +124,36 @@ const fn sign_extend(val: i64, amnt: u32) -> i64 {
 
 /// A modified port of LLVM's logic for resolving the `li` (load immediate) pseudo-instruction,
 /// as it existed in 2022.
-fn encode_li(code_buf: &mut Vec<u8>, reg: u8, val: i64) {
+fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
     let lo12 = sign_extend(val, 12);
     if val.fits_within_bits(32) {
         let hi20 = sign_extend(((val as u64).wrapping_add(0x800) >> 12) as i64, 20);
         if hi20 != 0 {
             if hi20.fits_within_bits(6) {
                 // C.LUI
-                code_buf.extend(encode_instr!([CI] 0b01, reg, 0b011, hi20));
+                code_buf.extend(encode_instr!([CI] 0b01, *reg, 0b011, hi20));
             } else {
                 // LUI
-                code_buf.extend(encode_instr!([U] 0b011_0111, reg, hi20));
+                code_buf.extend(encode_instr!([U] 0b011_0111, *reg, hi20));
             }
         }
         match (lo12, hi20) {
             (n, 0) if n.fits_within_bits(6) => {
                 // C.LI
-                code_buf.extend(encode_instr!([CI] 0b01, reg, 0b010, lo12));
+                code_buf.extend(encode_instr!([CI] 0b01, *reg, 0b010, lo12));
             }
             (0, _) => (),
             (n, _) if n.fits_within_bits(6) => {
                 // C.ADDIW
-                code_buf.extend(encode_instr!([CI] 0b01, reg, 0b001, lo12));
+                code_buf.extend(encode_instr!([CI] 0b01, *reg, 0b001, lo12));
             }
             (_, 0) => {
-                // ADDI reg, zero, lo12
-                code_buf.extend(encode_instr!([I] 0b001_0011, reg, 0, 0, lo12));
+                // ADDI reg.into(), zero, lo12
+                code_buf.extend(encode_instr!([I] 0b001_0011, *reg, 0, 0, lo12));
             }
             _ => {
-                // ADDIW reg, reg, lo12
-                code_buf.extend(encode_instr!([I] 0b001_1011, reg, reg, 0, lo12));
+                // ADDIW reg.into(), reg.into(), lo12
+                code_buf.extend(encode_instr!([I] 0b001_1011, *reg, *reg, 0, lo12));
             }
         }
         return;
@@ -182,11 +184,14 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: u8, val: i64) {
         // This will always fit within 6 bits, as 63_u32 fits within 6 bits, and is the highest
         // value that wouldn't shift the whole value out of bounds.
         // C.SLLI
-        code_buf.extend(encode_instr!([CI] 0b10, reg, 0, shift_amount));
+        code_buf.extend(encode_instr!([CI] 0b10, *reg, 0, shift_amount));
     }
     if lo12 != 0 {
         if lo12.fits_within_bits(6) {
-            code_buf.extend(c_addi(reg, lo12 as i8));
+            code_buf.extend(c_addi(
+                reg,
+                NonZeroI8::new(lo12 as i8).unwrap_or_else(|| unreachable!()),
+            ));
         } else {
             code_buf.extend(addi(reg, lo12 as i16));
         }
@@ -194,6 +199,35 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: u8, val: i64) {
 }
 
 // SPDX-SnippetEnd
+const NZ1: NonZeroI8 = NonZeroI8::new(1).expect("1 != 0");
+const NZ_NEG1: NonZeroI8 = NonZeroI8::new(-1).expect("1 != 0");
+
+/// Internal type representing a raw register identifier. Implements `Deref<Target = u8>`.
+/// The ways to construct it are with `TryFrom::try_from::<u8>` or `From::from<RiscVRegister>`.
+#[derive(PartialEq, Copy, Clone)]
+struct RawReg(u8);
+impl std::ops::Deref for RawReg {
+    type Target = u8;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl TryFrom<u8> for RawReg {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value.fits_within_bits(5) {
+            Ok(RawReg(value))
+        } else {
+            Err(value)
+        }
+    }
+}
+impl From<RiscVRegister> for RawReg {
+    fn from(value: RiscVRegister) -> Self {
+        RawReg(value as u8)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u8)]
@@ -205,39 +239,23 @@ pub(in super::super) enum RiscVRegister {
     A7 = 17, // X17, syscall register
 }
 
-/// Private unrepresentable scratch register used within certain operations
-const TEMP_REG: u8 = 6;
+/// Private scratch register used within certain operations
+const TEMP_REG: RawReg = RawReg(6);
 
 pub(crate) struct RiscV64Inter;
 
-fn addi(reg: u8, i: i16) -> [u8; 4] {
-    debug_assert!(
-        reg != 0 && reg.fits_within_bits(5),
-        "reg must be a valid register number"
-    );
+fn addi(reg: RawReg, i: i16) -> [u8; 4] {
     debug_assert!(
         i.fits_within_bits(12),
         "addi immediate must fit within 12 bits"
     );
-    encode_instr!([I] 0b001_0011, reg, reg, 0, i)
+    encode_instr!([I] 0b001_0011, *reg, *reg, 0, i)
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum CompareType {
     Eq,
     Ne,
-}
-
-const fn b_type_bithack(dist: i16) -> u32 {
-    debug_assert!(
-        dist >= -4096 && dist < 4096 && (dist & 1 == 0),
-        "B-type offset distance must be even number within -4096..4096"
-    );
-
-    let mut dist = (dist as i64) & 0x1ffe;
-    dist |= (dist & 0x800) >> 12;
-    dist |= (dist & 0x1000) >> 1;
-    sign_extend(dist, 12) as u32
 }
 
 fn cond_jump(
@@ -264,8 +282,9 @@ fn cond_jump(
         ($cond_code: literal) => {{
             // B-type instruction, which is like an S type, but the immediate is bits 12:1 not 11:0
             // (as the lowest bit is always zero), and for some reason, bit 11 of the immediate is
-            // moved to where bit 0 normally is. that said, given that
-            encode_instr!([S] 0b110_0011, TEMP_REG, 0, $cond_code, b_type_bithack(8))
+            // moved to where bit 0 normally is. That said, given that `8` is the same one way or
+            // the other, it's fine to just use it directly
+            encode_instr!([S] 0b110_0011, *TEMP_REG, 0, $cond_code, 8)
         }}
     }
     let mut code = [0; 12];
@@ -289,29 +308,23 @@ fn cond_jump(
     Ok(code)
 }
 
-fn c_addi(reg: u8, i: i8) -> [u8; 2] {
+fn c_addi(reg: RawReg, i: NonZeroI8) -> [u8; 2] {
     debug_assert!(
-        reg != 0 && reg.fits_within_bits(5),
-        "reg must be a valid register number"
-    );
-    debug_assert!(
-        i.fits_within_bits(6),
+        i.get().fits_within_bits(6),
         "c_addi must only be called with 6-bit signed immediates"
     );
-    // C.ADDI (expands to `addi reg, reg, imm`, and reg and imm must not be zero
-    debug_assert!(i != 0, "C.ADDI requires nonzero arguments");
-    let imm = i16::from(i) as u16;
-    u16::to_le_bytes(0x0001 | (imm & (1 << 5)) << 7 | (u16::from(reg) << 7) | ((imm & 0x1f) << 2))
+    let imm = i16::from(i.get()) as u16;
+    u16::to_le_bytes(0x0001 | (imm & (1 << 5)) << 7 | (u16::from(reg.0) << 7) | ((imm & 0x1f) << 2))
 }
 
 fn store_to_byte(addr: RiscVRegister) -> [u8; 4] {
     // SB
-    encode_instr!([S] 0b100_011, addr, TEMP_REG, 0, 0)
+    encode_instr!([S] 0b100_011, addr, *TEMP_REG, 0, 0)
 }
 
 fn load_from_byte(addr: RiscVRegister) -> [u8; 4] {
     // LB
-    encode_instr!([I] 0b000_011, TEMP_REG, addr, 0, 0)
+    encode_instr!([I] 0b000_011, *TEMP_REG, addr, 0, 0)
 }
 
 impl ArchInter for RiscV64Inter {
@@ -334,7 +347,7 @@ impl ArchInter for RiscV64Inter {
     const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
 
     fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) {
-        encode_li(code_buf, reg as u8, imm);
+        encode_li(code_buf, reg.into(), imm);
     }
 
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType) {
@@ -374,13 +387,15 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
-        code_buf.extend(load_from_byte(reg));
-        if (imm as i8).fits_within_bits(6) {
-            code_buf.extend(c_addi(TEMP_REG, -(imm as i8)));
-        } else {
-            code_buf.extend(addi(TEMP_REG, -i16::from(imm)));
+        if let Some(nzimm) = NonZeroI8::new(-(imm as i8)) {
+            code_buf.extend(load_from_byte(reg));
+            if nzimm.get().fits_within_bits(6) {
+                code_buf.extend(c_addi(TEMP_REG, nzimm));
+            } else {
+                code_buf.extend(addi(TEMP_REG, nzimm.get().into()));
+            }
+            code_buf.extend(store_to_byte(reg));
         }
-        code_buf.extend(store_to_byte(reg));
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) {
@@ -388,47 +403,52 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
-        code_buf.extend(load_from_byte(reg));
-        if (imm as i8).fits_within_bits(6) {
-            code_buf.extend(c_addi(TEMP_REG, imm as i8));
-        } else {
-            code_buf.extend(addi(TEMP_REG, i16::from(imm)));
+        if let Some(nzimm) = NonZeroI8::new(imm as i8) {
+            code_buf.extend(load_from_byte(reg));
+            if nzimm.get().fits_within_bits(6) {
+                code_buf.extend(c_addi(TEMP_REG, nzimm));
+            } else {
+                code_buf.extend(addi(TEMP_REG, nzimm.get().into()));
+            }
+            code_buf.extend(store_to_byte(reg));
         }
-        code_buf.extend(store_to_byte(reg));
     }
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) {
         match imm as i64 {
             0 => (),
-            -32..0 | 1..32 => code_buf.extend(c_addi(reg as u8, imm as i8)),
-            -2048..-32 | 32..2048 => code_buf.extend(addi(reg as u8, imm as i16)),
+            -32..0 | 1..32 => code_buf.extend(c_addi(
+                reg.into(),
+                NonZeroI8::new(imm as i8).unwrap_or_else(|| unreachable!()),
+            )),
+            -2048..-32 | 32..2048 => code_buf.extend(addi(reg.into(), imm as i16)),
             _ => {
                 encode_li(code_buf, TEMP_REG, imm as i64);
                 // C.ADD reg, aux
                 code_buf.extend(u16::to_le_bytes(
-                    0x9002 | (reg as u16) << 7 | u16::from(TEMP_REG) << 2,
+                    0x9002 | (reg as u16) << 7 | u16::from(*TEMP_REG) << 2,
                 ));
             }
         }
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        code_buf.extend(c_addi(reg as u8, 1));
+        code_buf.extend(c_addi(reg.into(), NZ1));
     }
 
     fn dec_reg(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        code_buf.extend(c_addi(reg as u8, -1));
+        code_buf.extend(c_addi(reg.into(), NZ_NEG1));
     }
 
     fn inc_byte(code_buf: &mut Vec<u8>, reg: Self::RegType) {
         code_buf.extend(load_from_byte(reg));
-        code_buf.extend(c_addi(TEMP_REG, 1));
+        code_buf.extend(c_addi(TEMP_REG, NZ1));
         code_buf.extend(store_to_byte(reg));
     }
 
     fn dec_byte(code_buf: &mut Vec<u8>, reg: Self::RegType) {
         code_buf.extend(load_from_byte(reg));
-        code_buf.extend(c_addi(TEMP_REG, -1));
+        code_buf.extend(c_addi(TEMP_REG, NZ_NEG1));
         code_buf.extend(store_to_byte(reg));
     }
 
@@ -595,8 +615,11 @@ mod test {
 
     #[disasm_test]
     fn test_caddi() {
-        let mut v = Vec::from(c_addi(RiscVRegister::A0 as u8, -1));
-        v.extend(c_addi(RiscVRegister::A1 as u8, 0x1f));
+        let mut v = Vec::from(c_addi(RiscVRegister::A0.into(), NZ_NEG1));
+        v.extend(c_addi(
+            RiscVRegister::A1.into(),
+            const { NonZeroI8::new(0x1f).unwrap() },
+        ));
         assert_eq!(
             disassembler().disassemble(v),
             ["addi a0, a0, -0x1", "addi a1, a1, 0x1f"]
@@ -605,8 +628,8 @@ mod test {
 
     #[disasm_test]
     fn test_addi() {
-        let mut v = Vec::from(addi(RiscVRegister::S0 as u8, -0x789));
-        v.extend(addi(RiscVRegister::A7 as u8, 0x123));
+        let mut v = Vec::from(addi(RiscVRegister::S0.into(), -0x789));
+        v.extend(addi(RiscVRegister::A7.into(), 0x123));
         assert_eq!(
             disassembler().disassemble(v),
             ["addi s0, s0, -0x789", "addi a7, a7, 0x123"]
@@ -615,12 +638,28 @@ mod test {
 
     #[debug_assert_test("c_addi must only be called with 6-bit signed immediates")]
     fn test_caddi_guard_positive() {
-        c_addi(RiscVRegister::A0 as u8, 0b0111_0000);
+        c_addi(
+            RiscVRegister::A0.into(),
+            const { NonZeroI8::new(0b0111_0000).unwrap() },
+        );
     }
 
     #[debug_assert_test("c_addi must only be called with 6-bit signed immediates")]
     fn test_caddi_guard_negative() {
-        c_addi(RiscVRegister::A0 as u8, -0b0111_0000);
+        c_addi(
+            RiscVRegister::A0.into(),
+            const { NonZeroI8::new(-0b0111_0000).unwrap() },
+        );
+    }
+
+    #[debug_assert_test("addi immediate must fit within 12 bits")]
+    fn addi_imm_guard_positive() {
+        addi(RiscVRegister::A0.into(), 0x1fff);
+    }
+
+    #[debug_assert_test("addi immediate must fit within 12 bits")]
+    fn addi_imm_guard_negative() {
+        addi(RiscVRegister::A0.into(), -0x1fff);
     }
 
     #[disasm_test]
