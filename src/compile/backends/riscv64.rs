@@ -210,8 +210,14 @@ const TEMP_REG: u8 = 6;
 pub(crate) struct RiscV64Inter;
 
 fn addi(reg: u8, i: i16) -> [u8; 4] {
-    assert!(reg != 0 && reg.fits_within_bits(5), "reg must be a valid register number");
-    assert!(i.fits_within_bits(12), "addi immediate must fit within 12 bits");
+    assert!(
+        reg != 0 && reg.fits_within_bits(5),
+        "reg must be a valid register number"
+    );
+    assert!(
+        i.fits_within_bits(12),
+        "addi immediate must fit within 12 bits"
+    );
     encode_instr!([I] 0b001_0011, reg, reg, 0, i)
 }
 
@@ -283,7 +289,10 @@ fn cond_jump(
 }
 
 fn c_addi(reg: u8, i: i8) -> [u8; 2] {
-    assert!(reg != 0 && reg.fits_within_bits(5), "reg must be a valid register number");
+    assert!(
+        reg != 0 && reg.fits_within_bits(5),
+        "reg must be a valid register number"
+    );
     assert!(
         i.fits_within_bits(6),
         "c_addi must only be called with 6-bit signed immediates"
