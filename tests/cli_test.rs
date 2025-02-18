@@ -427,6 +427,11 @@ fn test_arm64() -> io::Result<()> {
     test_arch("arm64")
 }
 
+#[bin_test(riscv64)]
+fn test_riscv64() -> io::Result<()> {
+    test_arch("riscv64")
+}
+
 #[bin_test(s390x)]
 fn test_s390x() -> io::Result<()> {
     test_arch("s390x")
