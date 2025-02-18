@@ -400,7 +400,7 @@ impl ArchInter for RiscV64Inter {
             _ => {
                 let aux = reg.aux();
                 Self::set_reg(code_buf, aux, imm as i64);
-                // C.ADDI reg, aux
+                // C.ADD reg, aux
                 code_buf.extend(u16::to_le_bytes(
                     0x9002 | (reg as u16) << 7 | (aux as u16) << 2,
                 ));
@@ -409,12 +409,10 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        // C.ADDI reg, 1
         code_buf.extend(c_addi(reg, 1));
     }
 
     fn dec_reg(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        // C.ADDI reg, -1
         code_buf.extend(c_addi(reg, -1));
     }
 
