@@ -51,6 +51,48 @@ impl_min_bits!([unsigned] u16);
 impl_min_bits!([unsigned] u32);
 impl_min_bits!([unsigned] u64);
 
+#[cfg(test)]
+mod test_min_bits {
+    use super::MinimumBits;
+
+    #[test]
+    fn test_unsigned() {
+        macro_rules! test_for {
+            ($t: ty) => {
+                for i in 1..(<$t>::BITS - 1) {
+                    let tst_val = <$t>::pow(2, i);
+                    assert!(tst_val.fits_within_bits(i + 1));
+                    assert!(!tst_val.fits_within_bits(i));
+                    assert!((tst_val - 1).fits_within_bits(i));
+                }
+            };
+        }
+        test_for!(u8);
+        test_for!(u16);
+        test_for!(u32);
+        test_for!(u64);
+    }
+
+    #[test]
+    fn test_signed() {
+        macro_rules! test_for {
+            ($t: ty) => {
+                for i in 1..(<$t>::BITS - 2) {
+                    let tst_val = <$t>::pow(2, i);
+                    assert!(tst_val.fits_within_bits(i + 2));
+                    assert!(!tst_val.fits_within_bits(i + 1));
+                    assert!((-tst_val).fits_within_bits(i + 1));
+                    assert!(!(-tst_val).fits_within_bits(i));
+                    assert!((tst_val - 1).fits_within_bits(i + 1));
+                }
+            };
+        }
+        test_for!(i8);
+        test_for!(i16);
+        test_for!(i32);
+        test_for!(i64);
+    }
+}
 /// Provides a safe way to use LLVM's disassembler for backends to use for unit testing, using the
 /// `Disassembler` struct.
 #[cfg(not(tarpaulin_include))]
