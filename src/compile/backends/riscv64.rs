@@ -707,4 +707,22 @@ mod test {
         assert_eq!(v.len(), 12);
         assert_eq!(disassembler().disassemble(v), ["nop"].repeat(3));
     }
+
+    #[disasm_test]
+    fn successfull_jumps_test() {
+        let mut v = vec![0; 12];
+        RiscV64Inter::jump_open(&mut v, 0, RiscVRegister::S0, 32).unwrap();
+        RiscV64Inter::jump_close(&mut v, RiscVRegister::S0, -32).unwrap();
+        assert_eq!(
+            disassembler().disassemble(v),
+            [
+                "lb t1, 0x0(s0)",
+                "bnez t1, 0x8",
+                "j 0x24",
+                "lb t1, 0x0(s0)",
+                "beqz t1, 0x8",
+                "j -0x1c",
+            ]
+        );
+    }
 }
