@@ -370,9 +370,9 @@ impl ArchInter for RiscV64Inter {
         let aux = reg.aux();
         code_buf.extend(load_from_byte(reg, aux));
         if (imm as i8).fits_within_bits(6) {
-            code_buf.extend(c_addi(reg, -(imm as i8)));
+            code_buf.extend(c_addi(aux, -(imm as i8)));
         } else {
-            code_buf.extend(addi(reg, -i16::from(imm)));
+            code_buf.extend(addi(aux, -i16::from(imm)));
         }
         code_buf.extend(store_to_byte(reg, aux));
     }
@@ -385,9 +385,9 @@ impl ArchInter for RiscV64Inter {
         let aux = reg.aux();
         code_buf.extend(load_from_byte(reg, aux));
         if (imm as i8).fits_within_bits(6) {
-            code_buf.extend(c_addi(reg, imm as i8));
+            code_buf.extend(c_addi(aux, imm as i8));
         } else {
-            code_buf.extend(addi(reg, i16::from(imm)));
+            code_buf.extend(addi(aux, i16::from(imm)));
         }
         code_buf.extend(store_to_byte(reg, aux));
     }
@@ -421,14 +421,14 @@ impl ArchInter for RiscV64Inter {
     fn inc_byte(code_buf: &mut Vec<u8>, reg: Self::RegType) {
         let aux = reg.aux();
         code_buf.extend(load_from_byte(reg, aux));
-        code_buf.extend(c_addi(reg, 1));
+        code_buf.extend(c_addi(aux, 1));
         code_buf.extend(store_to_byte(reg, aux));
     }
 
     fn dec_byte(code_buf: &mut Vec<u8>, reg: Self::RegType) {
         let aux = reg.aux();
         code_buf.extend(load_from_byte(reg, aux));
-        code_buf.extend(c_addi(reg, -1));
+        code_buf.extend(c_addi(aux, -1));
         code_buf.extend(store_to_byte(reg, aux));
     }
 
