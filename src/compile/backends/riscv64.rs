@@ -243,8 +243,9 @@ fn addi(reg: RawReg, i: i16) -> [u8; 4] {
 
 #[derive(Clone, Copy, PartialEq)]
 enum CompareType {
-    Eq,
-    Ne,
+    // This bit needs to be set in cond_jump for jump_open
+    Eq = 1 << 12,
+    Ne = 0,
 }
 
 fn cond_jump(
@@ -262,37 +263,38 @@ fn cond_jump(
             "Jump too long for riscv64 backend",
         ));
     }
-    // B-type is a variant of S-type with 2 specific immediate bits swapped, used for
-    // branch instructions.
 
-    // use this macro instead of passing `$cond_code` because encode_instr uses const assert to
-    // make sure its in range, so it needs to take constant values
-    macro_rules! branch {
-        ($cond_code: literal) => {{
-            // B-type instruction, which is like an S type, but the immediate is bits 12:1 not 11:0
-            // (as the lowest bit is always zero), and for some reason, bit 11 of the immediate is
-            // moved to where bit 0 normally is. That said, given that `8` is the same one way or
-            // the other, it's fine to just use it directly
-            encode_instr!([S] 0b110_0011, *TEMP_REG, 0, $cond_code, 8)
-        }}
-    }
+    // there are 2 types of instructions used here for control flow - branches, which can
+    // conditionally move up to 4 KiB away, and jumps, which unconditionally move up to 1MiB away.
+    // The former is too short, and the latter is unconditional, so the solution is to use an
+    // inverted branch condition and set it to branch over the unconditional jump. Ugly, but it
+    // works.
+    //
+    // There are C.BNEZ and C.BEQZ instructions that could branch smaller distances and always
+    // compare their operand register against the zero register, but they only work with a specific
+    // subset of registers, all of which are non-volatile.
+
+    let mut code = [0; 12];
+    // load byte to compare
+    code[..4].clone_from_slice(&load_from_byte(reg));
+
     let mut code = [0; 12];
     // load
     code[..4].clone_from_slice(&load_from_byte(reg));
-    code[4..8].clone_from_slice(&if comp_type == CompareType::Eq {
-        branch!(1)
-    } else {
-        branch!(0)
-    });
+
+    // `BNEZ t1, 8` if comp_type == Eq, otherwise `BEQZ t1, 8`
+    code[4..8].clone_from_slice(&u32::to_le_bytes(0x0003_0463 | (comp_type as u32)));
 
     // J-type is a variant of U-type with the bits scrambled around to simplify hardware
-    // implementation at the expense of compiler/assembler implementation
+    // implementation at the expense of compiler/assembler implementation.
     let jump_dist = distance as u32 + 4;
-    let encoded_jump_dist = ((jump_dist & (1 << 20)) >> 1)
-        | ((jump_dist & 0x7fe) << 8)
-        | ((jump_dist & (1 << 11)) >> 3)
-        | ((jump_dist & 0xff000) >> 12);
-    code[8..].clone_from_slice(&encode_instr!([U] 0b110_1111, 0, encoded_jump_dist));
+    let encoded_jump_dist = ((jump_dist & (1 << 20)) << 11)
+        | ((jump_dist & 0x7fe) << 20)
+        | ((jump_dist & (1 << 11)) << 9)
+        | (jump_dist & 0xff000);
+
+    // J distance
+    code[8..].clone_from_slice(&(encoded_jump_dist | 0b110_1111).to_le_bytes());
 
     Ok(code)
 }
