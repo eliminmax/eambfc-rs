@@ -224,43 +224,65 @@ enum CompareType {
     Ne,
 }
 
+const fn b_type_bithack(dist: i16) -> u32 {
+    assert!(
+        dist >= -4096 && dist < 4096 && (dist & 1 == 0),
+        "B-type offset distance must be even number within -4096..4096"
+    );
+
+    let mut dist = (dist as i64) & 0x1ffe;
+    dist |= (dist & 0x800) >> 12;
+    dist |= (dist & 0x1000) >> 1;
+    sign_extend(dist, 12) as u32
+}
+
 fn cond_jump(
     reg: RiscVRegister,
     comp_type: CompareType,
-    mut distance: i64,
-) -> Result<[u8; 8], BFCompileError> {
+    distance: i64,
+) -> Result<[u8; 12], BFCompileError> {
     assert!(
         distance & 1 == 0,
         "<…>::riscv64::cond_jump distance offset must be even"
     );
-    distance >>= 1;
-    if !distance.fits_within_bits(12) {
+    if !distance.fits_within_bits(21) {
         return Err(BFCompileError::basic(
             BFErrorID::JumpTooLong,
             "Jump too long for riscv64 backend",
         ));
     }
-    // B-type is a variant of an existing type with 2 specific immediate bits swapped, used for
+    // B-type is a variant of S-type with 2 specific immediate bits swapped, used for
     // branch instructions.
-    let dist = distance as u32;
-    let dist = (dist & 0xbfe) | (dist & 0x400) >> 10 | (dist & 1) << 10;
     let aux = reg.aux();
 
     // use this macro instead of passing `$cond_code` because encode_instr uses const assert to
     // make sure its in range, so it needs to take constant values
     macro_rules! branch {
         ($cond_code: literal) => {{
-            encode_instr!([S] 0b110_0011, aux, 0, $cond_code, dist)
+            // B-type instruction, which is like an S type, but the immediate is bits 12:1 not 11:0
+            // (as the lowest bit is always zero), and for some reason, bit 11 of the immediate is
+            // moved to where bit 0 normally is. that said, given that
+            encode_instr!([S] 0b110_0011, aux, 0, $cond_code, b_type_bithack(8))
         }}
     }
-    let mut code = [0; 8];
+    let mut code = [0; 12];
     // load
     code[..4].clone_from_slice(&load_from_byte(reg, aux));
-    code[4..].clone_from_slice(&if comp_type == CompareType::Eq {
-        branch!(0)
-    } else {
+    code[4..8].clone_from_slice(&if comp_type == CompareType::Eq {
         branch!(1)
+    } else {
+        branch!(0)
     });
+
+    // J-type is a variant of U-type with the bits scrambled around to simplify hardware
+    // implementation at the expense of compiler/assembler implementation
+    let jump_dist = distance as u32 + 4;
+    let encoded_jump_dist = ((jump_dist & (1 << 20)) >> 1)
+        | ((jump_dist & 0x7fe) << 8)
+        | ((jump_dist & (1 << 11)) >> 3)
+        | ((jump_dist & 0xff000) >> 12);
+    code[8..].clone_from_slice(&encode_instr!([U] 0b110_1111, 0, encoded_jump_dist));
+
     Ok(code)
 }
 
@@ -299,7 +321,7 @@ impl ArchInter for RiscV64Inter {
         write: 64,
         exit: 93,
     };
-    const JUMP_SIZE: usize = 8;
+    const JUMP_SIZE: usize = 12;
     const ARCH: ElfArch = ElfArch::RiscV64;
     const E_FLAGS: u32 = 5; // EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE (chosen to match Debian)
     const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
@@ -322,8 +344,7 @@ impl ArchInter for RiscV64Inter {
 
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // nop
-        code_buf.extend(u32::to_le_bytes(0x13));
-        code_buf.extend(u32::to_le_bytes(0x13));
+        code_buf.extend(u32::to_le_bytes(0x13).repeat(3));
     }
 
     fn jump_open(
@@ -332,7 +353,7 @@ impl ArchInter for RiscV64Inter {
         reg: Self::RegType,
         offset: i64,
     ) -> FailableInstrEncoding {
-        code_buf[index..index + 8].clone_from_slice(&cond_jump(reg, CompareType::Eq, offset)?);
+        code_buf[index..index + 12].clone_from_slice(&cond_jump(reg, CompareType::Eq, offset)?);
         Ok(())
     }
 
