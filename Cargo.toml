@@ -9,8 +9,7 @@ edition = "2021"
 
 [features]
 default = ["all_backends", "bintests", "disasmtests"]
-# TODO: Add riscv64 once it's enabled
-all_backends = ["arm64", "s390x", "x86_64"]
+all_backends = ["arm64", "riscv64", "s390x", "x86_64"]
 arm64 = []
 riscv64 = []
 s390x = []
