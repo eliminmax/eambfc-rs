@@ -181,3 +181,28 @@ pub fn bin_test(arch: TokenStream, func: TokenStream) -> TokenStream {
     test_func.attrs.extend(extra_attrs);
     test_func.into_token_stream().into()
 }
+
+/// An attribute that combines `#[test]` with `#[cfg_attr(debug_assertions), should_panic = "msg"]
+/// ```no_run
+/// #[debug_assert_test("msg")]
+/// fn foo () {
+///     ...
+/// }
+/// ```
+/// expands to
+/// #[test]
+/// #[cfg(debug_assertions, should_panic = "msg")]
+/// fn foo () {
+///     ...
+/// }
+#[proc_macro_attribute]
+pub fn debug_assert_test(attr_arg: TokenStream, func: TokenStream) -> TokenStream {
+    let msg = parse_macro_input!(attr_arg as syn::LitStr).value().to_string();
+    let mut func = parse_macro_input!(func as ItemFn);
+    func.attrs.extend([
+        parse_quote!(#[test]),
+        parse_quote!(#[cfg_attr(debug_assertions, should_panic = #msg)]),
+    ]);
+
+    func.into_token_stream().into()
+}
