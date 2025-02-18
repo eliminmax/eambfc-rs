@@ -752,6 +752,44 @@ mod test {
         );
     }
 
+    #[test]
+    fn sub_reg_is_negative_add_reg() {
+        let mut a = Vec::new();
+        let mut b = Vec::new();
+        RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 0);
+        RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, 0);
+        for i in 0..63 {
+            a.clear();
+            b.clear();
+            RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 1_u64 << i);
+            RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, (-1_i64 << i) as u64);
+            assert_eq!(a, b);
+        }
+    }
+
+    #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
+    #[disasm_test]
+    fn add_reg() {
+        let mut ds = disassembler();
+        let mut v = Vec::with_capacity(6);
+        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0);
+        assert!(v.is_empty());
+        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0x12);
+        assert_eq!(v.len(), 2);
+        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0x123);
+        assert_eq!(v.len(), 6);
+        assert_eq!(ds.disassemble(v), ["addi s0, s0, 0x12", "addi s0, s0, 0x123"]);
+        let mut a = Vec::new();
+        let mut b = Vec::new();
+        RiscV64Inter::add_reg(&mut a, RiscVRegister::S0, 0xdeadbeef);
+        encode_li(&mut b, TEMP_REG, 0xdeadbeef);
+        assert_eq!(a.len(), b.len() + 2);
+        let mut a = ds.disassemble(a);
+        let b = ds.disassemble(b);
+        assert_eq!(a.pop().unwrap(), "add s0, s0, t1");
+        assert_eq!(a, b);
+    }
+
     #[disasm_test]
     fn add_sub_byte() {
         let mut ds = disassembler();
