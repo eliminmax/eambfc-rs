@@ -725,4 +725,30 @@ mod test {
             ]
         );
     }
+
+    #[disasm_test]
+    fn inc_dec() {
+        let mut v = Vec::with_capacity(24);
+        RiscV64Inter::inc_byte(&mut v, RiscVRegister::S0);
+        assert_eq!(v.len(), 10);
+        RiscV64Inter::dec_byte(&mut v, RiscVRegister::S0);
+        assert_eq!(v.len(), 20);
+        RiscV64Inter::inc_reg(&mut v, RiscVRegister::S0);
+        assert_eq!(v.len(), 22);
+        RiscV64Inter::dec_reg(&mut v, RiscVRegister::S0);
+        assert_eq!(v.len(), 24);
+        assert_eq!(
+            disassembler().disassemble(v),
+            [
+                "lb t1, 0x0(s0)",
+                "addi t1, t1, 0x1",
+                "sb t1, 0x0(s0)",
+                "lb t1, 0x0(s0)",
+                "addi t1, t1, -0x1",
+                "sb t1, 0x0(s0)",
+                "addi s0, s0, 0x1",
+                "addi s0, s0, -0x1",
+            ]
+        );
+    }
 }
