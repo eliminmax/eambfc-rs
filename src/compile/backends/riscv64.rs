@@ -579,6 +579,22 @@ mod test {
             ]
         );
     }
+    #[disasm_test]
+    fn compressed_set_reg_64() {
+        // make sure that when it can use compressed instrucitons, it does so
+        let mut v = Vec::with_capacity(12);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 0xf_0000_0010);
+        assert_eq!(v.len(), 6);
+        let mut expected =
+            vec![["li a1, 0xf"], ["slli a1, a1, 0x20"], ["addi a1, a1, 0x10"]].into_iter();
+        // this loop makes sure each instruction is exactly 2 bytes in size
+        for chunk in v.chunks(2) {
+            assert_eq!(
+                disassembler().disassemble(chunk.to_owned()),
+                expected.next().unwrap()
+            );
+        }
+    }
 
     #[disasm_test]
     fn test_caddi() {
