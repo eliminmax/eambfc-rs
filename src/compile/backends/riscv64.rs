@@ -12,7 +12,7 @@ use crate::err::{BFCompileError, BFErrorID};
 macro_rules! validate_size {
     ($label: literal, $size: literal, $val: literal) => {
         const {
-            assert!(
+            debug_assert!(
                 $val >> $size == 0,
                 concat!($label, " can't be more than ", $size, " bits.")
             )
@@ -37,7 +37,7 @@ macro_rules! encode_instr {
     ([I] $op: literal, $rd: expr, $rs1: expr, $funct3: literal, $imm: expr) => {{
         validate_size!("opcode", 7, $op);
         validate_size!("funct3", 3, $funct3);
-        assert!(
+        debug_assert!(
             $imm.fits_within_bits(12),
             "I-type expressions take 12-bit immediates"
         );
@@ -53,7 +53,7 @@ macro_rules! encode_instr {
     ([S] $op: literal, $rs1: expr, $rs2: expr, $funct3: literal, $imm: expr) => {{
         validate_size!("opcode", 7, $op);
         validate_size!("funct3", 3, $funct3);
-        assert!(
+        debug_assert!(
             $imm.fits_within_bits(12),
             "S-type expressions take 12-bit immediates"
         );
@@ -69,7 +69,7 @@ macro_rules! encode_instr {
     }};
     ([U] $op: literal, $rd: expr, $imm: expr) => {{
         validate_size!("opcode", 7, $op);
-        assert!(
+        debug_assert!(
             $imm.fits_within_bits(20),
             "U-type instructions take 20-bit immediates"
         );
@@ -79,7 +79,7 @@ macro_rules! encode_instr {
     ([CI] $op: literal, $rd_rs1: expr, $funct3: literal, $imm: expr) => {{
         validate_size!("opcode", 2, $op);
         validate_size!("funct3", 3, $funct3);
-        assert!(
+        debug_assert!(
             $imm.fits_within_bits(6),
             "CI-type expressions take 6-bit immediates"
         );
@@ -211,11 +211,11 @@ const TEMP_REG: u8 = 6;
 pub(crate) struct RiscV64Inter;
 
 fn addi(reg: u8, i: i16) -> [u8; 4] {
-    assert!(
+    debug_assert!(
         reg != 0 && reg.fits_within_bits(5),
         "reg must be a valid register number"
     );
-    assert!(
+    debug_assert!(
         i.fits_within_bits(12),
         "addi immediate must fit within 12 bits"
     );
@@ -229,7 +229,7 @@ enum CompareType {
 }
 
 const fn b_type_bithack(dist: i16) -> u32 {
-    assert!(
+    debug_assert!(
         dist >= -4096 && dist < 4096 && (dist & 1 == 0),
         "B-type offset distance must be even number within -4096..4096"
     );
@@ -245,7 +245,7 @@ fn cond_jump(
     comp_type: CompareType,
     distance: i64,
 ) -> Result<[u8; 12], BFCompileError> {
-    assert!(
+    debug_assert!(
         distance & 1 == 0,
         "<…>::riscv64::cond_jump distance offset must be even"
     );
@@ -290,16 +290,16 @@ fn cond_jump(
 }
 
 fn c_addi(reg: u8, i: i8) -> [u8; 2] {
-    assert!(
+    debug_assert!(
         reg != 0 && reg.fits_within_bits(5),
         "reg must be a valid register number"
     );
-    assert!(
+    debug_assert!(
         i.fits_within_bits(6),
         "c_addi must only be called with 6-bit signed immediates"
     );
     // C.ADDI (expands to `addi reg, reg, imm`, and reg and imm must not be zero
-    assert!(i != 0, "C.ADDI requires nonzero arguments");
+    debug_assert!(i != 0, "C.ADDI requires nonzero arguments");
     let imm = i16::from(i) as u16;
     u16::to_le_bytes(0x0001 | (imm & (1 << 5)) << 7 | (u16::from(reg) << 7) | ((imm & 0x1f) << 2))
 }
@@ -443,7 +443,7 @@ mod test {
     #[cfg(feature = "disasmtests")]
     use super::super::test_utils::Disassembler;
     use super::*;
-    use test_macros::disasm_test;
+    use test_macros::{debug_assert_test, disasm_test};
 
     #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
@@ -613,14 +613,12 @@ mod test {
         );
     }
 
-    #[test]
-    #[should_panic = "c_addi must only be called with 6-bit signed immediates"]
+    #[debug_assert_test("c_addi must only be called with 6-bit signed immediates")]
     fn test_caddi_guard_positive() {
         c_addi(RiscVRegister::A0 as u8, 0b0111_0000);
     }
 
-    #[test]
-    #[should_panic = "c_addi must only be called with 6-bit signed immediates"]
+    #[debug_assert_test("c_addi must only be called with 6-bit signed immediates")]
     fn test_caddi_guard_negative() {
         c_addi(RiscVRegister::A0 as u8, -0b0111_0000);
     }
