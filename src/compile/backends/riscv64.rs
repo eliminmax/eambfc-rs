@@ -179,13 +179,10 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: u8, val: i64) {
     encode_li(code_buf, reg, hi52);
     // Generation of the instruction
     if shift_amount != 0 {
-        if shift_amount.fits_within_bits(6) {
-            // C.SLLI
-            code_buf.extend(encode_instr!([CI] 0b10, reg, 0, shift_amount));
-        } else {
-            // SLLI
-            code_buf.extend(encode_instr!([I] 0b001_0011, reg, reg, 0b111, shift_amount));
-        }
+        // This will always fit within 6 bits, as 63_u32 fits within 6 bits, and is the highest
+        // value that wouldn't shift the whole value out of bounds.
+        // C.SLLI
+        code_buf.extend(encode_instr!([CI] 0b10, reg, 0, shift_amount));
     }
     if lo12 != 0 {
         if lo12.fits_within_bits(6) {
