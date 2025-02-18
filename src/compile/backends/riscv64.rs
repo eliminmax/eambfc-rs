@@ -203,7 +203,6 @@ const NZ1: NonZeroI8 = NonZeroI8::new(1).expect("1 != 0");
 const NZ_NEG1: NonZeroI8 = NonZeroI8::new(-1).expect("1 != 0");
 
 /// Internal type representing a raw register identifier. Implements `Deref<Target = u8>`.
-/// The ways to construct it are with `TryFrom::try_from::<u8>` or `From::from<RiscVRegister>`.
 #[derive(PartialEq, Copy, Clone)]
 struct RawReg(u8);
 impl std::ops::Deref for RawReg {
@@ -213,16 +212,6 @@ impl std::ops::Deref for RawReg {
     }
 }
 
-impl TryFrom<u8> for RawReg {
-    type Error = u8;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value.fits_within_bits(5) {
-            Ok(RawReg(value))
-        } else {
-            Err(value)
-        }
-    }
-}
 impl From<RiscVRegister> for RawReg {
     fn from(value: RiscVRegister) -> Self {
         RawReg(value as u8)
