@@ -6,11 +6,9 @@
 //!
 //! * The following backends exist currently:
 //! * `arm64`
+//! * `riscv64`
 //! * `s390x`
 //! * `x86_64`
-//!
-//! Plumbing to add a `riscv64` backend is actively in the works, but the backend itself doesn't
-//! exist yet.
 //!
 //! \* Each supported platform has an associated feature, and will only be compiled in if that
 //! feature is enabled. By default, all backends are enabled through the `all_backends` feature*
