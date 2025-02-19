@@ -778,7 +778,10 @@ mod test {
         assert_eq!(v.len(), 2);
         RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0x123);
         assert_eq!(v.len(), 6);
-        assert_eq!(ds.disassemble(v), ["addi s0, s0, 0x12", "addi s0, s0, 0x123"]);
+        assert_eq!(
+            ds.disassemble(v),
+            ["addi s0, s0, 0x12", "addi s0, s0, 0x123"]
+        );
         let mut a = Vec::new();
         let mut b = Vec::new();
         RiscV64Inter::add_reg(&mut a, RiscVRegister::S0, 0xdeadbeef);

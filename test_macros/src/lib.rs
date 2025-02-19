@@ -197,7 +197,9 @@ pub fn bin_test(arch: TokenStream, func: TokenStream) -> TokenStream {
 /// }
 #[proc_macro_attribute]
 pub fn debug_assert_test(attr_arg: TokenStream, func: TokenStream) -> TokenStream {
-    let msg = parse_macro_input!(attr_arg as syn::LitStr).value().to_string();
+    let msg = parse_macro_input!(attr_arg as syn::LitStr)
+        .value()
+        .to_string();
     let mut func = parse_macro_input!(func as ItemFn);
     func.attrs.extend([
         parse_quote!(#[test]),
