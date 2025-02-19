@@ -589,7 +589,7 @@ mod test {
     }
     #[disasm_test]
     fn compressed_set_reg_64() {
-        // make sure that when it can use compressed instrucitons, it does so
+        // make sure that when it can use compressed instructions, it does so
         let mut v = Vec::with_capacity(12);
         RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 0xf_0000_0010);
         assert_eq!(v.len(), 6);
