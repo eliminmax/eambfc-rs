@@ -7,7 +7,7 @@
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
-arches='arm64 s390x x86_64'
+arches='arm64 riscv64 s390x x86_64'
 # fail with uncommitted changes - porcelain output will be empty if good to go
 if git status --porcelain | grep -q .; then
     printf 'Uncommitted changes!\n' >&2
