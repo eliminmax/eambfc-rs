@@ -9,94 +9,6 @@ use crate::err::{BFCompileError, BFErrorID};
 
 use std::num::NonZeroI8;
 
-/// A `const` assertion that `$val` fits within `$size` bits. `$val` is assumed to be a positive
-/// integer.
-macro_rules! validate_size {
-    ($label: literal, $size: literal, $val: literal) => {
-        const {
-            debug_assert!(
-                $val >> $size == 0,
-                concat!($label, " can't be more than ", $size, " bits.")
-            )
-        };
-    };
-}
-
-macro_rules! encode_instr {
-    ([R] $op: literal, $rd: expr, $rs1: expr, $rs2: expr, $funct3: literal, $funct7: literal) => {{
-        validate_size!("opcode", 7, $op);
-        validate_size!("funct3", 3, $funct3);
-        validate_size!("funct7", 7, $funct7);
-        u32::to_le_bytes(
-            ($funct7 << 25)
-                | (($rs2 as u32) << 20)
-                | (($rs1 as u32) << 15)
-                | ($funct3 << 12)
-                | (($rd as u32) << 7)
-                | $op,
-        )
-    }};
-    ([I] $op: literal, $rd: expr, $rs1: expr, $funct3: literal, $imm: expr) => {{
-        validate_size!("opcode", 7, $op);
-        validate_size!("funct3", 3, $funct3);
-        debug_assert!(
-            $imm.fits_within_bits(12),
-            "I-type expressions take 12-bit immediates"
-        );
-        #[allow(clippy::cast_lossless, reason = "Need to convert both ints and enums")]
-        u32::to_le_bytes(
-            ($imm as u32) << 20
-                | (($rs1 as u32) << 15)
-                | ($funct3 << 12)
-                | (($rd as u32) << 7)
-                | $op,
-        )
-    }};
-    ([S] $op: literal, $rs1: expr, $rs2: expr, $funct3: literal, $imm: expr) => {{
-        validate_size!("opcode", 7, $op);
-        validate_size!("funct3", 3, $funct3);
-        debug_assert!(
-            $imm.fits_within_bits(12),
-            "S-type expressions take 12-bit immediates"
-        );
-        #[allow(clippy::cast_lossless, reason = "Need to convert both ints and enums")]
-        u32::to_le_bytes(
-            ($imm & 0xfe0) << 25
-                | (($rs2 as u32) << 20)
-                | (($rs1 as u32) << 15)
-                | (($funct3 as u32) << 12)
-                | ($imm & 0x1f) << 7
-                | $op,
-        )
-    }};
-    ([U] $op: literal, $rd: expr, $imm: expr) => {{
-        validate_size!("opcode", 7, $op);
-        debug_assert!(
-            $imm.fits_within_bits(20),
-            "U-type instructions take 20-bit immediates"
-        );
-        #[allow(clippy::cast_lossless, reason = "Need to convert both ints and enums")]
-        u32::to_le_bytes((($imm as u32) << 12) | (($rd as u32) << 7) | $op)
-    }};
-    ([CI] $op: literal, $rd_rs1: expr, $funct3: literal, $imm: expr) => {{
-        validate_size!("opcode", 2, $op);
-        validate_size!("funct3", 3, $funct3);
-        debug_assert!(
-            $imm.fits_within_bits(6),
-            "CI-type expressions take 6-bit immediates"
-        );
-        let imm = $imm as u16;
-        #[allow(clippy::cast_lossless, reason = "Need to convert both ints and enums")]
-        u16::to_le_bytes(
-            $funct3 << 13
-                | (imm & (1 << 5)) << 7
-                | (($rd_rs1 as u16) << 7)
-                | ((imm & 0x1f) << 2)
-                | $op,
-        )
-    }};
-}
-
 /// Truncate `val` to `amnt` bits and sign extend the result
 const fn sign_extend(val: i64, amnt: u32) -> i64 {
     val << (i64::BITS - amnt) >> (i64::BITS - amnt)
@@ -130,30 +42,40 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
         let hi20 = sign_extend(((val as u64).wrapping_add(0x800) >> 12) as i64, 20);
         if hi20 != 0 {
             if hi20.fits_within_bits(6) {
-                // C.LUI
-                code_buf.extend(encode_instr!([CI] 0b01, *reg, 0b011, hi20));
+                // C.LUI imm, hi20
+                let imm = hi20 as u16;
+                code_buf.extend(u16::to_le_bytes(
+                    0x6001 | (imm & 0x20) << 7 | (u16::from(*reg) << 7) | ((imm & 0x1f) << 2),
+                ));
             } else {
                 // LUI
-                code_buf.extend(encode_instr!([U] 0b011_0111, *reg, hi20));
+                code_buf.extend(u32::to_le_bytes(
+                    ((hi20 as u32) << 12) | (u32::from(*reg) << 7) | 0b011_0111,
+                ));
             }
         }
         match (lo12, hi20) {
-            (n, 0) if n.fits_within_bits(6) => {
-                // C.LI
-                code_buf.extend(encode_instr!([CI] 0b01, *reg, 0b010, lo12));
+            (0, n) if n != 0 => (),
+            (_, n) if lo12.fits_within_bits(6) => {
+                // if n == 0: `C.LI reg, lo6`
+                // else: `ADDIW reg, reg, lo6`
+                let template = if n == 0 { 0x4001 } else { 0x2001 };
+                let imm = lo12 as u16;
+                code_buf.extend(u16::to_le_bytes(
+                    template | (imm & 0x20) << 7 | u16::from(*reg) << 7 | ((imm & 0x1f) << 2),
+                ));
             }
-            (0, _) => (),
-            (n, _) if n.fits_within_bits(6) => {
-                // C.ADDIW
-                code_buf.extend(encode_instr!([CI] 0b01, *reg, 0b001, lo12));
-            }
-            (_, 0) => {
-                // ADDI reg.into(), zero, lo12
-                code_buf.extend(encode_instr!([I] 0b001_0011, *reg, 0, 0, lo12));
-            }
-            _ => {
-                // ADDIW reg.into(), reg.into(), lo12
-                code_buf.extend(encode_instr!([I] 0b001_1011, *reg, *reg, 0, lo12));
+            (_, n) => {
+                // if n != 0: `ADDIW reg, reg, lo12`
+                // else `ADDI reg, zero, lo12`
+                let (opcode, rs1): (u32, u32) = if n == 0 {
+                    (0b001_0011, 0)
+                } else {
+                    (0b001_1011, u32::from(*reg) << 15)
+                };
+                code_buf.extend(u32::to_le_bytes(
+                    (lo12 as u32) << 20 | rs1 | (u32::from(*reg) << 7) | opcode,
+                ));
             }
         }
         return;
@@ -179,12 +101,18 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
     }
     // Recursive call
     encode_li(code_buf, reg, hi52);
+    let shift_amount = shift_amount as u16;
     // Generation of the instruction
     if shift_amount != 0 {
         // This will always fit within 6 bits, as 63_u32 fits within 6 bits, and is the highest
         // value that wouldn't shift the whole value out of bounds.
         // C.SLLI
-        code_buf.extend(encode_instr!([CI] 0b10, *reg, 0, shift_amount));
+        code_buf.extend(u16::to_le_bytes(
+            (shift_amount & 0x20) << 7
+                | (u16::from(*reg) << 7)
+                | ((shift_amount & 0x1f) << 2)
+                | 0b10,
+        ));
     }
     if lo12 != 0 {
         if lo12.fits_within_bits(6) {
@@ -199,8 +127,9 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
 }
 
 // SPDX-SnippetEnd
+
 const NZ1: NonZeroI8 = NonZeroI8::new(1).expect("1 != 0");
-const NZ_NEG1: NonZeroI8 = NonZeroI8::new(-1).expect("1 != 0");
+const NZ_NEG1: NonZeroI8 = NonZeroI8::new(-1).expect("-1 != 0");
 
 /// Internal type representing a raw register identifier. Implements `Deref<Target = u8>`.
 #[derive(PartialEq, Copy, Clone)]
@@ -238,7 +167,9 @@ fn addi(reg: RawReg, i: i16) -> [u8; 4] {
         i.fits_within_bits(12),
         "addi immediate must fit within 12 bits"
     );
-    encode_instr!([I] 0b001_0011, *reg, *reg, 0, i)
+    u32::to_le_bytes(
+        (i as u32) << 20 | (u32::from(*reg) << 15) | (u32::from(*reg) << 7) | 0b001_0011,
+    )
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -310,12 +241,12 @@ fn c_addi(reg: RawReg, i: NonZeroI8) -> [u8; 2] {
 
 fn store_to_byte(addr: RiscVRegister) -> [u8; 4] {
     // SB
-    encode_instr!([S] 0b100_011, addr, *TEMP_REG, 0, 0)
+    u32::to_le_bytes((u32::from(*TEMP_REG) << 20) | ((addr as u32) << 15) | 0b100_011)
 }
 
 fn load_from_byte(addr: RiscVRegister) -> [u8; 4] {
     // LB
-    encode_instr!([I] 0b000_011, *TEMP_REG, addr, 0, 0)
+    u32::to_le_bytes(((addr as u32) << 15) | (u32::from(*TEMP_REG) << 7) | 0b000_011)
 }
 
 impl ArchInter for RiscV64Inter {
@@ -445,7 +376,7 @@ impl ArchInter for RiscV64Inter {
 
     fn zero_byte(code_buf: &mut Vec<u8>, reg: Self::RegType) {
         // SB reg, zero
-        code_buf.extend(encode_instr!([S] 0b100_011, reg, 0, 0, 0));
+        code_buf.extend(u32::to_le_bytes(((reg as u32) << 15) | 0b010_0011));
     }
 }
 
