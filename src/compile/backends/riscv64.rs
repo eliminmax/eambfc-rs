@@ -207,10 +207,6 @@ fn cond_jump(
     // load byte to compare
     code[..4].clone_from_slice(&load_from_byte(reg));
 
-    let mut code = [0; 12];
-    // load
-    code[..4].clone_from_slice(&load_from_byte(reg));
-
     // `BNEZ t1, 8` if comp_type == Eq, otherwise `BEQZ t1, 8`
     code[4..8].clone_from_slice(&u32::to_le_bytes(0x0003_0463 | (comp_type as u32)));
 
