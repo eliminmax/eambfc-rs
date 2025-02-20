@@ -42,13 +42,13 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
         let hi20 = sign_extend(((val as u64).wrapping_add(0x800) >> 12) as i64, 20);
         if hi20 != 0 {
             if hi20.fits_within_bits(6) {
-                // C.LUI imm, hi20
+                // C.LUI reg, hi20
                 let imm = hi20 as u16;
                 code_buf.extend(u16::to_le_bytes(
                     0x6001 | (imm & 0x20) << 7 | (u16::from(*reg) << 7) | ((imm & 0x1f) << 2),
                 ));
             } else {
-                // LUI
+                // LUI reg, hi20
                 code_buf.extend(u32::to_le_bytes(
                     ((hi20 as u32) << 12) | (u32::from(*reg) << 7) | 0b011_0111,
                 ));
@@ -104,9 +104,7 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
     let shift_amount = shift_amount as u16;
     // Generation of the instruction
     if shift_amount != 0 {
-        // This will always fit within 6 bits, as 63_u32 fits within 6 bits, and is the highest
-        // value that wouldn't shift the whole value out of bounds.
-        // C.SLLI
+        // C.SLLI reg, shift_amount
         code_buf.extend(u16::to_le_bytes(
             (shift_amount & 0x20) << 7
                 | (u16::from(*reg) << 7)
