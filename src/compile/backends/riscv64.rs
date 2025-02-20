@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use super::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
-use super::MinimumBits;
 use crate::err::{BFCompileError, BFErrorID};
 
 use std::num::NonZeroI8;

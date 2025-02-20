@@ -12,7 +12,7 @@ pub(crate) mod backends;
 pub(crate) mod elf_tools;
 
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
-use elf_tools::{ElfArch, PType, EHDR_SIZE, PHDR_SIZE};
+use elf_tools::{EHDR_SIZE, ElfArch, PHDR_SIZE, PType};
 
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
@@ -123,7 +123,7 @@ pub(crate) trait BFCompile {
         tape_blocks: u64,
         out_suffix: Option<&OsStr>,
     ) -> Result<(), Vec<BFCompileError>> {
-        use std::fs::{remove_file, File, OpenOptions};
+        use std::fs::{File, OpenOptions, remove_file};
 
         let mut open_options = OpenOptions::new();
         open_options.write(true).create(true).truncate(true);
@@ -390,11 +390,7 @@ impl<B: BFCompileHelper> BFCompile for B {
                 "Failed to write internal code buffer to output file",
             )),
         }
-        if errs.is_empty() {
-            Ok(())
-        } else {
-            Err(errs)
-        }
+        if errs.is_empty() { Ok(()) } else { Err(errs) }
     }
 }
 
@@ -478,24 +474,28 @@ mod tests {
                 .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
         // partial write failure while writing code
-        assert!(TestInter::compile(
-            b"[-]".as_slice(),
-            FailingWriter {
-                fail_after: START_ADDR as usize + 1
-            },
-            true,
-            8
-        )
-        .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite));
+        assert!(
+            TestInter::compile(
+                b"[-]".as_slice(),
+                FailingWriter {
+                    fail_after: START_ADDR as usize + 1
+                },
+                true,
+                8
+            )
+            .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
+        );
         // total write failure after writing headers
-        assert!(TestInter::compile(
-            b"[-]".as_slice(),
-            FailingWriter {
-                fail_after: START_ADDR as usize
-            },
-            true,
-            8
-        )
-        .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite));
+        assert!(
+            TestInter::compile(
+                b"[-]".as_slice(),
+                FailingWriter {
+                    fail_after: START_ADDR as usize
+                },
+                true,
+                8
+            )
+            .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
+        );
     }
 }

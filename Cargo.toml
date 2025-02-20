@@ -5,7 +5,7 @@
 [package]
 name = "eambfc-rs"
 version = "4.0.0-pre"
-edition = "2021"
+edition = "2024"
 
 [features]
 default = ["all_backends", "bintests", "disasmtests"]

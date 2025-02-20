@@ -100,9 +100,7 @@ macro_rules! checked_output {
         assert!(!output.status.success());
         output.$stream
     }};
-    (expect_failure, $cmd: expr) => {{
-        checked_output!(expect_failure, $cmd, stdout)
-    }};
+    (expect_failure, $cmd: expr) => {{ checked_output!(expect_failure, $cmd, stdout) }};
 }
 
 macro_rules! help_text {
@@ -113,9 +111,7 @@ macro_rules! help_text {
             env!("EAMBFC_DEFAULT_ARCH")
         )
     }};
-    () => {{
-        help_text!(EXEC_PATH)
-    }};
+    () => {{ help_text!(EXEC_PATH) }};
 }
 
 #[derive(Deserialize, PartialEq, Clone)]

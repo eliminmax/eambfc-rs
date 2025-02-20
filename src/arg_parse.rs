@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::OutMode;
 use crate::compile::elf_tools::ElfArch;
 use crate::err::{BFCompileError, BFErrorID};
-use crate::OutMode;
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
 #[cfg(unix)]
@@ -95,7 +95,7 @@ impl PartialRunConfig {
                         format!("'{}' is not a recognized argument", bad_arg.escape_ascii()),
                     ),
                     self.out_mode,
-                ))
+                ));
             }
         }
         Ok(())
@@ -129,7 +129,7 @@ impl PartialRunConfig {
                         format!("{} is not a recognized architecture", f.escape_ascii()),
                     ),
                     self.out_mode,
-                ))
+                ));
             }
         };
         Ok(())

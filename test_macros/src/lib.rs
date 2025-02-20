@@ -5,7 +5,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::ToTokens;
-use syn::{parse_macro_input, parse_quote, Attribute, Block, Ident, ItemFn};
+use syn::{Attribute, Block, Ident, ItemFn, parse_macro_input, parse_quote};
 
 #[proc_macro_attribute]
 /// For tests which should be `ignore`d on non-unix targets due to the use of unix-only traits like

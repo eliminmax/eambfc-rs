@@ -89,7 +89,9 @@ mod tests {
 
     #[test]
     fn rmext_fail() {
-        assert!(set_extension("ee.e".as_ref(), ".bf".as_ref(), None)
-            .is_err_and(|e| e.error_id() == BFErrorID::BadExtension));
+        assert!(
+            set_extension("ee.e".as_ref(), ".bf".as_ref(), None)
+                .is_err_and(|e| e.error_id() == BFErrorID::BadExtension)
+        );
     }
 }
