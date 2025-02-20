@@ -355,6 +355,7 @@ impl<B: BFCompileHelper> BFCompile for B {
         }
 
         // quick check to make sure that there are no unterminated loops
+        jump_stack.reverse();
         while let Some(jl) = jump_stack.pop() {
             errs.push(BFCompileError::new(
                 BFErrorID::UnmatchedOpen,
