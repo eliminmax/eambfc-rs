@@ -329,12 +329,12 @@ impl ArchInter for S390xInter {
         } else if let Ok(imm16) = i16::try_from(imm) {
             // if it fits in a halfword, use Load Halfword Immediate (64 <- 16)
             // LGHI r.reg, imm {RI-a}
-            code_buf.extend(u16::to_be_bytes(0xa709 | (reg as u16) << 4));
+            code_buf.extend(u16::to_be_bytes(0xa709 | ((reg as u16) << 4)));
             code_buf.extend(imm16.to_be_bytes());
         } else if let Ok(imm32) = i32::try_from(imm) {
             // if it fits within a word, use Load Immediate (64 <- 32)
             // LGFI r.reg, imm {RIL-a}
-            code_buf.extend(u16::to_be_bytes(0xc001 | (reg as u16) << 4));
+            code_buf.extend(u16::to_be_bytes(0xc001 | ((reg as u16) << 4)));
             code_buf.extend(imm32.to_be_bytes());
         } else {
             Self::set_reg(code_buf, reg, i64::from(imm as i32));
@@ -347,19 +347,19 @@ impl ArchInter for S390xInter {
                 (n, imm_high_low) if n == default_val => {
                     // set bits 16-31 of the register to the immediate, leave other bits as-is
                     // IIHL reg, upper_imm {RI-a}
-                    code_buf.extend(u16::to_be_bytes(0xa501 | (reg as u16) << 4));
+                    code_buf.extend(u16::to_be_bytes(0xa501 | ((reg as u16) << 4)));
                     code_buf.extend(imm_high_low.to_be_bytes());
                 }
                 (imm_high_high, n) if n == default_val => {
                     // set bits 0-15 of the register to the immediate, leave other bits as-is
                     // IIHH reg, upper_imm {RI-a}
-                    code_buf.extend(u16::to_be_bytes(0xa500 | (reg as u16) << 4));
+                    code_buf.extend(u16::to_be_bytes(0xa500 | ((reg as u16) << 4)));
                     code_buf.extend(imm_high_high.to_be_bytes());
                 }
                 _ => {
                     // need to set the full upper word, with Insert Immediate (high)
                     // IIHF reg, imm {RIL-a}
-                    code_buf.extend(u16::to_be_bytes(0xc008 | (reg as u16) << 4));
+                    code_buf.extend(u16::to_be_bytes(0xc008 | ((reg as u16) << 4)));
                     code_buf.extend(imm_high.to_be_bytes());
                 }
             }

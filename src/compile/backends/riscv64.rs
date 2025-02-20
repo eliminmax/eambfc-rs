@@ -45,7 +45,7 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
                 // C.LUI reg, hi20
                 let imm = hi20 as u16;
                 code_buf.extend(u16::to_le_bytes(
-                    0x6001 | (imm & 0x20) << 7 | (u16::from(*reg) << 7) | ((imm & 0x1f) << 2),
+                    0x6001 | (((imm & 0x20) | u16::from(*reg)) << 7) | ((imm & 0x1f) << 2),
                 ));
             } else {
                 // LUI reg, hi20
@@ -62,7 +62,7 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
                 let template = if n == 0 { 0x4001 } else { 0x2001 };
                 let imm = lo12 as u16;
                 code_buf.extend(u16::to_le_bytes(
-                    template | (imm & 0x20) << 7 | u16::from(*reg) << 7 | ((imm & 0x1f) << 2),
+                    template | (((imm & 0x20) | u16::from(*reg)) << 7) | ((imm & 0x1f) << 2),
                 ));
             }
             (_, n) => {
@@ -74,7 +74,7 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
                     (0b001_1011, u32::from(*reg) << 15)
                 };
                 code_buf.extend(u32::to_le_bytes(
-                    (lo12 as u32) << 20 | rs1 | (u32::from(*reg) << 7) | opcode,
+                    ((lo12 as u32) << 20) | rs1 | (u32::from(*reg) << 7) | opcode,
                 ));
             }
         }
@@ -106,8 +106,7 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
     if shift_amount != 0 {
         // C.SLLI reg, shift_amount
         code_buf.extend(u16::to_le_bytes(
-            (shift_amount & 0x20) << 7
-                | (u16::from(*reg) << 7)
+            (((shift_amount & 0x20) | (u16::from(*reg))) << 7)
                 | ((shift_amount & 0x1f) << 2)
                 | 0b10,
         ));
@@ -166,7 +165,7 @@ fn addi(reg: RawReg, i: i16) -> [u8; 4] {
         "addi immediate must fit within 12 bits"
     );
     u32::to_le_bytes(
-        (i as u32) << 20 | (u32::from(*reg) << 15) | (u32::from(*reg) << 7) | 0b001_0011,
+        ((i as u32) << 20) | (u32::from(*reg) << 15) | (u32::from(*reg) << 7) | 0b001_0011,
     )
 }
 
@@ -230,7 +229,7 @@ fn c_addi(reg: RawReg, i: NonZeroI8) -> [u8; 2] {
         "c_addi must only be called with 6-bit signed immediates"
     );
     let imm = i16::from(i.get()) as u16;
-    u16::to_le_bytes(0x0001 | (imm & (1 << 5)) << 7 | (u16::from(reg.0) << 7) | ((imm & 0x1f) << 2))
+    u16::to_le_bytes(0x0001 | (((imm & 0x20) | u16::from(*reg)) << 7) | ((imm & 0x1f) << 2))
 }
 
 fn store_to_byte(addr: RiscVRegister) -> [u8; 4] {
@@ -269,7 +268,7 @@ impl ArchInter for RiscV64Inter {
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType) {
         // C.MV src, dst
         code_buf.extend(u16::to_le_bytes(
-            0x8002 | (dst as u16) << 7 | (src as u16) << 2,
+            0x8002 | ((dst as u16) << 7) | ((src as u16) << 2),
         ));
     }
 
@@ -342,7 +341,7 @@ impl ArchInter for RiscV64Inter {
                 encode_li(code_buf, TEMP_REG, imm as i64);
                 // C.ADD reg, aux
                 code_buf.extend(u16::to_le_bytes(
-                    0x9002 | (reg as u16) << 7 | u16::from(*TEMP_REG) << 2,
+                    0x9002 | ((reg as u16) << 7) | (u16::from(*TEMP_REG) << 2),
                 ));
             }
         }
