@@ -143,13 +143,18 @@ impl ErrorMsg {
     }
 }
 
+fn get_errs(eambfc_cmd: &mut Command) -> Vec<ErrorMsg> {
+    String::from_utf8(checked_output!(expect_failure, eambfc_cmd))
+        .unwrap()
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+}
+
 macro_rules! test_err {
     ($first_err: expr) => {
-        let errors = String::from_utf8(
-            checked_output!(expect_failure, eambfc_with_args!("-j"))
-        ).unwrap()
-        .lines()
-        .map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
+        let errors = get_errs(eambfc_with_args!("-j"));
         assert_eq!(
             ErrorMsg::expected_formatting(&errors).trim(),
             String::from_utf8(
@@ -159,11 +164,7 @@ macro_rules! test_err {
         assert_eq!(errors[0].error_id, $first_err);
     };
     ($first_err: expr, $($args:expr),+) => {
-        let errors = String::from_utf8(
-            eambfc_with_args!("-j", $($args),+).output().unwrap().stdout
-        ).unwrap()
-        .lines()
-        .map(|e| serde_json::from_str(&e).unwrap()).collect::<Vec<_>>();
+        let errors = get_errs(eambfc_with_args!("-j", $($args),+));
         let output = checked_output!(expect_failure, eambfc_with_args!($($args),+), stderr);
         assert_eq!(
             ErrorMsg::expected_formatting(&errors).trim(),
@@ -510,5 +511,25 @@ fn test_help_output() {
 fn test_alt_argv0_help() {
     use std::os::unix::process::CommandExt;
     let output = checked_output!(eambfc_with_args!("-h").arg0("bfc"));
-    assert_eq!(output, help_text!("bfc").as_bytes());
+    assert_eq!(String::from_utf8(output).unwrap(), help_text!("bfc"));
+}
+
+#[test]
+fn code_position_reporting() -> io::Result<()> {
+    use io::Write;
+    let dir = working_dir()?;
+    let codepos = dir.join("codepos.bf");
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&codepos)?
+        .write_all(b"\n+++++++++++++++++++++++++++++++[\n[")?;
+    let errors = get_errs(eambfc_with_args!("-j", codepos));
+    assert_eq!(errors[0].line, Some(2));
+    assert_eq!(errors[0].column, Some(32));
+    assert_eq!(errors[0].error_id, "UNMATCHED_OPEN");
+    assert_eq!(errors[1].line, Some(3));
+    assert_eq!(errors[1].column, Some(1));
+    assert_eq!(errors[1].error_id, "UNMATCHED_OPEN");
+    Ok(())
 }
