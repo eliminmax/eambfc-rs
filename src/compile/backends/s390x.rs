@@ -641,7 +641,7 @@ mod tests {
         assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
         assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
         // lh for low | high (i.e. not equal).
-        // For some reason, treats operand as an unsigned immediate after sign extending it to
+        // For some reason, LLVM treats operand as an unsigned immediate after sign extending it to
         // the full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
         given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
         assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
