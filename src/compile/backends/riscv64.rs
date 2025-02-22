@@ -234,12 +234,12 @@ fn c_addi(reg: RawReg, i: NonZeroI8) -> [u8; 2] {
 
 fn store_to_byte(addr: RiscVRegister) -> [u8; 4] {
     // SB
-    u32::to_le_bytes((u32::from(*TEMP_REG) << 20) | ((addr as u32) << 15) | 0b100_011)
+    u32::to_le_bytes((u32::from(*TEMP_REG) << 20) | ((addr as u32) << 15) | 0b010_0011)
 }
 
 fn load_from_byte(addr: RiscVRegister) -> [u8; 4] {
     // LB
-    u32::to_le_bytes(((addr as u32) << 15) | (u32::from(*TEMP_REG) << 7) | 0b000_011)
+    u32::to_le_bytes(((addr as u32) << 15) | (u32::from(*TEMP_REG) << 7) | 0b000_0011)
 }
 
 impl ArchInter for RiscV64Inter {
@@ -266,7 +266,7 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType) {
-        // C.MV src, dst
+        // C.MV dst, src
         code_buf.extend(u16::to_le_bytes(
             0x8002 | ((dst as u16) << 7) | ((src as u16) << 2),
         ));
