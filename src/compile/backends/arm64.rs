@@ -13,7 +13,8 @@ use super::elf_tools::{ByteOrdering, ElfArch};
 // X19 is the first register that the ABI guarantees to be preserved across function calls, and the
 // rest are used by the Linux system call interface for the platform.
 // Other registers are not defined because they are not needed for eambfc-rs, but they go up to 31.
-// 32 is a special case not relevant here.
+// 32 is a special case that is either a zero register or the stack pointer, depending on the
+// instruction
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u8)]
@@ -22,10 +23,27 @@ pub(in super::super) enum Arm64Register {
     X1 = 1,   // arg2 register
     X2 = 2,   // arg3 register
     X8 = 8,   // syscall register
-    X16 = 16, // scratch register
-    X17 = 17, // scratch register
     X19 = 19, // bf pointer register
 }
+
+/// Internal type representing a raw register identifier. Implements `Deref<Target = u8>`.
+#[derive(PartialEq, Copy, Clone)]
+struct RawReg(u8);
+impl std::ops::Deref for RawReg {
+    type Target = u8;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<Arm64Register> for RawReg {
+    fn from(value: Arm64Register) -> Self {
+        RawReg(value as u8)
+    }
+}
+
+/// Private scratch register used within certain operations
+const TEMP_REG: RawReg = RawReg(17);
 
 #[derive(Clone, Copy, PartialEq)]
 #[repr(u8)]
@@ -44,7 +62,7 @@ enum MoveType {
     Invert = 0b00,
 }
 
-fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, reg: Arm64Register) -> [u8; 4] {
+fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, reg: RawReg) -> [u8; 4] {
     // depending on MoveType, it will be one of MOVK, MOVN, or MOVZ
     // bitwise not to invert imm16 if needed.
     let imm16 = if move_type == MoveType::Invert {
@@ -57,26 +75,18 @@ fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, reg: Arm64Register) -
             | ((move_type as u32) << 29)
             | ((shift as u32) << 21)
             | (u32::from(imm16) << 5)
-            | (reg as u32),
+            | u32::from(*reg),
     )
 }
 
-fn aux_reg(reg: Arm64Register) -> Arm64Register {
-    if reg == Arm64Register::X17 {
-        Arm64Register::X16
-    } else {
-        Arm64Register::X17
-    }
+fn load_from_byte(addr: Arm64Register) -> [u8; 4] {
+    // LDRB w17, addr
+    u32::to_le_bytes(0x3840_0411 | ((addr as u32) << 5))
 }
 
-fn load_from_byte(addr: Arm64Register, dst: Arm64Register) -> [u8; 4] {
-    // LDRB dst, addr
-    u32::to_le_bytes(0x3840_0400 | (dst as u32) | ((addr as u32) << 5))
-}
-
-fn store_to_byte(addr: Arm64Register, src: Arm64Register) -> [u8; 4] {
-    // STRB src, addr
-    u32::to_le_bytes(0x3800_0400 | (src as u32) | ((addr as u32) << 5))
+fn store_to_byte(addr: Arm64Register) -> [u8; 4] {
+    // STRB w17, addr
+    u32::to_le_bytes(0x3800_0411 | ((addr as u32) << 5))
 }
 
 #[derive(PartialEq, Copy, Clone)]
@@ -105,17 +115,39 @@ fn branch_cond(
         ));
     }
     let offset = (1 + ((offset as u32) >> 2)) & 0x7ffff;
-    let aux = aux_reg(reg);
     let mut code_buf = [0; 12];
-    code_buf[..4].clone_from_slice(&load_from_byte(reg, aux));
+    code_buf[..4].clone_from_slice(&load_from_byte(reg));
 
     // TST reg, 0xff (technically an alias for ANDS xzr, reg, 0xff)
-    code_buf[4..8].clone_from_slice(&u32::to_le_bytes(0xf240_1c1f | ((aux as u32) << 5)));
+    code_buf[4..8].clone_from_slice(&u32::to_le_bytes(0xf240_1e3f));
     // B.cond {offset}
     code_buf[8..].clone_from_slice(&u32::to_le_bytes(
         0x5400_0000 | (cond as u32) | (offset << 5),
     ));
     Ok(code_buf)
+}
+fn set_raw_reg(code_buf: &mut Vec<u8>, reg: RawReg, imm: i64) {
+    // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
+    let parts: [(u16, ShiftLevel); 4] = [
+        (imm as u16, ShiftLevel::NoShift),
+        ((imm >> 16) as u16, ShiftLevel::Shift16),
+        ((imm >> 32) as u16, ShiftLevel::Shift32),
+        ((imm >> 48) as u16, ShiftLevel::Shift48),
+    ];
+    let (test_val, first_mov_type): (u16, MoveType) = if imm < 0 {
+        (0xffff, MoveType::Invert)
+    } else {
+        (0, MoveType::Zero)
+    };
+    let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != test_val);
+    let fallback = (test_val, ShiftLevel::NoShift);
+    let (lead_imm, lead_shift) = parts.next().unwrap_or(&fallback);
+    // (MOVZ or MOVN) reg, lead_imm << lead_shift
+    code_buf.extend(mov(first_mov_type, *lead_imm, *lead_shift, reg));
+    parts.for_each(|(imm16, shift)| {
+        // MOVK reg, imm16 << shift
+        code_buf.extend(mov(MoveType::Keep, *imm16, *shift, reg));
+    });
 }
 
 pub(crate) struct Arm64Inter;
@@ -142,27 +174,7 @@ impl ArchInter for Arm64Inter {
     const ARCH: ElfArch = ElfArch::Arm64;
     const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
     fn set_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
-        // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
-        let parts: [(u16, ShiftLevel); 4] = [
-            (imm as u16, ShiftLevel::NoShift),
-            ((imm >> 16) as u16, ShiftLevel::Shift16),
-            ((imm >> 32) as u16, ShiftLevel::Shift32),
-            ((imm >> 48) as u16, ShiftLevel::Shift48),
-        ];
-        let (test_val, first_mov_type): (u16, MoveType) = if imm < 0 {
-            (0xffff, MoveType::Invert)
-        } else {
-            (0, MoveType::Zero)
-        };
-        let mut parts = parts.iter().filter(|(imm16, _)| *imm16 != test_val);
-        let fallback = (test_val, ShiftLevel::NoShift);
-        let (lead_imm, lead_shift) = parts.next().unwrap_or(&fallback);
-        // (MOVZ or MOVN) reg, lead_imm << lead_shift
-        code_buf.extend(mov(first_mov_type, *lead_imm, *lead_shift, reg));
-        parts.for_each(|(imm16, shift)| {
-            // MOVK reg, imm16 << shift
-            code_buf.extend(mov(MoveType::Keep, *imm16, *shift, reg));
-        });
+        set_raw_reg(code_buf, reg.into(), imm);
     }
 
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Arm64Register, src: Arm64Register) {
@@ -207,31 +219,29 @@ impl ArchInter for Arm64Inter {
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
-        let aux = aux_reg(reg);
-        code_buf.extend(load_from_byte(reg, aux));
-        add_sub_imm(code_buf, aux, u64::from(imm), ArithOp::Add, false);
-        code_buf.extend(store_to_byte(reg, aux));
+        code_buf.extend(load_from_byte(reg));
+        add_sub_imm(code_buf, TEMP_REG, u64::from(imm), ArithOp::Add, false);
+        code_buf.extend(store_to_byte(reg));
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
-        let aux = aux_reg(reg);
-        code_buf.extend(load_from_byte(reg, aux));
-        add_sub_imm(code_buf, aux, u64::from(imm), ArithOp::Sub, false);
-        code_buf.extend(store_to_byte(reg, aux));
+        code_buf.extend(load_from_byte(reg));
+        add_sub_imm(code_buf, TEMP_REG, u64::from(imm), ArithOp::Sub, false);
+        code_buf.extend(store_to_byte(reg));
     }
 
     fn inc_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-        let aux = aux_reg(reg);
-        code_buf.extend(load_from_byte(reg, aux));
-        Self::inc_reg(code_buf, aux);
-        code_buf.extend(store_to_byte(reg, aux));
+        code_buf.extend(load_from_byte(reg));
+        // add x17, x17, 1
+        code_buf.extend(u32::to_le_bytes(0x9100_0631));
+        code_buf.extend(store_to_byte(reg));
     }
 
     fn dec_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-        let aux = aux_reg(reg);
-        code_buf.extend(load_from_byte(reg, aux));
-        Self::dec_reg(code_buf, aux);
-        code_buf.extend(store_to_byte(reg, aux));
+        code_buf.extend(load_from_byte(reg));
+        // sub x17, x17, 1
+        code_buf.extend(u32::to_le_bytes(0xd100_0631));
+        code_buf.extend(store_to_byte(reg));
     }
 
     fn jump_close(
@@ -266,7 +276,7 @@ enum ArithOp {
     Sub = 0xd1,
 }
 
-fn add_sub_imm(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp, shift: bool) {
+fn add_sub_imm(code_buf: &mut Vec<u8>, reg: RawReg, imm: u64, op: ArithOp, shift: bool) {
     assert!(
         (shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0),
         "{imm} is invalid for shift level"
@@ -277,28 +287,26 @@ fn add_sub_imm(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp
         ((op as u32) << 24)
             | if shift { 1 << 22 } else { 0 }
             | aligned_imm
-            | ((reg as u32) << 5)
-            | reg as u32,
+            | (u32::from(*reg) << 5)
+            | u32::from(*reg),
     ));
 }
 
 fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp) {
     match imm {
-        i if i < 0x1_000 => add_sub_imm(code_buf, reg, imm, op, false),
+        i if i < 0x1_000 => add_sub_imm(code_buf, reg.into(), imm, op, false),
         i if i < 0x1_000_000 => {
-            add_sub_imm(code_buf, reg, imm & 0xfff_000, op, true);
+            add_sub_imm(code_buf, reg.into(), imm & 0xfff_000, op, true);
             if i & 0xfff != 0 {
-                add_sub_imm(code_buf, reg, imm & 0xfff, op, false);
+                add_sub_imm(code_buf, reg.into(), imm & 0xfff, op, false);
             }
         }
         i => {
-            let aux = aux_reg(reg);
-            Arm64Inter::set_reg(code_buf, aux, i as i64);
-            // either ADD reg, reg, aux or SUB reg, reg, aux
+            set_raw_reg(code_buf, TEMP_REG, i as i64);
+            // either ADD reg, reg, x17 or SUB reg, reg, x17
             code_buf.extend(u32::to_le_bytes(
-                0x8b00_0000
+                0x8b11_0000
                     | if op == ArithOp::Sub { 1 << 30 } else { 0 }
-                    | ((aux as u32) << 16)
                     | ((reg as u32) << 5)
                     | (reg as u32),
             ));
@@ -342,7 +350,7 @@ mod tests {
     #[test]
     #[should_panic = "32 is invalid for shift level"]
     fn test_add_sub_imm_guard() {
-        add_sub_imm(&mut vec![], Arm64Register::X8, 32, ArithOp::Add, true);
+        add_sub_imm(&mut vec![], RawReg(8), 32, ArithOp::Add, true);
     }
 
     #[disasm_test]
@@ -405,13 +413,13 @@ mod tests {
     fn test_load_store() {
         let mut ds = disassembler();
         assert_eq!(
-            ds.disassemble(load_from_byte(Arm64Register::X19, Arm64Register::X16).into()),
-            ["ldrb w16, [x19], #0x0"],
+            ds.disassemble(load_from_byte(Arm64Register::X19).into()),
+            ["ldrb w17, [x19], #0x0"],
         );
 
         assert_eq!(
-            ds.disassemble(store_to_byte(Arm64Register::X19, Arm64Register::X16).into()),
-            ["strb w16, [x19], #0x0"],
+            ds.disassemble(store_to_byte(Arm64Register::X19).into()),
+            ["strb w17, [x19], #0x0"],
         );
     }
 
@@ -421,32 +429,32 @@ mod tests {
 
         // Handling of 24-bit values
         let mut v: Vec<u8> = Vec::with_capacity(24);
-        add_sub(&mut v, Arm64Register::X16, 0xabc_def, ArithOp::Add);
+        add_sub(&mut v, Arm64Register::X8, 0xabc_def, ArithOp::Add);
         assert_eq!(
             ds.disassemble(v),
-            ["add x16, x16, #0xabc, lsl #12", "add x16, x16, #0xdef"]
+            ["add x8, x8, #0xabc, lsl #12", "add x8, x8, #0xdef"]
         );
 
         // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
         // included
         let mut v: Vec<u8> = Vec::with_capacity(24);
-        add_sub(&mut v, Arm64Register::X16, 0xabc_000, ArithOp::Sub);
-        assert_eq!(ds.disassemble(v), ["sub x16, x16, #0xabc, lsl #12"]);
+        add_sub(&mut v, Arm64Register::X8, 0xabc_000, ArithOp::Sub);
+        assert_eq!(ds.disassemble(v), ["sub x8, x8, #0xabc, lsl #12"]);
 
         let mut v: Vec<u8> = Vec::with_capacity(24);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        Arm64Inter::add_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
+        Arm64Inter::add_reg(&mut v, Arm64Register::X8, 0xdeadbeef);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        Arm64Inter::sub_reg(&mut v, Arm64Register::X16, 0xdeadbeef);
+        Arm64Inter::sub_reg(&mut v, Arm64Register::X8, 0xdeadbeef);
         assert_eq!(
             ds.disassemble(v),
             [
                 "mov x17, #0xbeef",
                 "movk x17, #0xdead, lsl #16",
-                "add x16, x16, x17",
+                "add x8, x8, x17",
                 "mov x17, #0xbeef",
                 "movk x17, #0xdead, lsl #16",
-                "sub x16, x16, x17",
+                "sub x8, x8, x17",
             ],
         );
     }
@@ -473,45 +481,23 @@ mod tests {
     fn test_zero_byte() {
         let mut v: Vec<u8> = Vec::new();
         Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
-        assert_eq!(
-            disassembler().disassemble(v),
-            ["strb wzr, [x19], #0x0"]
-        );
-    }
-
-    #[test]
-    fn test_aux_reg() {
-        let aux_regs: Vec<_> = [
-            Arm64Register::X0,
-            Arm64Register::X1,
-            Arm64Register::X2,
-            Arm64Register::X8,
-            Arm64Register::X16,
-            Arm64Register::X17,
-            Arm64Register::X19,
-        ]
-        .into_iter()
-        .map(aux_reg)
-        .collect();
-        let mut expected = vec![Arm64Register::X17; 7];
-        expected[5] = Arm64Register::X16;
-        assert_eq!(expected, aux_regs);
+        assert_eq!(disassembler().disassemble(v), ["strb wzr, [x19], #0x0"]);
     }
 
     #[disasm_test]
     fn test_inc_dec_wrapper() {
         let mut v: Vec<u8> = Vec::with_capacity(24);
         Arm64Inter::inc_byte(&mut v, Arm64Register::X1);
-        Arm64Inter::dec_byte(&mut v, Arm64Register::X17);
+        Arm64Inter::dec_byte(&mut v, Arm64Register::X8);
         assert_eq!(
             disassembler().disassemble(v),
             [
                 "ldrb w17, [x1], #0x0",
                 "add x17, x17, #0x1",
                 "strb w17, [x1], #0x0",
-                "ldrb w16, [x17], #0x0",
-                "sub x16, x16, #0x1",
-                "strb w16, [x17], #0x0",
+                "ldrb w17, [x8], #0x0",
+                "sub x17, x17, #0x1",
+                "strb w17, [x8], #0x0",
             ]
         );
     }
@@ -520,11 +506,11 @@ mod tests {
     fn test_reg_copy() {
         let mut v: Vec<u8> = Vec::with_capacity(12);
         Arm64Inter::reg_copy(&mut v, Arm64Register::X1, Arm64Register::X19);
-        Arm64Inter::reg_copy(&mut v, Arm64Register::X2, Arm64Register::X17);
-        Arm64Inter::reg_copy(&mut v, Arm64Register::X8, Arm64Register::X16);
+        Arm64Inter::reg_copy(&mut v, Arm64Register::X2, Arm64Register::X0);
+        Arm64Inter::reg_copy(&mut v, Arm64Register::X8, Arm64Register::X8);
         assert_eq!(
             disassembler().disassemble(v),
-            ["mov x1, x19", "mov x2, x17", "mov x8, x16"]
+            ["mov x1, x19", "mov x2, x0", "mov x8, x8"]
         );
     }
 
