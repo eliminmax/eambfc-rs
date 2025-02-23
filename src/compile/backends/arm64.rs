@@ -203,9 +203,7 @@ impl ArchInter for Arm64Inter {
     }
 
     fn zero_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-        let aux = aux_reg(reg);
-        Arm64Inter::set_reg(code_buf, aux, 0);
-        code_buf.extend(store_to_byte(reg, aux));
+        code_buf.extend(u32::to_le_bytes(0x3800_041f | ((reg as u32) << 5)));
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
@@ -477,7 +475,7 @@ mod tests {
         Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
         assert_eq!(
             disassembler().disassemble(v),
-            ["mov x17, #0x0", "strb w17, [x19], #0x0"]
+            ["strb wzr, [x19], #0x0"]
         );
     }
 
