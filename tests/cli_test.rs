@@ -176,36 +176,36 @@ macro_rules! test_err {
 
 #[test]
 fn test_simple_errors() {
-    test_err!("MULTIPLE_EXTENSIONS", "-e", ".bf", "-e", ".b");
-    test_err!("MULTIPLE_OUTPUT_EXTENSIONS", "-s", ".elf", "-s", ".out");
-    test_err!("MULTIPLE_TAPE_BLOCK_COUNTS", "-t", "32", "-t", "76");
-    test_err!("MISSING_OPERAND", "-t");
-    test_err!("UNKNOWN_ARG", "-r");
-    test_err!("NO_SOURCE_FILES");
-    test_err!("BAD_EXTENSION", "e");
-    test_err!("NO_TAPE", "-t", "0");
-    test_err!("TAPE_TOO_LARGE", "-t9223372036854775807");
-    test_err!("NOT_NUMERIC", "-t", "hello");
-    test_err!("OPEN_R_FAILED", "nonexistent.bf");
-    test_err!("UNKNOWN_ARCH", "-a", "pdp10.99999");
+    test_err!("MultipleExtensions", "-e", ".bf", "-e", ".b");
+    test_err!("MultipleOutputExtensions", "-s", ".elf", "-s", ".out");
+    test_err!("MultipleTapeBlockCounts", "-t", "32", "-t", "76");
+    test_err!("MissingOperand", "-t");
+    test_err!("UnknownArg", "-r");
+    test_err!("NoSourceFiles");
+    test_err!("BadExtension", "e");
+    test_err!("NoTape", "-t", "0");
+    test_err!("TapeTooLarge", "-t9223372036854775807");
+    test_err!("NotNumeric", "-t", "hello");
+    test_err!("OpenReadFailed", "nonexistent.bf");
+    test_err!("UnknownArch", "-a", "pdp10.99999");
     test_err!(
-        "MULTIPLE_ARCHES",
+        "MultipleArches",
         "-a",
         env!("EAMBFC_DEFAULT_ARCH"),
         "-a",
         env!("EAMBFC_DEFAULT_ARCH")
     );
 
-    test_err!("INPUT_IS_OUTPUT", "-s.bf");
-    test_err!("INPUT_IS_OUTPUT", "-s.b", "-e.b");
+    test_err!("InputIsOutput", "-s.bf");
+    test_err!("InputIsOutput", "-s.b", "-e.b");
 
     let unmatched_open = source_file("unmatched_open.bf");
     let unmatched_close = source_file("unmatched_close.bf");
-    test_err!("UNMATCHED_OPEN", &unmatched_open);
-    test_err!("UNMATCHED_CLOSE", &unmatched_close);
+    test_err!("UnmatchedOpen", &unmatched_open);
+    test_err!("UnmatchedClose", &unmatched_close);
     // optimization mode uses a separate dedicated check for unbalanced loops, so check again
-    test_err!("UNMATCHED_OPEN", "-O", &unmatched_open);
-    test_err!("UNMATCHED_CLOSE", "-O", &unmatched_close);
+    test_err!("UnmatchedOpen", "-O", &unmatched_open);
+    test_err!("UnmatchedClose", "-O", &unmatched_close);
 }
 
 #[test]
@@ -300,7 +300,7 @@ fn permission_error_test() -> io::Result<()> {
     let unreadable_src = dir.join("unreadable.bf");
     drop(open_options.open(&unreadable_src)?);
 
-    test_err!("OPEN_R_FAILED", &unreadable_src);
+    test_err!("OpenReadFailed", &unreadable_src);
 
     let unwritable_dest = dir.join("unwritable");
     let unwritable_src = unwritable_dest.with_extension("bf");
@@ -313,7 +313,7 @@ fn permission_error_test() -> io::Result<()> {
         .truncate(false)
         .mode(0o555);
     drop(open_options.open(&unwritable_dest)?);
-    test_err!("OPEN_W_FAILED", &unwritable_src);
+    test_err!("OpenWriteFailed", &unwritable_src);
     Ok(())
 }
 
@@ -527,9 +527,9 @@ fn code_position_reporting() -> io::Result<()> {
     let errors = get_errs(eambfc_with_args!("-j", codepos));
     assert_eq!(errors[0].line, Some(2));
     assert_eq!(errors[0].column, Some(32));
-    assert_eq!(errors[0].error_id, "UNMATCHED_OPEN");
+    assert_eq!(errors[0].error_id, "UnmatchedOpen");
     assert_eq!(errors[1].line, Some(3));
     assert_eq!(errors[1].column, Some(1));
-    assert_eq!(errors[1].error_id, "UNMATCHED_OPEN");
+    assert_eq!(errors[1].error_id, "UnmatchedOpen");
     Ok(())
 }

@@ -28,7 +28,7 @@ impl OutMode {
 }
 
 #[non_exhaustive]
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub(crate) enum BFErrorID {
     BadExtension,
     FailedRead,
@@ -52,39 +52,6 @@ pub(crate) enum BFErrorID {
     UnmatchedOpen,
     #[cfg(not(any(unix, target_os = "wasi")))]
     NonUTF8,
-}
-
-impl std::fmt::Debug for BFErrorID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                BFErrorID::BadExtension => "BAD_EXTENSION",
-                BFErrorID::FailedRead => "FAILED_READ",
-                BFErrorID::FailedWrite => "FAILED_WRITE",
-                BFErrorID::InputIsOutput => "INPUT_IS_OUTPUT",
-                BFErrorID::JumpTooLong => "JUMP_TOO_LONG",
-                BFErrorID::MissingOperand => "MISSING_OPERAND",
-                BFErrorID::MultipleArches => "MULTIPLE_ARCHES",
-                BFErrorID::MultipleExtensions => "MULTIPLE_EXTENSIONS",
-                BFErrorID::MultipleOutputExtensions => "MULTIPLE_OUTPUT_EXTENSIONS",
-                BFErrorID::MultipleTapeBlockCounts => "MULTIPLE_TAPE_BLOCK_COUNTS",
-                BFErrorID::NoSourceFiles => "NO_SOURCE_FILES",
-                BFErrorID::NoTape => "NO_TAPE",
-                BFErrorID::NotNumeric => "NOT_NUMERIC",
-                BFErrorID::OpenReadFailed => "OPEN_R_FAILED",
-                BFErrorID::OpenWriteFailed => "OPEN_W_FAILED",
-                BFErrorID::TapeTooLarge => "TAPE_TOO_LARGE",
-                BFErrorID::UnknownArch => "UNKNOWN_ARCH",
-                BFErrorID::UnknownArg => "UNKNOWN_ARG",
-                BFErrorID::UnmatchedClose => "UNMATCHED_CLOSE",
-                BFErrorID::UnmatchedOpen => "UNMATCHED_OPEN",
-                #[cfg(not(any(unix, target_os = "wasi")))]
-                BFErrorID::NonUTF8 => "NonUTF8",
-            }
-        )
-    }
 }
 
 type ErrMsg = Cow<'static, str>;
