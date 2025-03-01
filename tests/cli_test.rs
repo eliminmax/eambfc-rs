@@ -198,6 +198,8 @@ fn test_simple_errors() {
 
     test_err!("InputIsOutput", "-s.bf");
     test_err!("InputIsOutput", "-s.b", "-e.b");
+    // if -e changes suffix after -s.bf, error shouldn't be InputIsOutput
+    test_err!("NoSourceFiles", "-s.bf", "-e.b");
 
     let unmatched_open = source_file("unmatched_open.bf");
     let unmatched_close = source_file("unmatched_close.bf");
