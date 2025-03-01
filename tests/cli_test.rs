@@ -122,6 +122,7 @@ struct ErrorMsg {
     instruction: Option<String>,
     line: Option<usize>,
     column: Option<usize>,
+    file: Option<String>,
 }
 
 impl ErrorMsg {
@@ -133,6 +134,9 @@ impl ErrorMsg {
             write!(s, "Error {}", err.error_id).unwrap();
             if let Some(instr) = err.instruction.as_ref() {
                 write!(s, " when compiling '{}'", instr.as_bytes().escape_ascii()).unwrap();
+            }
+            if let Some(file) = err.file.as_ref() {
+                write!(s, " in file {file}").unwrap();
             }
             if let (Some(line), Some(col)) = (err.line, err.column) {
                 write!(s, " at line {line} column {col}").unwrap();

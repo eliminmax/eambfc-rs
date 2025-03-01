@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use std::borrow::Cow;
+use std::ffi::OsStr;
 use std::fmt::Write;
 
 #[derive(PartialEq, Debug, Clone, Copy, Default)]
@@ -62,6 +63,19 @@ pub(crate) struct BFCompileError {
     msg: ErrMsg,
     instr: Option<u8>,
     loc: Option<CodePosition>,
+    file: Option<Box<OsStr>>,
+}
+
+fn json_escape(s: &str) -> String {
+    let mut construct = String::new();
+    s.chars().for_each(|c| {
+        if c.is_ascii_control() || matches!(c, '"' | '\\') {
+            json_escape_byte(c as u8, &mut construct);
+        } else {
+            construct.push(c);
+        }
+    });
+    construct
 }
 
 fn json_escape_byte(b: u8, target: &mut String) {
@@ -92,7 +106,11 @@ impl BFCompileError {
             msg: msg.into(),
             instr,
             loc,
+            file: None,
         }
+    }
+    pub fn set_file(&mut self, file: &OsStr) {
+        self.file = Some(Box::from(file));
     }
 
     /// Construct a new `BFCompileError` with the provided information.
@@ -103,6 +121,7 @@ impl BFCompileError {
             msg: msg.into(),
             instr: None,
             loc: None,
+            file: None,
         }
     }
 
@@ -110,11 +129,15 @@ impl BFCompileError {
         let mut report_string = format!("Error {:?}", self.kind);
         if let Some(instr) = self.instr {
             if instr > 0x7f {
-                report_string.push_str(" when compiling '�' (byte value {instr})");
+                write!(report_string, " when compiling '�' (byte value {instr})")
             } else {
                 write!(report_string, " when compiling '{}'", instr.escape_ascii())
-                    .unwrap_or_else(|_| unreachable!("Won't fail to `write!` to String"));
             }
+            .unwrap_or_else(|_| unreachable!("Won't fail to `write!` to String"));
+        }
+        if let Some(file) = self.file.as_ref() {
+            write!(report_string, " in file {}", file.to_string_lossy())
+                .unwrap_or_else(|_| unreachable!("Won't fail to `write!` to string"));
         }
         if let Some(loc) = self.loc {
             write!(report_string, " at line {} column {}", loc.line, loc.col)
@@ -129,6 +152,14 @@ impl BFCompileError {
             report_string.push_str(",\"instruction\":\"");
             json_escape_byte(instr, &mut report_string);
             report_string.push('\"');
+        }
+        if let Some(file) = self.file.as_ref() {
+            write!(
+                report_string,
+                ",\"file\":\"{}\"",
+                json_escape(&file.to_string_lossy())
+            )
+            .unwrap_or_else(|_| unreachable!("Won't fail to `write!` to string"));
         }
         if let Some(CodePosition { line, col }) = self.loc {
             write!(report_string, ",\"line\":{line},\"column\":{col}")

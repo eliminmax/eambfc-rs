@@ -154,7 +154,10 @@ pub(crate) trait BFCompile {
                 ),
             )]
         })?;
-        let ret = Self::compile(infile, outfile, optimize, tape_blocks);
+        let mut ret = Self::compile(infile, outfile, optimize, tape_blocks);
+        if let Err(ref mut errs) = ret {
+            errs.iter_mut().for_each(|e| e.set_file(file_name));
+        }
         if ret.is_err() && !keep {
             // try to delete the file
             #[allow(
