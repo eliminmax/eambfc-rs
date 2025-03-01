@@ -111,7 +111,7 @@ impl PartialRunConfig {
 
     fn set_arch(&mut self, param: &[u8]) -> Result<(), (BFCompileError, OutMode)> {
         if self.arch.is_some() {
-            return Err(self.gen_err(BFErrorID::MultipleArches, "passed -a multiple times"));
+            return Err(self.gen_err(BFErrorID::MultipleArchitectures, "passed -a multiple times"));
         }
         self.arch = match param {
             #[cfg(feature = "arm64")]
@@ -201,12 +201,15 @@ impl PartialRunConfig {
         }
         let Ok(Ok(tape_size)) = String::from_utf8(param).map(|s| u64::from_str(&s)) else {
             return Err(self.gen_err(
-                BFErrorID::NotNumeric,
+                BFErrorID::TapeSizeNotNumeric,
                 "tape size could not be parsed as a numeric value",
             ));
         };
         match tape_size {
-            0 => Err(self.gen_err(BFErrorID::NoTape, "Tape value for -t must be at least 1")),
+            0 => Err(self.gen_err(
+                BFErrorID::TapeSizeZero,
+                "Tape value for -t must be at least 1",
+            )),
             i if i >= u64::MAX >> 12 => Err(self.gen_err(
                 BFErrorID::TapeTooLarge,
                 "tape size exceeds 64-bit integer limit",

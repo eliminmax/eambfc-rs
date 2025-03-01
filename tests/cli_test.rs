@@ -182,14 +182,14 @@ fn test_simple_errors() {
     test_err!("MissingOperand", "-t");
     test_err!("UnknownArg", "-r");
     test_err!("NoSourceFiles");
-    test_err!("BadExtension", "e");
-    test_err!("NoTape", "-t", "0");
+    test_err!("BadSourceExtension", "e");
+    test_err!("TapeSizeZero", "-t", "0");
     test_err!("TapeTooLarge", "-t9223372036854775807");
-    test_err!("NotNumeric", "-t", "hello");
+    test_err!("TapeSizeNotNumeric", "-t", "hello");
     test_err!("OpenReadFailed", "nonexistent.bf");
     test_err!("UnknownArch", "-a", "pdp10.99999");
     test_err!(
-        "MultipleArches",
+        "MultipleArchitectures",
         "-a",
         env!("EAMBFC_DEFAULT_ARCH"),
         "-a",

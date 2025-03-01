@@ -88,7 +88,7 @@ fn handle_empty_args() {
 #[test]
 fn non_numeric_tape_size() {
     let (err, ..) = parse_args(vec![arg("-t"), arg("###")].into_iter()).unwrap_err();
-    assert_eq!(err.error_id(), BFErrorID::NotNumeric);
+    assert_eq!(err.error_id(), BFErrorID::TapeSizeNotNumeric);
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn multiple_tape_size() {
 fn tape_size_zero() {
     let args_set = vec![arg("-t0")].into_iter();
     let (err, ..) = parse_args(args_set).unwrap_err();
-    assert_eq!(err.error_id(), BFErrorID::NoTape);
+    assert_eq!(err.error_id(), BFErrorID::TapeSizeZero);
 }
 
 #[test]
@@ -288,7 +288,7 @@ fn multiple_arches_error() {
     if cfg!(all(feature = "x86_64", feature = "arm64")) {
         assert!(
             parse_args(vec![arg("-ax86_64"), arg("-aarm64"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.error_id() == BFErrorID::MultipleArches)
+                .is_err_and(|e| e.0.error_id() == BFErrorID::MultipleArchitectures)
         );
     }
 }

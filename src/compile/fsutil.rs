@@ -30,7 +30,7 @@ pub(super) fn set_extension<'a>(
             outname = OsStr::from_bytes(&filename.as_bytes()[..name_len - ext_len]);
         } else {
             return Err(BFCompileError::basic(
-                BFErrorID::BadExtension,
+                BFErrorID::BadSourceExtension,
                 format!(
                     "{} does not end with expected extension",
                     filename.to_string_lossy()
@@ -57,7 +57,7 @@ pub(super) fn set_extension<'a>(
             filename
                 .strip_suffix(extension)
                 .ok_or(BFCompileError::basic(
-                    BFErrorID::BadExtension,
+                    BFErrorID::BadSourceExtension,
                     format!("{filename} does not end with expected extension"),
                 ))?,
         );
@@ -91,7 +91,7 @@ mod tests {
     fn rmext_fail() {
         assert!(
             set_extension("ee.e".as_ref(), ".bf".as_ref(), None)
-                .is_err_and(|e| e.error_id() == BFErrorID::BadExtension)
+                .is_err_and(|e| e.error_id() == BFErrorID::BadSourceExtension)
         );
     }
 }

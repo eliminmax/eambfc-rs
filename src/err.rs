@@ -30,19 +30,19 @@ impl OutMode {
 #[non_exhaustive]
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub(crate) enum BFErrorID {
-    BadExtension,
+    BadSourceExtension,
     FailedRead,
     FailedWrite,
     InputIsOutput,
     JumpTooLong,
     MissingOperand,
-    MultipleArches,
+    MultipleArchitectures,
     MultipleExtensions,
     MultipleOutputExtensions,
     MultipleTapeBlockCounts,
     NoSourceFiles,
-    NoTape,
-    NotNumeric,
+    TapeSizeZero,
+    TapeSizeNotNumeric,
     OpenReadFailed,
     OpenWriteFailed,
     TapeTooLarge,
