@@ -77,33 +77,6 @@ fn json_escape_byte(b: u8, target: &mut String) {
     }
 }
 
-#[cfg(test)]
-#[test]
-fn test_json_escape() {
-    let mut s = String::new();
-    for b in 0x00..0x10 {
-        json_escape_byte(b, &mut s);
-    }
-    // make sure control characters are properly escaped
-    assert_eq!(
-        s,
-        concat!(
-            "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007",
-            "\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f"
-        )
-    );
-    s.clear();
-    json_escape_byte(b'"', &mut s);
-    json_escape_byte(b'\'', &mut s);
-    json_escape_byte(b'\\', &mut s);
-    assert_eq!(s, "\\\"'\\\\");
-    s.clear();
-    for b in b" \x90" {
-        json_escape_byte(*b, &mut s);
-    }
-    assert_eq!(s, " \\u0090");
-}
-
 impl BFCompileError {
     /// Construct a new `BFCompileError` with the provided information.
     #[must_use]
@@ -207,4 +180,31 @@ impl From<BFCompileError> for Vec<BFCompileError> {
 pub(crate) struct CodePosition {
     pub line: usize,
     pub col: usize,
+}
+
+#[cfg(test)]
+#[test]
+fn test_json_escape() {
+    let mut s = String::new();
+    for b in 0x00..0x10 {
+        json_escape_byte(b, &mut s);
+    }
+    // make sure control characters are properly escaped
+    assert_eq!(
+        s,
+        concat!(
+            "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007",
+            "\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f"
+        )
+    );
+    s.clear();
+    json_escape_byte(b'"', &mut s);
+    json_escape_byte(b'\'', &mut s);
+    json_escape_byte(b'\\', &mut s);
+    assert_eq!(s, "\\\"'\\\\");
+    s.clear();
+    for b in b" \x90" {
+        json_escape_byte(*b, &mut s);
+    }
+    assert_eq!(s, " \\u0090");
 }
