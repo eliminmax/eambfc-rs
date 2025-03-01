@@ -69,11 +69,10 @@ fn json_escape_byte(b: u8, target: &mut String) {
         // characters with special backslash escapes in JSON but not Rust
         0x08 => target.push_str("\\b"),
         0x0c => target.push_str("\\f"),
-        // single quote doesn't need to be escaped for JSON, but Rust escapes it
-        b'\'' => target.push('\''),
-        c if c < 0b1000_0000 => write!(target, "{}", c.escape_ascii())
+        b'\n' | b'\r' | b'\t' | b'\\' | b'"' => write!(target, "{}", b.escape_ascii())
             .unwrap_or_else(|_| unreachable!("Won't fail to write! to String")),
-        _ => write!(target, r"\\x{b:02x}")
+        0b10_000..0b1000_0000 => target.push(char::from(b)),
+        _ => write!(target, "\\u{b:04x}")
             .unwrap_or_else(|_| unreachable!("Won't fail to write! to String")),
     }
 }
@@ -86,7 +85,13 @@ fn test_json_escape() {
         json_escape_byte(b, &mut s);
     }
     // make sure control characters are properly escaped
-    assert_eq!(s, r"\x00\x01\x02\x03\x04\x05\x06\x07\b\t\n\x0b\f\r\x0e\x0f");
+    assert_eq!(
+        s,
+        concat!(
+            "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007",
+            "\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f"
+        )
+    );
     s.clear();
     json_escape_byte(b'"', &mut s);
     json_escape_byte(b'\'', &mut s);
@@ -96,7 +101,7 @@ fn test_json_escape() {
     for b in b" \x90" {
         json_escape_byte(*b, &mut s);
     }
-    assert_eq!(s, r" \\x90");
+    assert_eq!(s, " \\u0090");
 }
 
 impl BFCompileError {
@@ -130,8 +135,12 @@ impl BFCompileError {
     fn report_basic(&self) {
         let mut report_string = format!("Error {:?}", self.kind);
         if let Some(instr) = self.instr {
-            write!(report_string, " when compiling '{}'", instr.escape_ascii())
-                .unwrap_or_else(|_| unreachable!("Won't fail to write! to String"));
+            if instr > 0x7f {
+                report_string.push_str(" when compiling '�' (byte value {instr})");
+            } else {
+                write!(report_string, " when compiling '{}'", instr.escape_ascii())
+                    .unwrap_or_else(|_| unreachable!("Won't fail to `write!` to String"));
+            }
         }
         if let Some(loc) = self.loc {
             write!(report_string, " at line {} column {}", loc.line, loc.col)
