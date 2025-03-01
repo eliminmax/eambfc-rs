@@ -71,9 +71,10 @@ fn json_escape_byte(b: u8, target: &mut String) {
         0x0c => target.push_str("\\f"),
         b'\n' | b'\r' | b'\t' | b'\\' | b'"' => write!(target, "{}", b.escape_ascii())
             .unwrap_or_else(|_| unreachable!("Won't fail to write! to String")),
-        0b10_000..0b1000_0000 => target.push(char::from(b)),
-        _ => write!(target, "\\u{b:04x}")
+        ..0b10_000 => write!(target, "\\u{b:04x}")
             .unwrap_or_else(|_| unreachable!("Won't fail to write! to String")),
+        0b10_000..0b1000_0000 => target.push(char::from(b)),
+        _ => target.push('�'),
     }
 }
 
@@ -206,5 +207,5 @@ fn test_json_escape() {
     for b in b" \x90" {
         json_escape_byte(*b, &mut s);
     }
-    assert_eq!(s, " \\u0090");
+    assert_eq!(s, " �");
 }
