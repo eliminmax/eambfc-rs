@@ -98,7 +98,7 @@ impl PartialRunConfig {
                 return Err((
                     BFCompileError::basic(
                         BFErrorID::UnknownArg,
-                        format!("'{}' is not a recognized argument", bad_arg.escape_ascii()),
+                        format!("'-{}' is not a recognized argument", bad_arg.escape_ascii()),
                     ),
                     self.out_mode,
                 ));
