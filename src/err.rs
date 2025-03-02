@@ -125,7 +125,8 @@ impl BFCompileError {
         }
     }
 
-    fn report_basic(&self) {
+    #[must_use]
+    fn report_basic(&self) -> String {
         let mut report_string = format!("Error {:?}", self.kind);
         if let Some(instr) = self.instr {
             if instr > 0x7f {
@@ -143,10 +144,11 @@ impl BFCompileError {
             write!(report_string, " at line {} column {}", loc.line, loc.col)
                 .unwrap_or_else(|_| unreachable!("Won't fail to write! to String"));
         }
-        eprintln!("{report_string}: {}", self.msg);
+        format!("{report_string}: {}", self.msg)
     }
 
-    fn report_json(&self) {
+    #[must_use]
+    fn report_json(&self) -> String {
         let mut report_string = format!("{{\"errorId\":\"{:?}\"", self.kind);
         if let Some(instr) = self.instr {
             report_string.push_str(",\"instruction\":\"");
@@ -165,7 +167,7 @@ impl BFCompileError {
             write!(report_string, ",\"line\":{line},\"column\":{col}")
                 .unwrap_or_else(|_| unreachable!("Won't fail to write! to String"));
         }
-        println!("{report_string},\"message\":\"{}\"}}", self.msg);
+        format!("{report_string},\"message\":\"{}\"}}", self.msg)
     }
 
     /// Report error to user in manner determined by `out_mode`.
@@ -189,8 +191,8 @@ impl BFCompileError {
     pub fn report(&self, out_mode: OutMode) {
         match out_mode {
             OutMode::Quiet => (),
-            OutMode::Basic => self.report_basic(),
-            OutMode::Json => self.report_json(),
+            OutMode::Basic => eprintln!("{}", self.report_basic()),
+            OutMode::Json => println!("{}", self.report_json()),
         }
     }
 
@@ -215,28 +217,121 @@ pub(crate) struct CodePosition {
 }
 
 #[cfg(test)]
-#[test]
-fn test_json_escape() {
-    let mut s = String::new();
-    for b in 0x00..0x10 {
-        json_escape_byte(b, &mut s);
+mod tests {
+    use super::*;
+    use test_macros::unix_test;
+
+    #[derive(Debug, serde::Deserialize)]
+    struct DeserializedCompileError {
+        #[serde(rename = "errorId")]
+        error_id: String,
+        message: String,
+        instruction: Option<char>,
+        line: Option<usize>,
+        column: Option<usize>,
+        file: Option<String>,
     }
-    // make sure control characters are properly escaped
-    assert_eq!(
-        s,
-        concat!(
-            "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007",
-            "\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f"
-        )
-    );
-    s.clear();
-    json_escape_byte(b'"', &mut s);
-    json_escape_byte(b'\'', &mut s);
-    json_escape_byte(b'\\', &mut s);
-    assert_eq!(s, "\\\"'\\\\");
-    s.clear();
-    for b in b" \x90" {
-        json_escape_byte(*b, &mut s);
+
+    impl DeserializedCompileError {
+        fn from_json(s: &str) -> Self {
+            serde_json::from_str(s).unwrap()
+        }
     }
-    assert_eq!(s, " �");
+
+    impl PartialEq<BFCompileError> for DeserializedCompileError {
+        fn eq(&self, other: &BFCompileError) -> bool {
+            let loc = if let (Some(line), Some(col)) = (self.line, self.column) {
+                Some(CodePosition { line, col })
+            } else {
+                None
+            };
+            let instr = other
+                .instr
+                .map(|c| if c.is_ascii() { c as char } else { '�' });
+            self.error_id == format!("{:?}", other.kind)
+                && self.message == other.msg
+                && self.instruction == instr
+                && loc == other.loc
+                && self.file.as_deref().map(OsStr::new) == other.file.as_deref()
+        }
+    }
+
+    #[test]
+    fn test_json_escape_byte() {
+        let mut s = String::new();
+        for b in 0x00..0x10 {
+            json_escape_byte(b, &mut s);
+        }
+        // make sure control characters are properly escaped
+        assert_eq!(
+            s,
+            concat!(
+                "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007",
+                "\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f"
+            )
+        );
+        s.clear();
+        json_escape_byte(b'"', &mut s);
+        json_escape_byte(b'\'', &mut s);
+        json_escape_byte(b'\\', &mut s);
+        assert_eq!(s, "\\\"'\\\\");
+        s.clear();
+        for b in b" \x90" {
+            json_escape_byte(*b, &mut s);
+        }
+        assert_eq!(s, " �");
+    }
+
+    #[test]
+    fn test_json_escape() {
+        assert_eq!(json_escape("\""), "\\\"");
+        assert_eq!(json_escape("Hello, world!\n"), "Hello, world!\\n");
+    }
+
+    #[unix_test("OsStrExt::from_bytes")]
+    fn error_reporting_test() {
+        use std::os::unix::ffi::OsStrExt;
+        let mut test_err =
+            BFCompileError::basic(BFErrorID::BadSourceExtension, "Bad source extension");
+        assert_eq!(
+            test_err.report_basic(),
+            "Error BadSourceExtension: Bad source extension"
+        );
+        assert_eq!(
+            DeserializedCompileError::from_json(&test_err.report_json()),
+            test_err
+        );
+        test_err.set_file(OsStr::from_bytes(b"somefile.b\xeef"));
+        assert_eq!(
+            test_err.report_basic(),
+            "Error BadSourceExtension in file somefile.b�f: Bad source extension"
+        );
+        let json = test_err.report_json();
+        test_err.set_file(OsStr::new("somefile.b�f"));
+        assert_eq!(DeserializedCompileError::from_json(&json), test_err);
+        test_err.instr = Some(b'e');
+        assert_eq!(
+            test_err.report_basic(),
+            "Error BadSourceExtension when compiling 'e' in file somefile.b�f: Bad source extension"
+        );
+        assert_eq!(
+            DeserializedCompileError::from_json(&test_err.report_json()).instruction,
+            Some('e')
+        );
+        test_err.loc = Some(CodePosition { line: 32, col: 64 });
+        assert_eq!(
+            test_err.report_basic(),
+            concat!(
+                "Error BadSourceExtension when compiling 'e' in file somefile.b�f",
+                " at line 32 column 64: Bad source extension"
+            )
+        );
+        test_err.loc = None;
+        test_err.file = None;
+        test_err.instr = Some(200);
+        assert_eq!(
+            test_err.report_basic(),
+            "Error BadSourceExtension when compiling '�' (byte value 200): Bad source extension"
+        );
+    }
 }
