@@ -2,15 +2,21 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::OutMode;
+#![cfg_attr(
+    all(not(test), feature = "longopts"),
+    expect(unused_imports, reason = "Used without longopts")
+)]
 use crate::compile::elf_tools::ElfArch;
 use crate::err::{BFCompileError, BFErrorID};
+use crate::OutMode;
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 #[cfg(target_os = "wasi")]
 use std::os::wasi::ffi::{OsStrExt, OsStringExt};
+#[cfg(feature = "longopts")]
+pub(crate) mod longopts;
 
 #[derive(PartialEq, Debug)]
 pub(crate) struct StandardRunConfig {
@@ -230,6 +236,7 @@ pub(crate) enum RunConfig {
     ListArches,
 }
 
+#[cfg(any(test, not(feature = "longopts")))]
 pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
     mut args: T,
 ) -> Result<RunConfig, (BFCompileError, OutMode)> {

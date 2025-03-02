@@ -21,10 +21,9 @@ use std::borrow::Cow;
 use std::env::args_os;
 use std::process::ExitCode;
 
-use crate::arg_parse::RunConfig;
-use crate::compile::BFCompile;
-use crate::compile::elf_tools::ElfArch;
-use crate::err::OutMode;
+use arg_parse::RunConfig;
+use compile::{BFCompile, elf_tools::ElfArch};
+use err::OutMode;
 
 // architecture interfaces
 #[cfg(feature = "arm64")]
@@ -42,7 +41,13 @@ fn main() -> ExitCode {
     let progname: Cow<'static, str> = args.next().map_or(env!("CARGO_BIN_NAME").into(), |c| {
         c.to_string_lossy().to_string().into()
     });
-    match arg_parse::parse_args(args) {
+    #[cfg(not(feature = "longopts"))]
+    let rc = arg_parse::parse_args(args);
+    #[cfg(feature = "longopts")]
+    // SAFETY: this function is safe as long as it's in a single-threaded environment, and no
+    // threads have been spawned thus far
+    let rc = unsafe { arg_parse::longopts::parse_args_long() };
+    match rc {
         Ok(RunConfig::ListArches) => {
             println!(concat!(
                 "This build of ",

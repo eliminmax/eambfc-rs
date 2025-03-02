@@ -16,6 +16,7 @@ s390x = []
 x86_64 = []
 bintests = []
 disasmtests = []
+longopts = ["dep:libc"]
 
 [lints.rust]
 # don't warn on tarpaulin code coverage cfg conditions or custom cfgs
@@ -69,3 +70,6 @@ serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
 tempfile = "3.15.0"
 llvm-sys = { version = "191.0.0", features = ["prefer-dynamic"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { version = "0.2.170", optional = true }
