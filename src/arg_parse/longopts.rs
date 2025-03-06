@@ -5,7 +5,6 @@ use super::RunConfig;
 use crate::err::{BFCompileError, BFErrorID};
 use crate::OutMode;
 use libc::{c_char, c_int, getopt_long, option};
-use std::env::args_os;
 use std::ffi::{CStr, CString, OsString};
 use std::os::unix::ffi::OsStringExt;
 use std::ptr::{null, null_mut};
@@ -62,7 +61,6 @@ const fn final_opt() -> option {
     }
 }
 
-
 /// A wrapper around a `Vec<*mut c_char>`, where each contained pointer was created with
 /// `CString::into_raw`. Constructing it any other way will result in undefined behavior when
 /// dropping it. Derefs to the underlying `Vec`
@@ -106,13 +104,17 @@ impl Drop for CCompatibleArgs {
 /// While this function **does** handle most of the safety invariants needed for `getopt_long`
 /// internally, there is no way to use `getopt_long` safely in a multi-threaded context, so this
 /// function can only be called before spawning any threads.
-pub(crate) unsafe fn parse_args_long() -> Result<RunConfig, (BFCompileError, OutMode)> {
+pub(crate) unsafe fn parse_args_long(
+    args: impl Iterator<Item = OsString>,
+) -> Result<RunConfig, (BFCompileError, OutMode)> {
     const OPTSTRING: &CStr = c":hVqjOkcAa:e:t:s:";
 
     let mut pcfg = super::PartialRunConfig::default();
+    let mut args: Vec<_> = args.collect();
+    args.insert(0, OsString::from("placeholder"));
 
     let mut raw_args = CCompatibleArgs(
-        args_os()
+        args.into_iter()
             .map(|arg| {
                 let mut arg = arg.into_vec();
                 arg.push(0);

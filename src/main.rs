@@ -46,7 +46,7 @@ fn main() -> ExitCode {
     #[cfg(feature = "longopts")]
     // SAFETY: this function is safe as long as it's in a single-threaded environment, and no
     // threads have been spawned thus far
-    let rc = unsafe { arg_parse::longopts::parse_args_long() };
+    let rc = unsafe { arg_parse::longopts::parse_args_long(args) };
     match rc {
         Ok(RunConfig::ListArches) => {
             println!(concat!(
