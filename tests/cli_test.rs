@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![cfg(test)]
 
+#[path = "../src/arg_parse/help_text.rs"]
+mod help_text;
+use help_text::help_fmt;
+
 extern crate tempfile;
 use tempfile::TempDir;
 
@@ -105,11 +109,7 @@ macro_rules! checked_output {
 
 macro_rules! help_text {
     ($progname: expr) => {{
-        format!(
-            concat!(include_str!("../src/text_assets/help_template.txt"), '\n'),
-            $progname,
-            env!("EAMBFC_DEFAULT_ARCH")
-        )
+        format!("{}\n", help_fmt($progname))
     }};
     () => {{ help_text!(EXEC_PATH) }};
 }

@@ -21,7 +21,7 @@ use std::borrow::Cow;
 use std::env::args_os;
 use std::process::ExitCode;
 
-use arg_parse::RunConfig;
+use arg_parse::{RunConfig, help_fmt};
 use compile::{BFCompile, elf_tools::ElfArch};
 use err::OutMode;
 
@@ -70,11 +70,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(RunConfig::ShowHelp) => {
-            println!(
-                include_str!("text_assets/help_template.txt"),
-                progname,
-                ElfArch::default()
-            );
+            println!("{}", help_fmt(&progname));
             ExitCode::SUCCESS
         }
         Ok(RunConfig::StandardRun(rc)) => {
@@ -125,11 +121,7 @@ fn main() -> ExitCode {
         Err((err, out_mode)) => {
             err.report(out_mode);
             if out_mode == OutMode::Basic {
-                eprintln!(
-                    include_str!("text_assets/help_template.txt"),
-                    progname,
-                    ElfArch::default()
-                );
+                eprintln!("{}", help_fmt(&progname));
             }
             ExitCode::FAILURE
         }

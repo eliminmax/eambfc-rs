@@ -18,6 +18,9 @@ use std::os::wasi::ffi::{OsStrExt, OsStringExt};
 #[cfg(feature = "longopts")]
 pub(crate) mod longopts;
 
+mod help_text;
+pub use help_text::help_fmt;
+
 #[derive(PartialEq, Debug)]
 pub(crate) struct StandardRunConfig {
     pub out_mode: OutMode,

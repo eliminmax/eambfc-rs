@@ -1,28 +1,25 @@
-Usage: {} [options] <program.bf> [<program2.bf> ...]
+Usage: {progname} [options] <program.bf> [<program2.bf> ...]
 
- -h        - display this help text and exit
- -V        - print version information and exit
- -j        - print errors in JSON format
- -q        - don't print errors unless -j was passed
- -O        - enable optimization*.
- -k        - keep files that failed to compile (for debugging)
- -c        - continue to the next file instead of quitting if a
-             file fails to compile
- -t count  - allocate <count> 4-KiB blocks for the tape
-             (defaults to 8 if not specified)**
- -e ext    - use 'ext' as the extension for source files instead of '.bf'
-             (This program will remove this at the end of the input
-             file to create the output file name)**
- -a arch   - compile for specified architecture
-             (defaults to {} if not specified)**
- -s ext    - use 'ext' as the extension for compiled binaries
-             (they'll have no extension if -s is not passed)**
- -A        - list supported architectures and exit
+{help}
+{version}
+{json}
+{quiet}
+{optimize}
+{cont}
+{list_targets}
+{keep}
 
-* Optimization can make error reporting less precise.
-** -a, -t, -e, and -s can only be passed at most once each.
+* -q and -j will not affect arguments passed before they were.
 
-Remaining options are treated as source file names. If they don't
-end with '.bf' (or the extension specified with '-e'), the program
-will raise an error.
+** Optimization can make error reporting less precise.
 
+PARAMETER OPTIONS (provide at most once each):
+{tape_size}
+{extension}
+{arch}
+{out_suffix}
+
+If not provided, it falls back to 8 as the tape-size count, ".bf" as the source extension, {default_arch} as the target arch, and an empty output suffix.
+
+Remaining options are treated as source file names. If they don't end with the right extension, the program will raise an error.
+Additionally, passing "--" as a standalone argument will stop argument parsing, and treat remaining arguments as source file names.
