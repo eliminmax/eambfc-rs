@@ -221,40 +221,8 @@ mod tests {
     use super::*;
     use test_macros::unix_test;
 
-    #[derive(Debug, serde::Deserialize)]
-    struct DeserializedCompileError {
-        #[serde(rename = "errorId")]
-        error_id: String,
-        message: String,
-        instruction: Option<char>,
-        line: Option<usize>,
-        column: Option<usize>,
-        file: Option<String>,
-    }
-
-    impl DeserializedCompileError {
-        fn from_json(s: &str) -> Self {
-            serde_json::from_str(s).unwrap()
-        }
-    }
-
-    impl PartialEq<BFCompileError> for DeserializedCompileError {
-        fn eq(&self, other: &BFCompileError) -> bool {
-            let loc = if let (Some(line), Some(col)) = (self.line, self.column) {
-                Some(CodePosition { line, col })
-            } else {
-                None
-            };
-            let instr = other
-                .instr
-                .map(|c| if c.is_ascii() { c as char } else { '�' });
-            self.error_id == format!("{:?}", other.kind)
-                && self.message == other.msg
-                && self.instruction == instr
-                && loc == other.loc
-                && self.file.as_deref().map(OsStr::new) == other.file.as_deref()
-        }
-    }
+    #[cfg(unix)]
+    use deserialized_err::DeserializedCompileError;
 
     #[test]
     fn test_json_escape_byte() {
@@ -333,5 +301,45 @@ mod tests {
             test_err.report_basic(),
             "Error BadSourceExtension when compiling '�' (byte value 200): Bad source extension"
         );
+    }
+
+    #[cfg(unix)]
+    mod deserialized_err {
+        use super::*;
+
+        #[derive(Debug, serde::Deserialize)]
+        pub(super) struct DeserializedCompileError {
+            #[serde(rename = "errorId")]
+            pub error_id: String,
+            pub message: String,
+            pub instruction: Option<char>,
+            pub line: Option<usize>,
+            pub column: Option<usize>,
+            pub file: Option<String>,
+        }
+
+        impl DeserializedCompileError {
+            pub(super) fn from_json(s: &str) -> Self {
+                serde_json::from_str(s).unwrap()
+            }
+        }
+
+        impl PartialEq<BFCompileError> for DeserializedCompileError {
+            fn eq(&self, other: &BFCompileError) -> bool {
+                let loc = if let (Some(line), Some(col)) = (self.line, self.column) {
+                    Some(CodePosition { line, col })
+                } else {
+                    None
+                };
+                let instr = other
+                    .instr
+                    .map(|c| if c.is_ascii() { c as char } else { '�' });
+                self.error_id == format!("{:?}", other.kind)
+                    && self.message == other.msg
+                    && self.instruction == instr
+                    && loc == other.loc
+                    && self.file.as_deref().map(OsStr::new) == other.file.as_deref()
+            }
+        }
     }
 }
