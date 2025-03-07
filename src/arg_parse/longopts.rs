@@ -352,7 +352,8 @@ mod tests {
     fn behaves_like_parse_args() {
         // test args copied from every unit test for the original parse_args except for
         // `options_dont_mix_with_files`, to make sure they're processed identically to
-        // `parse_args`
+        // `parse_args`. (getopt_long does allow options to mix with files as long as the
+        // environment variable POSIXLY_CORRECT is not set).
         let arg_groups = vec![
             vec![
                 // should be interpreted identically to -k -j -e .brainfuck'
@@ -420,8 +421,16 @@ mod tests {
 
     #[test]
     fn options_can_mix_with_files() {
-        // ensure that -h is not interpreted as a file name (unlike parse_args)
+        use std::env::var_os;
         let cfg = parse_args_long_locked(vec![arg("e.bf"), arg("-h")].into_iter()).unwrap();
-        assert_eq!(cfg, RunConfig::ShowHelp);
+        if var_os("POSIXLY_CORRECT").is_some() {
+            let RunConfig::StandardRun(StandardRunConfig { source_files, .. }) = cfg else {
+                panic!("Expected standard run config")
+            };
+            assert_eq!(source_files, ["e.bf", "-h"]);
+        } else {
+            // ensure that -h is not interpreted as a file name (unlike parse_args)
+            assert_eq!(cfg, RunConfig::ShowHelp);
+        }
     }
 }
