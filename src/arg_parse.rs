@@ -6,9 +6,9 @@
     all(not(test), feature = "longopts"),
     expect(unused_imports, reason = "Used without longopts")
 )]
+use crate::OutMode;
 use crate::compile::elf_tools::ElfArch;
 use crate::err::{BFCompileError, BFErrorID};
-use crate::OutMode;
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
 #[cfg(unix)]
@@ -491,8 +491,10 @@ mod tests {
 
     #[test]
     fn bad_args_error_out() {
-        assert!(parse_args(vec![arg("-u")].into_iter())
-            .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArg));
+        assert!(
+            parse_args(vec![arg("-u")].into_iter())
+                .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArg)
+        );
     }
 
     #[test]
@@ -524,8 +526,10 @@ mod tests {
                 );
             };
         } else {
-            assert!(parse_args(vec![arg("-aarm64"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
+            assert!(
+                parse_args(vec![arg("-aarm64"), arg("foo.bf")].into_iter())
+                    .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
+            );
         }
         if cfg!(feature = "riscv64") {
             #[cfg(feature = "riscv64")]
@@ -540,8 +544,10 @@ mod tests {
                 );
             };
         } else {
-            assert!(parse_args(vec![arg("-ariscv"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
+            assert!(
+                parse_args(vec![arg("-ariscv"), arg("foo.bf")].into_iter())
+                    .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
+            );
         }
         if cfg!(feature = "s390x") {
             #[cfg(feature = "s390x")]
@@ -560,8 +566,10 @@ mod tests {
                 );
             };
         } else {
-            assert!(parse_args(vec![arg("-as390x"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
+            assert!(
+                parse_args(vec![arg("-as390x"), arg("foo.bf")].into_iter())
+                    .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
+            );
         }
         if cfg!(feature = "x86_64") {
             #[cfg(feature = "x86_64")]
@@ -584,11 +592,15 @@ mod tests {
                 );
             };
         } else {
-            assert!(parse_args(vec![arg("-ax86_64"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
+            assert!(
+                parse_args(vec![arg("-ax86_64"), arg("foo.bf")].into_iter())
+                    .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
+            );
         }
-        assert!(parse_args(vec![arg("-apdp11"), arg("foo.bf")].into_iter())
-            .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch));
+        assert!(
+            parse_args(vec![arg("-apdp11"), arg("foo.bf")].into_iter())
+                .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
+        );
     }
 
     #[test]
