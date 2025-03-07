@@ -45,6 +45,18 @@ cargo tarpaulin --fail-under 90
 cargo nextest run --target x86_64-pc-windows-gnu --no-default-features \
     --features=all_backends
 
+# test longopts argument parsing (with and without POSIXLY_CORRECT)
+env POSIXLY_CORRECT=1 cargo nextest run --target x86_64-unknown-linux-gnu \
+    --no-default-features --features=all_backends,longopts \
+    arg_parse::longopts::tests
+env -u POSIXLY_CORRECT cargo nextest run --target x86_64-unknown-linux-gnu \
+    --no-default-features --features=all_backends,longopts \
+    arg_parse::longopts::tests
+env POSIXLY_CORRECT=1 cargo nextest run --target x86_64-unknown-linux-gnu \
+    --no-default-features --features=all_backends,longopts --test cli_test
+env -u POSIXLY_CORRECT cargo nextest run --target x86_64-unknown-linux-gnu \
+    --no-default-features --features=all_backends,longopts --test cli_test
+
 # test all single-backend builds one-by-one
 for backend in $arches; do
     cargo nextest run --no-default-features --features "$backend,bintests"
