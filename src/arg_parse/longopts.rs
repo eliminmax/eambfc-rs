@@ -433,4 +433,13 @@ mod tests {
             assert_eq!(cfg, RunConfig::ShowHelp);
         }
     }
+
+    #[test]
+    fn unrecognized_longopts() {
+        let a = parse_args_long_locked(vec![arg("-R")].into_iter()).unwrap_err();
+        let b = parse_args_long_locked(vec![arg("--run-real-fast")].into_iter()).unwrap_err();
+        assert_eq!(a.0.error_id(), b.0.error_id());
+        assert_eq!(a.0.error_id(), BFErrorID::UnknownArg);
+        assert_ne!(a.0, b.0);
+    }
 }
