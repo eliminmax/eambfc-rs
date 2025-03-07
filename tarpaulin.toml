@@ -9,3 +9,13 @@ engine = "Llvm"
 test-timeout = "1m"
 target-dir = ".tarpaulin"
 skip-clean = true
+
+[longopts_test]
+name = "eambfc-rs"
+locked = true
+offline = true
+engine = "Llvm"
+test-timeout = "1m"
+target-dir = ".tarpaulin"
+skip-clean = true
+features = "all_backends longopts"
