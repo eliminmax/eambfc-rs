@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 use super::RunConfig;
-use crate::err::{BFCompileError, BFErrorID};
 use crate::OutMode;
+use crate::err::{BFCompileError, BFErrorID};
 use libc::{c_char, c_int, getopt_long, option};
 use std::ffi::{CStr, CString, OsString};
 use std::os::unix::ffi::OsStringExt;
@@ -257,4 +257,171 @@ unsafe fn get_files(mut raw_args: impl Iterator<Item = *mut c_char>) -> Vec<OsSt
             OsString::from_vec(unsafe { CString::from_raw(ptr) }.into_bytes())
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::*;
+    use std::sync::{LazyLock, Mutex};
+    static LIBC_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    // a more consice way to write OsString::from(a)
+    #[cfg(not(tarpaulin_include))]
+    fn arg(a: impl Into<OsString>) -> OsString {
+        a.into()
+    }
+
+    #[cfg(not(tarpaulin_include))]
+    fn parse_args_long_locked(
+        args: impl Iterator<Item = OsString>,
+    ) -> Result<RunConfig, (BFCompileError, OutMode)> {
+        // SAFETY: the use of the libc_lock means that only 1 thread is accessing the libc arg
+        // parsing logic at a time, which should be safe, as there's nothing else in the program
+        // that would access them.
+        unsafe {
+            let libc_lock = LIBC_GUARD.lock().unwrap();
+            let ret = super::parse_args_long(args);
+            // if `getopt_long` is called multiple times, `optind` needs to be reset to 0 between
+            // calls to trigger glibc's reinitialization.
+            super::optind = 0;
+            // explicitly drop the lock to make its lifetime clearer.
+            drop(libc_lock);
+            ret
+        }
+    }
+
+    #[test]
+    fn longopts_are_like_shortopts() {
+        // For standalone options, make sure that they're handled identically in short and long
+        // forms
+        let pairs = vec![
+            ("-h", "--help"),
+            ("-V", "--version"),
+            ("-q", "--quiet"),
+            ("-j", "--json"),
+            ("-O", "--optimize"),
+            ("-k", "--keep-failed"),
+            ("-c", "--continue"),
+            ("-A", "--list-targets"),
+        ];
+        for (short_opt, long_opt) in pairs {
+            assert_eq!(
+                parse_args_long_locked(vec![arg(short_opt), arg("f.bf")].into_iter()),
+                parse_args_long_locked(vec![arg(long_opt), arg("f.bf")].into_iter()),
+            );
+        }
+
+        // For flags that take arguments, make sure that the forms `-a x86_64`,
+        // `--target-arch x86_64`, `-ax86_64`, and `--target-arch=x86_64` are all processed
+        // identically.
+        let param_opts = vec![
+            (
+                "-a",
+                "--target-arch",
+                vec![arg(env!("EAMBFC_DEFAULT_ARCH"))],
+            ),
+            (
+                "-t",
+                "--tape-size",
+                vec![arg("1"), arg("###"), arg("0"), arg(u64::MAX.to_string())],
+            ),
+            ("-e", "--source-suffix", vec![arg(".beef")]),
+            ("-s", "--output-suffix", vec![arg(".elf")]),
+        ];
+        for (short, long, test_params) in param_opts {
+            for param in test_params {
+                let mut joined_short = arg(short);
+                joined_short.push(&param);
+                let mut joined_long = arg(long);
+                joined_long.push("=");
+                joined_long.push(&param);
+                let a = parse_args_long_locked(
+                    vec![arg(short), param.clone(), arg("f.bf")].into_iter(),
+                );
+                let b = parse_args_long_locked(vec![arg(long), param, arg("f.bf")].into_iter());
+                let c = parse_args_long_locked(vec![joined_short, arg("f.bf")].into_iter());
+                let d = parse_args_long_locked(vec![joined_long, arg("f.bf")].into_iter());
+                assert_eq!(a, b);
+                assert_eq!(a, c);
+                assert_eq!(a, d);
+            }
+        }
+    }
+
+    #[test]
+    fn behaves_like_parse_args() {
+        // test args copied from every unit test for the original parse_args except for
+        // `options_dont_mix_with_files`, to make sure they're processed identically to
+        // `parse_args`
+        let arg_groups = vec![
+            vec![
+                // should be interpreted identically to -k -j -e .brainfuck'
+                arg("-kje.brainfuck"),
+                arg("foo.brainfuck"),
+                arg("bar.brainfuck"),
+            ],
+            vec![
+                // should be interpreted identically to -kje.brainfuck'
+                arg("-k"),
+                arg("-j"),
+                arg("-e"),
+                arg(".brainfuck"),
+                arg("foo.brainfuck"),
+                arg("bar.brainfuck"),
+            ],
+            vec![arg("--"), arg("-j"), arg("-h"), arg("-e.notbf")],
+            vec![arg("-h")],
+            vec![arg("-V")],
+            vec![],
+            vec![arg("-t"), arg("###")],
+            vec![arg("-t1"), arg("-t1024")],
+            vec![arg("-t0")],
+            vec![arg("-t9223372036854775807")],
+            vec![arg("-t")],
+            vec![arg("-e")],
+            vec![arg("-a")],
+            vec![arg("-q"), arg("f.bf")],
+            vec![arg("-j"), arg("f.bf")],
+            vec![arg("-qj"), arg("f.bf")],
+            vec![arg("-jq"), arg("f.bf")],
+            vec![arg("-Ok"), arg("foo.bf")],
+            vec![arg("-Ok"), arg("-c"), arg("foo.bf")],
+            vec![arg("-c"), arg("foo.bf")],
+            vec![arg("-Oc"), arg("foo.bf")],
+            vec![arg("-kOccOk"), arg("foo.bf")],
+            vec![arg("foo.bf")],
+            vec![arg("-e.brainfuck"), arg("-e"), arg(".bf")],
+            vec![arg("-u")],
+            vec![arg("-A")],
+            vec![arg("-e"), arg(".b"), arg("-A")],
+            vec![arg("-aarm64"), arg("foo.bf")],
+            vec![arg("-aaarch64"), arg("foo.bf")],
+            vec![arg("-ariscv64"), arg("foo.bf")],
+            vec![arg("-ariscv"), arg("foo.bf")],
+            vec![arg("-as390x"), arg("foo.bf")],
+            vec![arg("-as390"), arg("foo.bf")],
+            vec![arg("-az/architecture"), arg("foo.bf")],
+            vec![arg("-ax86_64"), arg("foo.bf")],
+            vec![arg("-ax64"), arg("foo.bf")],
+            vec![arg("-aamd64"), arg("foo.bf")],
+            vec![arg("-ax86-64"), arg("foo.bf")],
+            vec![arg("-apdp11"), arg("foo.bf")],
+            vec![arg("-ax86_64"), arg("-aarm64"), arg("foo.bf")],
+        ];
+
+        for args in arg_groups {
+            assert_eq!(
+                parse_args(args.clone().into_iter()),
+                parse_args_long_locked(args.clone().into_iter()),
+                "{args:?} were parsed differently by parse_args and parse_args_long_locked"
+            );
+        }
+    }
+
+    #[test]
+    fn options_can_mix_with_files() {
+        // ensure that -h is not interpreted as a file name (unlike parse_args)
+        let cfg = parse_args_long_locked(vec![arg("e.bf"), arg("-h")].into_iter()).unwrap();
+        assert_eq!(cfg, RunConfig::ShowHelp);
+    }
 }
