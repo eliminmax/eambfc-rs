@@ -108,9 +108,7 @@ macro_rules! checked_output {
 }
 
 macro_rules! help_text {
-    ($progname: expr) => {{
-        format!("{}\n", help_fmt($progname))
-    }};
+    ($progname: expr) => {{ format!("{}\n", help_fmt($progname)) }};
     () => {{ help_text!(EXEC_PATH) }};
 }
 

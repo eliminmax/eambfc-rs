@@ -12,7 +12,9 @@ macro_rules! help_opt {
     }};
     ($l: literal, $s: literal, $a: literal, $spad: literal, $lpad: literal, $msg: literal) => {{
         if cfg!(feature = "longopts") {
-            concat!(" --", $l, "=", $a, ", ", $lpad, "-", $s, " ", $spad, $a, ":   ", $msg)
+            concat!(
+                " --", $l, "=", $a, ", ", $lpad, "-", $s, " ", $spad, $a, ":   ", $msg
+            )
         } else {
             concat!(" -", $s, " ", $spad, $a, ":   ", $msg)
         }
