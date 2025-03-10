@@ -106,9 +106,7 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
     if shift_amount != 0 {
         // C.SLLI reg, shift_amount
         code_buf.extend(u16::to_le_bytes(
-            (((shift_amount & 0x20) | (u16::from(reg))) << 7)
-                | ((shift_amount & 0x1f) << 2)
-                | 0b10,
+            (((shift_amount & 0x20) | (u16::from(reg))) << 7) | ((shift_amount & 0x1f) << 2) | 0b10,
         ));
     }
     if lo12 != 0 {
