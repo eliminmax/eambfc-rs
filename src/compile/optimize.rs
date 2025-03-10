@@ -34,6 +34,7 @@ impl FilteredInstr {
             _ => None,
         }
     }
+
     fn cancels(self, other: Self) -> bool {
         match self {
             FI::Add => other == FI::Sub,
@@ -206,6 +207,7 @@ fn find_dead_loop(code_bytes: &[FI], search_start: usize) -> Option<usize> {
     if search_start == 0 && code_bytes[0] == FI::LoopOpen {
         return Some(0);
     }
+
     for (index, window) in code_bytes[search_start.saturating_sub(1)..]
         .windows(2)
         .enumerate()
@@ -227,6 +229,7 @@ fn set_zero_code(code_bytes: &[FI], search_start: usize) -> Option<usize> {
     if code_bytes.is_empty() {
         return None;
     }
+
     for (i, window) in code_bytes[search_start..].windows(3).enumerate() {
         if matches!(window, [FI::LoopOpen, FI::Add | FI::Sub, FI::LoopClose]) {
             return Some(search_start + i);

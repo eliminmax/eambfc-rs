@@ -162,10 +162,12 @@ impl ArchInter for X86_64Inter {
             }
         }
     }
+
     fn reg_copy(code_buf: &mut Vec<u8>, dst: X86_64Register, src: X86_64Register) {
         // MOV dst, src
         code_buf.extend([0x89, 0xc0 + ((src as u8) << 3) + dst as u8]);
     }
+
     fn syscall(code_buf: &mut Vec<u8>) {
         // SYSCALL
         code_buf.extend([0x0f, 0x05]);
@@ -184,6 +186,7 @@ impl ArchInter for X86_64Inter {
         )?);
         Ok(())
     }
+
     fn jump_close(
         code_buf: &mut Vec<u8>,
         reg: Self::RegType,
@@ -202,18 +205,22 @@ impl ArchInter for X86_64Inter {
         // INC reg
         x86_offset(code_buf, OffsetOp::Inc, OffsetMode::Reg, reg);
     }
+
     fn inc_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // INC byte [reg]
         x86_offset(code_buf, OffsetOp::Inc, OffsetMode::BytePtr, reg);
     }
+
     fn dec_reg(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // DEC reg
         x86_offset(code_buf, OffsetOp::Dec, OffsetMode::Reg, reg);
     }
+
     fn dec_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // DEC byte [reg]
         x86_offset(code_buf, OffsetOp::Dec, OffsetMode::BytePtr, reg);
     }
+
     fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u64) {
         if let Ok(imm8) = i8::try_from(imm) {
             add_reg_imm8(code_buf, reg, imm8);
@@ -223,10 +230,12 @@ impl ArchInter for X86_64Inter {
             add_reg_imm64(code_buf, reg, imm);
         }
     }
+
     fn add_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u8) {
         // ADD byte [reg], imm8
         code_buf.extend([0x80, reg as u8, imm]);
     }
+
     fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u64) {
         if let Ok(imm8) = i8::try_from(imm) {
             sub_reg_imm8(code_buf, reg, imm8);
@@ -236,10 +245,12 @@ impl ArchInter for X86_64Inter {
             sub_reg_imm64(code_buf, reg, imm);
         }
     }
+
     fn sub_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u8) {
         // SUB byte [reg], imm8
         code_buf.extend([0x80, 0x28 | (reg as u8), imm]);
     }
+
     fn zero_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // MOV byte [reg], 0
         code_buf.extend([0xc6, reg as u8, 0x00]);

@@ -444,6 +444,7 @@ mod tests {
     struct FailingWriter {
         fail_after: usize,
     }
+
     impl Write for FailingWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             if self.fail_after == 0 {
@@ -460,6 +461,7 @@ mod tests {
                 Ok(ret)
             }
         }
+
         fn flush(&mut self) -> io::Result<()> {
             Ok(())
         }

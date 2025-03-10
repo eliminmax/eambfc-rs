@@ -120,6 +120,7 @@ fn branch_cond(
     ));
     Ok(code_buf)
 }
+
 fn set_raw_reg(code_buf: &mut Vec<u8>, reg: RawReg, imm: i64) {
     // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
     let parts: [(u16, ShiftLevel); 4] = [
@@ -178,10 +179,12 @@ impl ArchInter for Arm64Inter {
             0xaa00_03e0 | (dst as u32) | ((src as u32) << 16),
         ));
     }
+
     fn syscall(code_buf: &mut Vec<u8>) {
         // SVC 0
         code_buf.extend(const { u32::to_le_bytes(0xd400_0001) });
     }
+
     fn nop_loop_open(code_buf: &mut Vec<u8>) {
         // 3 NOP instructions.
         const NOP: [u8; 4] = u32::to_le_bytes(0xd503_201f);
@@ -194,6 +197,7 @@ impl ArchInter for Arm64Inter {
             0x9100_0400 | ((reg as u32) << 5) | (reg as u32),
         ));
     }
+
     fn dec_reg(code_buf: &mut Vec<u8>, reg: Arm64Register) {
         // SUB reg, reg, 1
         code_buf.extend(u32::to_le_bytes(
@@ -204,6 +208,7 @@ impl ArchInter for Arm64Inter {
     fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) {
         add_sub(code_buf, reg, imm, ArithOp::Add);
     }
+
     fn sub_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) {
         add_sub(code_buf, reg, imm, ArithOp::Sub);
     }
