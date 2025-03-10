@@ -390,6 +390,31 @@ mod tests {
     }
 
     #[disasm_test]
+    fn test_reg_split_neg() {
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdead_0000_beef);
+        assert_eq!(
+            disassembler().disassemble(v),
+            [
+                "mov x19, #-0xbeef",
+                // the bitwise negation of 0xdead is 0x2152
+                "movk x19, #0x2152, lsl #32",
+            ]
+        );
+        let mut v: Vec<u8> = Vec::new();
+        Arm64Inter::set_reg(&mut v, Arm64Register::X8, -0xdead_beef_0000);
+        assert_eq!(
+            disassembler().disassemble(v),
+            [
+                // the bitwise negation of 0xbeef_0000 is 0x4110_0000
+                // (Add 1 because that's how 2's complement works)
+                "mov x8, 0x41100001",
+                "movk x8, #0x2152, lsl #32"
+            ],
+        );
+    }
+
+    #[disasm_test]
     fn test_inc_dec_reg() {
         let mut ds = disassembler();
         let mut v: Vec<u8> = Vec::new();
