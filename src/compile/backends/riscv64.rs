@@ -36,7 +36,7 @@ const fn sign_extend(val: i64, amnt: u32) -> i64 {
 
 /// A modified port of LLVM's logic for resolving the `li` (load immediate) pseudo-instruction,
 /// as it existed in 2022.
-fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
+fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
     let lo12 = sign_extend(val, 12);
     if val.fits_within_bits(32) {
         let hi20 = sign_extend(((val as u64).wrapping_add(0x800) >> 12) as i64, 20);
@@ -45,12 +45,12 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
                 // C.LUI reg, hi20
                 let imm = hi20 as u16;
                 code_buf.extend(u16::to_le_bytes(
-                    0x6001 | (((imm & 0x20) | u16::from(*reg)) << 7) | ((imm & 0x1f) << 2),
+                    0x6001 | (((imm & 0x20) | u16::from(reg)) << 7) | ((imm & 0x1f) << 2),
                 ));
             } else {
                 // LUI reg, hi20
                 code_buf.extend(u32::to_le_bytes(
-                    ((hi20 as u32) << 12) | (u32::from(*reg) << 7) | 0b011_0111,
+                    ((hi20 as u32) << 12) | (u32::from(reg) << 7) | 0b011_0111,
                 ));
             }
         }
@@ -62,7 +62,7 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
                 let template = if n == 0 { 0x4001 } else { 0x2001 };
                 let imm = lo12 as u16;
                 code_buf.extend(u16::to_le_bytes(
-                    template | (((imm & 0x20) | u16::from(*reg)) << 7) | ((imm & 0x1f) << 2),
+                    template | (((imm & 0x20) | u16::from(reg)) << 7) | ((imm & 0x1f) << 2),
                 ));
             }
             (_, n) => {
@@ -71,10 +71,10 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
                 let (opcode, rs1): (u32, u32) = if n == 0 {
                     (0b001_0011, 0)
                 } else {
-                    (0b001_1011, u32::from(*reg) << 15)
+                    (0b001_1011, u32::from(reg) << 15)
                 };
                 code_buf.extend(u32::to_le_bytes(
-                    ((lo12 as u32) << 20) | rs1 | (u32::from(*reg) << 7) | opcode,
+                    ((lo12 as u32) << 20) | rs1 | (u32::from(reg) << 7) | opcode,
                 ));
             }
         }
@@ -100,13 +100,13 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
         hi52 = ((hi52 as u64) << 12) as i64;
     }
     // Recursive call
-    encode_li(code_buf, reg, hi52);
+    encode_li(code_buf, RawReg(reg), hi52);
     let shift_amount = shift_amount as u16;
     // Generation of the instruction
     if shift_amount != 0 {
         // C.SLLI reg, shift_amount
         code_buf.extend(u16::to_le_bytes(
-            (((shift_amount & 0x20) | (u16::from(*reg))) << 7)
+            (((shift_amount & 0x20) | (u16::from(reg))) << 7)
                 | ((shift_amount & 0x1f) << 2)
                 | 0b10,
         ));
@@ -114,11 +114,11 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
     if lo12 != 0 {
         if lo12.fits_within_bits(6) {
             code_buf.extend(c_addi(
-                reg,
+                RawReg(reg),
                 NonZeroI8::new(lo12 as i8).unwrap_or_else(|| unreachable!()),
             ));
         } else {
-            code_buf.extend(addi(reg, lo12 as i16));
+            code_buf.extend(addi(RawReg(reg), lo12 as i16));
         }
     }
 }
@@ -128,15 +128,9 @@ fn encode_li(code_buf: &mut Vec<u8>, reg: RawReg, val: i64) {
 const NZ1: NonZeroI8 = NonZeroI8::new(1).expect("1 != 0");
 const NZ_NEG1: NonZeroI8 = NonZeroI8::new(-1).expect("-1 != 0");
 
-/// Internal type representing a raw register identifier. Implements `Deref<Target = u8>`.
+/// Internal type representing a raw register identifier.
 #[derive(PartialEq, Copy, Clone)]
 struct RawReg(u8);
-impl std::ops::Deref for RawReg {
-    type Target = u8;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 impl From<RiscVRegister> for RawReg {
     fn from(value: RiscVRegister) -> Self {
@@ -159,13 +153,13 @@ const TEMP_REG: RawReg = RawReg(6);
 
 pub(crate) struct RiscV64Inter;
 
-fn addi(reg: RawReg, i: i16) -> [u8; 4] {
+fn addi(RawReg(reg): RawReg, i: i16) -> [u8; 4] {
     debug_assert!(
         i.fits_within_bits(12),
         "addi immediate must fit within 12 bits"
     );
     u32::to_le_bytes(
-        ((i as u32) << 20) | (u32::from(*reg) << 15) | (u32::from(*reg) << 7) | 0b001_0011,
+        ((i as u32) << 20) | (u32::from(reg) << 15) | (u32::from(reg) << 7) | 0b001_0011,
     )
 }
 
@@ -223,23 +217,23 @@ fn cond_jump(
     Ok(code)
 }
 
-fn c_addi(reg: RawReg, i: NonZeroI8) -> [u8; 2] {
+fn c_addi(RawReg(reg): RawReg, i: NonZeroI8) -> [u8; 2] {
     debug_assert!(
         i.get().fits_within_bits(6),
         "c_addi must only be called with 6-bit signed immediates"
     );
     let imm = i16::from(i.get()) as u16;
-    u16::to_le_bytes(0x0001 | (((imm & 0x20) | u16::from(*reg)) << 7) | ((imm & 0x1f) << 2))
+    u16::to_le_bytes(0x0001 | (((imm & 0x20) | u16::from(reg)) << 7) | ((imm & 0x1f) << 2))
 }
 
 fn store_to_byte(addr: RiscVRegister) -> [u8; 4] {
     // SB
-    u32::to_le_bytes((u32::from(*TEMP_REG) << 20) | ((addr as u32) << 15) | 0b010_0011)
+    u32::to_le_bytes((u32::from(TEMP_REG.0) << 20) | ((addr as u32) << 15) | 0b010_0011)
 }
 
 fn load_from_byte(addr: RiscVRegister) -> [u8; 4] {
     // LB
-    u32::to_le_bytes(((addr as u32) << 15) | (u32::from(*TEMP_REG) << 7) | 0b000_0011)
+    u32::to_le_bytes(((addr as u32) << 15) | (u32::from(TEMP_REG.0) << 7) | 0b000_0011)
 }
 
 impl ArchInter for RiscV64Inter {
@@ -341,7 +335,7 @@ impl ArchInter for RiscV64Inter {
                 encode_li(code_buf, TEMP_REG, imm as i64);
                 // C.ADD reg, aux
                 code_buf.extend(u16::to_le_bytes(
-                    0x9002 | ((reg as u16) << 7) | (u16::from(*TEMP_REG) << 2),
+                    0x9002 | ((reg as u16) << 7) | (u16::from(TEMP_REG.0) << 2),
                 ));
             }
         }

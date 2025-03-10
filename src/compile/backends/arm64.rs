@@ -26,15 +26,9 @@ pub(in super::super) enum Arm64Register {
     X19 = 19, // bf pointer register
 }
 
-/// Internal type representing a raw register identifier. Implements `Deref<Target = u8>`.
+/// Internal type representing a raw register identifier.
 #[derive(PartialEq, Copy, Clone)]
 struct RawReg(u8);
-impl std::ops::Deref for RawReg {
-    type Target = u8;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 impl From<Arm64Register> for RawReg {
     fn from(value: Arm64Register) -> Self {
@@ -62,7 +56,7 @@ enum MoveType {
     Invert = 0b00,
 }
 
-fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, reg: RawReg) -> [u8; 4] {
+fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, RawReg(reg): RawReg) -> [u8; 4] {
     // depending on MoveType, it will be one of MOVK, MOVN, or MOVZ
     // bitwise not to invert imm16 if needed.
     let imm16 = if move_type == MoveType::Invert {
@@ -75,7 +69,7 @@ fn mov(move_type: MoveType, imm16: u16, shift: ShiftLevel, reg: RawReg) -> [u8; 
             | ((move_type as u32) << 29)
             | ((shift as u32) << 21)
             | (u32::from(imm16) << 5)
-            | u32::from(*reg),
+            | u32::from(reg),
     )
 }
 
@@ -276,7 +270,7 @@ enum ArithOp {
     Sub = 0xd1,
 }
 
-fn add_sub_imm(code_buf: &mut Vec<u8>, reg: RawReg, imm: u64, op: ArithOp, shift: bool) {
+fn add_sub_imm(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, imm: u64, op: ArithOp, shift: bool) {
     assert!(
         (shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0),
         "{imm} is invalid for shift level"
@@ -287,8 +281,8 @@ fn add_sub_imm(code_buf: &mut Vec<u8>, reg: RawReg, imm: u64, op: ArithOp, shift
         ((op as u32) << 24)
             | if shift { 1 << 22 } else { 0 }
             | aligned_imm
-            | (u32::from(*reg) << 5)
-            | u32::from(*reg),
+            | (u32::from(reg) << 5)
+            | u32::from(reg),
     ));
 }
 
