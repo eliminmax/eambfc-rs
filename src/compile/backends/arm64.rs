@@ -329,19 +329,19 @@ mod tests {
     fn test_set_reg_simple() {
         let mut ds = disassembler();
         // the following can be set with 1 instruction each.
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
         assert_eq!(ds.disassemble(v), ["mov x0, #0x0"]);
 
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, -1);
         assert_eq!(ds.disassemble(v), ["mov x0, #-0x1"]);
 
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001);
         assert_eq!(ds.disassemble(v), ["mov x0, #-0x100001"]);
 
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::set_reg(&mut v, Arm64Register::X1, 0xbeef);
         assert_eq!(ds.disassemble(v), ["mov x1, #0xbeef"]);
     }
@@ -354,7 +354,7 @@ mod tests {
 
     #[disasm_test]
     fn test_reg_multiple() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(8);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
         assert_eq!(
@@ -365,7 +365,7 @@ mod tests {
 
     #[disasm_test]
     fn test_reg_split() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(8);
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead_0000_beef);
         assert_eq!(
             disassembler().disassemble(v),
@@ -375,7 +375,7 @@ mod tests {
 
     #[disasm_test]
     fn test_reg_neg() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(8);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
         assert_eq!(
@@ -390,7 +390,7 @@ mod tests {
 
     #[disasm_test]
     fn test_reg_split_neg() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(8);
         Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdead_0000_beef);
         assert_eq!(
             disassembler().disassemble(v),
@@ -400,7 +400,7 @@ mod tests {
                 "movk x19, #0x2152, lsl #32",
             ]
         );
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(12);
         Arm64Inter::set_reg(&mut v, Arm64Register::X8, -0xdead_beef_0000);
         assert_eq!(
             disassembler().disassemble(v),
@@ -418,19 +418,19 @@ mod tests {
     #[disasm_test]
     fn test_inc_dec_reg() {
         let mut ds = disassembler();
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::inc_reg(&mut v, Arm64Register::X0);
         assert_eq!(ds.disassemble(v), ["add x0, x0, #0x1"]);
 
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::inc_reg(&mut v, Arm64Register::X19);
         assert_eq!(ds.disassemble(v), ["add x19, x19, #0x1"]);
 
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::dec_reg(&mut v, Arm64Register::X1);
         assert_eq!(ds.disassemble(v), ["sub x1, x1, #0x1"]);
 
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::dec_reg(&mut v, Arm64Register::X19);
         assert_eq!(ds.disassemble(v), ["sub x19, x19, #0x1"]);
     }
@@ -454,7 +454,7 @@ mod tests {
         let mut ds = disassembler();
 
         // Handling of 24-bit values
-        let mut v: Vec<u8> = Vec::with_capacity(24);
+        let mut v: Vec<u8> = Vec::with_capacity(8);
         add_sub(&mut v, Arm64Register::X8, 0xabc_def, ArithOp::Add);
         assert_eq!(
             ds.disassemble(v),
@@ -463,7 +463,7 @@ mod tests {
 
         // Ensure that if it fits within 24 bits and the lowest 12 are 0, no ADD or SUB 0 is
         // included
-        let mut v: Vec<u8> = Vec::with_capacity(24);
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         add_sub(&mut v, Arm64Register::X8, 0xabc_000, ArithOp::Sub);
         assert_eq!(ds.disassemble(v), ["sub x8, x8, #0xabc, lsl #12"]);
 
@@ -487,7 +487,7 @@ mod tests {
 
     #[disasm_test]
     fn test_add_sub_byte() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(24);
         Arm64Inter::add_byte(&mut v, Arm64Register::X19, 0xa5);
         Arm64Inter::sub_byte(&mut v, Arm64Register::X19, 0xa5);
         assert_eq!(
@@ -505,7 +505,7 @@ mod tests {
 
     #[disasm_test]
     fn test_zero_byte() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::with_capacity(4);
         Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
         assert_eq!(disassembler().disassemble(v), ["strb wzr, [x19], #0x0"]);
     }
