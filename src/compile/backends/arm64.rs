@@ -405,10 +405,12 @@ mod tests {
         assert_eq!(
             disassembler().disassemble(v),
             [
-                // the bitwise negation of 0xbeef_0000 is 0x4110_0000
+                "mov x8, #-0x10000",
+                // the bitwise negation of 0xbeef is 0x4110
                 // (Add 1 because that's how 2's complement works)
-                "mov x8, 0x41100001",
-                "movk x8, #0x2152, lsl #32"
+                "movk x8, #0x4111, lsl #16",
+                // the bitwise negation of 0xdead is 0x2152
+                "movk x8, #0x2152, lsl #32",
             ],
         );
     }
