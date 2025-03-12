@@ -377,25 +377,29 @@ mod tests {
 
     #[disasm_test]
     fn add_sub_small_imm() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v = Vec::with_capacity(3);
         let mut ds = disassembler();
         X86_64Inter::add_reg(&mut v, X86_64Register::Rsi, 0x20);
+        assert_eq!(v.len(), 3);
         assert_eq!(ds.disassemble(v), ["add esi, 0x20"]);
 
-        let mut v: Vec<u8> = Vec::new();
+        let mut v = Vec::with_capacity(3);
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rsi, 0x20);
+        assert_eq!(v.len(), 3);
         assert_eq!(ds.disassemble(v), ["sub esi, 0x20"]);
     }
 
     #[disasm_test]
     fn add_sub_medium_imm() {
-        let mut v: Vec<u8> = Vec::new();
+        let mut v = Vec::with_capacity(6);
         let mut ds = disassembler();
         X86_64Inter::add_reg(&mut v, X86_64Register::Rdx, 0xdead);
+        assert_eq!(v.len(), 6);
         assert_eq!(ds.disassemble(v), ["add edx, 0xdead"]);
 
-        let mut v: Vec<u8> = Vec::new();
+        let mut v = Vec::with_capacity(6);
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rdx, 0xbeef);
+        assert_eq!(v.len(), 6);
         assert_eq!(ds.disassemble(v), ["sub edx, 0xbeef"]);
     }
 
