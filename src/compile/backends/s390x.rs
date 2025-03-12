@@ -404,11 +404,11 @@ impl ArchInter for S390xInter {
         // BC and BCR are variants of BRANCH ON CONDITION with different encodings, and extended
         // mnemonics for when used as NOP instructions
         // BC 0, 0 {RX-b}
-        const NOPR: [u8; 4] = [0x47, 0x00, 0x00, 0x00];
+        const NOP: [u8; 4] = [0x47, 0x00, 0x00, 0x00];
         // BCR 0, 0 {RR}
-        const NOP: [u8; 2] = [0x07, 0x00];
-        code_buf.extend(NOPR.repeat(4));
-        code_buf.extend(NOP);
+        const NOPR: [u8; 2] = [0x07, 0x00];
+        code_buf.extend(NOP.repeat(4));
+        code_buf.extend(NOPR);
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
@@ -647,9 +647,6 @@ mod tests {
         // the full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
         given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
         assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
-        // LLVM apparently also flips the nop and nopr mnemonics, and requires that they have
-        // arguments. I double-checked the IBM docs on this one after seeing this, and I got it
-        // the right way around, so I'm confused here.
         for i in 0..4 {
             assert_eq!(
                 disasm_lines.next().unwrap(),
