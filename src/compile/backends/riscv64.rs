@@ -733,7 +733,7 @@ mod test {
             ]
         );
 
-        let mut v = Vec::with_capacity(28);
+        let mut v = Vec::with_capacity(24);
         RiscV64Inter::add_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x70);
         RiscV64Inter::sub_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x70);
         assert_eq!(
@@ -750,7 +750,7 @@ mod test {
 
         // if the imm is >= 0x80, it will become negative due to the casting that's done, but will
         // have the same byte value once truncated down.
-        let mut v = Vec::with_capacity(28);
+        let mut v = Vec::with_capacity(24);
         RiscV64Inter::add_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x80);
         RiscV64Inter::sub_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x80);
         const { assert!((1_i16 + 0x80) as u8 == (1_i16 - 0x80) as u8) };
