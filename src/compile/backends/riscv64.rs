@@ -674,6 +674,7 @@ mod test {
         let mut b = Vec::new();
         RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 0);
         RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, 0);
+        assert_eq!(a, b);
         for i in 0..63 {
             a.clear();
             b.clear();
