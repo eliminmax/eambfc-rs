@@ -609,7 +609,7 @@ mod tests {
         S390xInter::set_reg(&mut v, S390xRegister::R8, -0x1234_5678_9abc_def0);
         given_that!(!0x1234_5678_i32 == 3989547399_u32 as i32);
         assert_eq!(
-            ds.disassemble(v.clone()),
+            ds.disassemble(v),
             ["lgfi %r8, 1698898192", "iihf %r8, 3989547399"]
         );
     }
