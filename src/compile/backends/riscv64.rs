@@ -625,7 +625,7 @@ mod test {
     }
 
     #[disasm_test]
-    fn successfull_jumps_test() {
+    fn successful_jumps_test() {
         let mut v = vec![0; 12];
         RiscV64Inter::jump_open(&mut v, 0, RiscVRegister::S0, 32).unwrap();
         RiscV64Inter::jump_close(&mut v, RiscVRegister::S0, -32).unwrap();
