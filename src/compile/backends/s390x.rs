@@ -533,7 +533,7 @@ mod tests {
     }
 
     #[disasm_test]
-    fn test_reg_set_small_imm() {
+    fn test_set_reg_small_imm() {
         let mut v: Vec<u8> = Vec::new();
         S390xInter::set_reg(&mut v, S390xRegister::R5, 12345);
         S390xInter::set_reg(&mut v, S390xRegister::R8, -12345);
@@ -544,7 +544,7 @@ mod tests {
     }
 
     #[disasm_test]
-    fn test_set_medium_imm() {
+    fn test_set_reg_medium_imm() {
         let mut v: Vec<u8> = Vec::new();
         S390xInter::set_reg(&mut v, S390xRegister::R4, 0x1234_abcd);
         S390xInter::set_reg(&mut v, S390xRegister::R4, -0x1234_abcd);
@@ -555,7 +555,7 @@ mod tests {
     }
 
     #[disasm_test]
-    fn test_set_large_imm() {
+    fn test_set_reg_large_imm() {
         let mut ds = Disassembler::new(ElfArch::S390x);
         // this one's messy, due to the number of possible combinations
         let mut v: Vec<u8> = Vec::new();
