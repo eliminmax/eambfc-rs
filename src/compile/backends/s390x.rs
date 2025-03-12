@@ -548,6 +548,7 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         S390xInter::set_reg(&mut v, S390xRegister::R4, 0x1234_abcd);
         S390xInter::set_reg(&mut v, S390xRegister::R4, -0x1234_abcd);
+        given_that!(0x1234_abcd == 305441741);
         assert_eq!(
             disassembler().disassemble(v),
             ["lgfi %r4, 305441741", "lgfi %r4, -305441741"]
@@ -606,6 +607,7 @@ mod tests {
         v.clear();
 
         S390xInter::set_reg(&mut v, S390xRegister::R8, -0x1234_5678_9abc_def0);
+        given_that!(!0x1234_5678_i32 == 3989547399_u32 as i32);
         assert_eq!(
             ds.disassemble(v.clone()),
             ["lgfi %r8, 1698898192", "iihf %r8, 3989547399"]
