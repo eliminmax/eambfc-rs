@@ -327,7 +327,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
 mod tests {
     use super::*;
 
-    // a more consice way to write OsString::from(a)
+    // a more concise way to write OsString::from(a)
     #[cfg(not(tarpaulin_include))]
     fn arg(a: impl Into<OsString>) -> OsString {
         a.into()

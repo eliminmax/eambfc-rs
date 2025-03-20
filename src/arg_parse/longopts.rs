@@ -265,7 +265,7 @@ mod tests {
     use std::sync::{LazyLock, Mutex};
     static LIBC_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-    // a more consice way to write OsString::from(a)
+    // a more concise way to write OsString::from(a)
     #[cfg(not(tarpaulin_include))]
     fn arg(a: impl Into<OsString>) -> OsString {
         a.into()
