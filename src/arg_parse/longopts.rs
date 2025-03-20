@@ -103,7 +103,7 @@ impl Drop for CCompatibleArgs {
 ///
 /// While this function **does** handle most of the safety invariants needed for `getopt_long`
 /// internally, there is no way to use `getopt_long` safely in a multi-threaded context, so this
-/// function can only be called before spawning any threads.
+/// function is only safe to call in a single-threaded context.
 pub(crate) unsafe fn parse_args_long(
     args: impl Iterator<Item = OsString>,
 ) -> Result<RunConfig, (BFCompileError, OutMode)> {
@@ -272,12 +272,17 @@ mod tests {
     }
 
     #[cfg(not(tarpaulin_include))]
-    fn parse_args_long_locked(
+    unsafe fn parse_args_long_locked(
         args: impl Iterator<Item = OsString>,
     ) -> Result<RunConfig, (BFCompileError, OutMode)> {
         // SAFETY: the use of the libc_lock means that only 1 thread is accessing the libc arg
         // parsing logic at a time, which should be safe, as there's nothing else in the program
-        // that would access them.
+        // that would access them. That said, the function is marked in the manpage as MT-Unsafe,
+        // and if there's more than one thread running, this may be reasonably likely to be safe,
+        // but is not trule guaranteed to be truly safe to use.
+        //
+        // Given that this is exclusively used in unit tests, I'm reluctantly accepting the
+        // standard of "reasonably likely to be safe".
         unsafe {
             let libc_lock = LIBC_GUARD.lock().unwrap();
             let ret = super::parse_args_long(args);
@@ -306,8 +311,8 @@ mod tests {
         ];
         for (short_opt, long_opt) in pairs {
             assert_eq!(
-                parse_args_long_locked(vec![arg(short_opt), arg("f.bf")].into_iter()),
-                parse_args_long_locked(vec![arg(long_opt), arg("f.bf")].into_iter()),
+                unsafe { parse_args_long_locked(vec![arg(short_opt), arg("f.bf")].into_iter()) },
+                unsafe { parse_args_long_locked(vec![arg(long_opt), arg("f.bf")].into_iter()) },
             );
         }
 
@@ -335,12 +340,16 @@ mod tests {
                 let mut joined_long = arg(long);
                 joined_long.push("=");
                 joined_long.push(&param);
-                let a = parse_args_long_locked(
-                    vec![arg(short), param.clone(), arg("f.bf")].into_iter(),
-                );
-                let b = parse_args_long_locked(vec![arg(long), param, arg("f.bf")].into_iter());
-                let c = parse_args_long_locked(vec![joined_short, arg("f.bf")].into_iter());
-                let d = parse_args_long_locked(vec![joined_long, arg("f.bf")].into_iter());
+                let a = unsafe {
+                    parse_args_long_locked(vec![arg(short), param.clone(), arg("f.bf")].into_iter())
+                };
+                let b = unsafe {
+                    parse_args_long_locked(vec![arg(long), param, arg("f.bf")].into_iter())
+                };
+                let c =
+                    unsafe { parse_args_long_locked(vec![joined_short, arg("f.bf")].into_iter()) };
+                let d =
+                    unsafe { parse_args_long_locked(vec![joined_long, arg("f.bf")].into_iter()) };
                 assert_eq!(a, b);
                 assert_eq!(a, c);
                 assert_eq!(a, d);
@@ -413,7 +422,7 @@ mod tests {
         for args in arg_groups {
             assert_eq!(
                 parse_args(args.clone().into_iter()),
-                parse_args_long_locked(args.clone().into_iter()),
+                unsafe { parse_args_long_locked(args.clone().into_iter()) },
                 "{args:?} were parsed differently by parse_args and parse_args_long_locked"
             );
         }
@@ -422,7 +431,8 @@ mod tests {
     #[test]
     fn options_can_mix_with_files() {
         use std::env::var_os;
-        let cfg = parse_args_long_locked(vec![arg("e.bf"), arg("-h")].into_iter()).unwrap();
+        let cfg =
+            unsafe { parse_args_long_locked(vec![arg("e.bf"), arg("-h")].into_iter()) }.unwrap();
         if var_os("POSIXLY_CORRECT").is_some() {
             let RunConfig::StandardRun(StandardRunConfig { source_files, .. }) = cfg else {
                 panic!("Expected standard run config")
@@ -436,8 +446,9 @@ mod tests {
 
     #[test]
     fn unrecognized_longopts() {
-        let a = parse_args_long_locked(vec![arg("-R")].into_iter()).unwrap_err();
-        let b = parse_args_long_locked(vec![arg("--run-real-fast")].into_iter()).unwrap_err();
+        let a = unsafe { parse_args_long_locked(vec![arg("-R")].into_iter()) }.unwrap_err();
+        let b = unsafe { parse_args_long_locked(vec![arg("--run-real-fast")].into_iter()) }
+            .unwrap_err();
         assert_eq!(a.0.error_id(), b.0.error_id());
         assert_eq!(a.0.error_id(), BFErrorID::UnknownArg);
         assert_ne!(a.0, b.0);
