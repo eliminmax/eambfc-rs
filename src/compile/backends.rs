@@ -109,7 +109,7 @@ mod test_utils {
     use std::ffi::CStr;
     use std::sync::OnceLock;
 
-    /// a dummy value to ensure that the LLVM Disassembler functions are
+    /// a dummy value to ensure that the LLVM Disassemblers are initialized
     static LLVM_TARGET_INIT: OnceLock<()> = OnceLock::new();
 
     /// cross the ffi boundary to call functions to set up the LLVM disassembler interface
