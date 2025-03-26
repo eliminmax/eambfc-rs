@@ -75,13 +75,19 @@ use super::elf_tools::{ByteOrdering, ElfArch};
 //  - bits 12-15: lower 4 bits of opcode
 //  - bits 16-31: immediate
 //
+// * RI-c (2 halfwords, 12-bit opcode, [register, relative halfword immediate])
+//  - bits 0-7: higher 8 bits of opcode
+//  - bits 8-11: register
+//  - bits 12-15: lower 4 bits of opcode
+//  - bits 16-31: immediate
+//
 // * RIL-a (3 halfwords, 12-bit opcode, [register, word immediate])
 //  - bits 0-7: higher 8 bits of opcode
 //  - bits 8-11: register
 //  - bits 12-15: lower 4 bits of opcode
 //  - bits 16-47: immediate
 //
-// * RIL-c (3 halfwords, 12-bit opcode, [mask, 32-bit relative immediate])
+// * RIL-c (3 halfwords, 12-bit opcode, [mask, relative word immediate])
 //  - bits 0-7: higher 8 bits of opcode
 //  - bits 8-11: mask
 //  - bits 12-15: lower 4 bits of opcode
@@ -399,16 +405,20 @@ impl ArchInter for S390xInter {
         Ok(())
     }
 
-    fn nop_loop_open(code_buf: &mut Vec<u8>) {
+    fn pad_loop_open(code_buf: &mut Vec<u8>) {
         // BRANCH ON CONDITION with all operands set to zero is used as a NO-OP.
         // BC and BCR are variants of BRANCH ON CONDITION with different encodings, and extended
         // mnemonics for when used as NOP instructions
         // BC 0, 0 {RX-b}
         const NOP: [u8; 4] = [0x47, 0x00, 0x00, 0x00];
+        // start with a jump into it own second halfword - both gcc and clang generate that for
+        // `__builtin_trap()`
+        // BRC 15, 2 {RI-c}
+        const INSTR_SEQ: [[u8; 4]; 4] = [u32::to_be_bytes(0xa7f4_0001), NOP, NOP, NOP];
+        code_buf.extend(INSTR_SEQ.into_iter().flatten());
+        // two bytes short of Self::JUMP_SIZE, so pad with the NOPR pseudo-instruction
         // BCR 0, 0 {RR}
-        const NOPR: [u8; 2] = [0x07, 0x00];
-        code_buf.extend(NOP.repeat(4));
-        code_buf.extend(NOPR);
+        code_buf.extend([0x07, 0x00]);
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
@@ -625,7 +635,7 @@ mod tests {
         let mut v: Vec<u8> = vec![0; 18];
         S390xInter::jump_open(&mut v, 0, S390xRegister::R3, 18).unwrap();
         S390xInter::jump_close(&mut v, S390xRegister::R3, -36).unwrap();
-        S390xInter::nop_loop_open(&mut v);
+        S390xInter::pad_loop_open(&mut v);
         // it took a while, but I found a comment in the LLVM source code* that explained that
         // it uses "jge" instead of the IBM-documented "jle" extended mnemonic for
         // `brcl 8,addr` because "jl" is also "jump if less". Thinking that Capstone was
@@ -647,11 +657,12 @@ mod tests {
         // the full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
         given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
         assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
-        for i in 0..4 {
+        assert_eq!(disasm_lines.next().unwrap(), "j 0x2");
+        for i in 0..3 {
             assert_eq!(
                 disasm_lines.next().unwrap(),
                 "nop 0",
-                "only {i}/4 nopr instructions were matched"
+                "only {i}/3 nop instructions were matched"
             );
         }
         assert_eq!(disasm_lines.next().unwrap(), "nopr %r0");

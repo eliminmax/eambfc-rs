@@ -217,14 +217,14 @@ trait BFCompileHelper: ArchInter {
             b'.' => Self::bf_io(code_buf, Self::SC_NUMS.write, 1),
             // Read 1 byte to [bf_ptr] from STDIN
             b',' => Self::bf_io(code_buf, Self::SC_NUMS.read, 0),
-            // for this, fill jump_size bytes with NOPs, and push the location to jump_stack.
+            // pad `Self::JUMP_SIZE` bytes with a trap instruction followed by no-ops.
             // will replace when reaching the corresponding ']' instruction
             b'[' => {
                 jump_stack.push(JumpLocation {
                     loc: loc.copied(),
                     index: code_buf.len(),
                 });
-                Self::nop_loop_open(code_buf);
+                Self::pad_loop_open(code_buf);
             }
             b']' => {
                 // First, compile the skipped '[' instruction

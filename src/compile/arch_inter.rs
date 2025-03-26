@@ -52,9 +52,10 @@ pub(super) trait ArchInter {
     /// Should return an error if `offset` is too large of a jump for this architecture
     fn jump_close(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64)
     -> FailableInstrEncoding;
-    /// append non-op instructions `code_buf` as padding bytes to to make room for `jump_open`
-    /// instruction once `offset` is known. Must extend it by `Self::JUMP_SIZE` bytes.
-    fn nop_loop_open(code_buf: &mut Vec<u8>);
+    /// append a trap/illegal instruction to `code_buf`, followed by no-op instructions. This
+    /// should be overwritten using `jump_open` once the appropriate `offset` is known, and must
+    /// append a sequence of exactly `SELF::JUMP_SIZE` bytes.
+    fn pad_loop_open(code_buf: &mut Vec<u8>);
     /// append machine code to `code_buf` to increment the value in `reg` by 1
     fn inc_reg(code_buf: &mut Vec<u8>, reg: Self::RegType);
     /// append machine code to `code_buf` to increment the byte pointed to by `reg` by 1

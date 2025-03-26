@@ -269,9 +269,14 @@ impl ArchInter for RiscV64Inter {
         code_buf.extend(u32::to_le_bytes(0x73));
     }
 
-    fn nop_loop_open(code_buf: &mut Vec<u8>) {
-        // nop
-        code_buf.extend(u32::to_le_bytes(0x13).repeat(3));
+    fn pad_loop_open(code_buf: &mut Vec<u8>) {
+        // illegal; nop; nop
+        const INSTR_SEQUENCE: [[u8; 4]; 3] = [
+            u32::to_le_bytes(0),
+            u32::to_le_bytes(0x13),
+            u32::to_le_bytes(0x13),
+        ];
+        code_buf.extend(INSTR_SEQUENCE.into_iter().flatten());
     }
 
     fn jump_open(
@@ -617,11 +622,13 @@ mod test {
     }
 
     #[disasm_test]
-    fn nop_pad() {
+    fn jump_pad() {
         let mut v = Vec::with_capacity(12);
-        RiscV64Inter::nop_loop_open(&mut v);
+        RiscV64Inter::pad_loop_open(&mut v);
         assert_eq!(v.len(), 12);
-        assert_eq!(disassembler().disassemble(v), ["nop"].repeat(3));
+        // the defined illegal instruction 0x0000_0000 is interpreted as two unimplemented 0x0000
+        // instructions by LLVM
+        assert_eq!(disassembler().disassemble(v), ["unimp", "unimp", "nop", "nop"]);
     }
 
     #[disasm_test]

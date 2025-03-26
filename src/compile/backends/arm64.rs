@@ -4,9 +4,9 @@
 
 use crate::err::{BFCompileError, BFErrorID};
 
-use super::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
+use super::MinimumBits;
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit
 // forms. w8 is the 32-bit form for register #8, and x0 is the 64-bit form for register #0.
@@ -185,10 +185,14 @@ impl ArchInter for Arm64Inter {
         code_buf.extend(const { u32::to_le_bytes(0xd400_0001) });
     }
 
-    fn nop_loop_open(code_buf: &mut Vec<u8>) {
-        // 3 NOP instructions.
-        const NOP: [u8; 4] = u32::to_le_bytes(0xd503_201f);
-        code_buf.extend(NOP.repeat(3));
+    fn pad_loop_open(code_buf: &mut Vec<u8>) {
+        // BRK 1; NOP; NOP
+        const INSTR_SEQUENCE: [[u8; 4]; 3] = [
+            u32::to_le_bytes(0xd420_0020),
+            u32::to_le_bytes(0xd503_201f),
+            u32::to_le_bytes(0xd503_201f),
+        ];
+        code_buf.extend(INSTR_SEQUENCE.into_iter().flatten());
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: Arm64Register) {
@@ -548,10 +552,10 @@ mod tests {
     }
 
     #[disasm_test]
-    fn test_nops() {
+    fn test_jump_pad() {
         let mut v = Vec::with_capacity(12);
-        Arm64Inter::nop_loop_open(&mut v);
-        assert_eq!(disassembler().disassemble(v), ["nop", "nop", "nop"]);
+        Arm64Inter::pad_loop_open(&mut v);
+        assert_eq!(disassembler().disassemble(v), ["brk #0x1", "nop", "nop"]);
     }
 
     #[test]

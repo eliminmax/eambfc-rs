@@ -196,9 +196,10 @@ impl ArchInter for X86_64Inter {
         Ok(())
     }
 
-    fn nop_loop_open(code_buf: &mut Vec<u8>) {
-        // times JUMP_SIZE NOP
-        code_buf.extend([0x90; Self::JUMP_SIZE]);
+    fn pad_loop_open(code_buf: &mut Vec<u8>) {
+        // UD2; times 7 NOP
+        code_buf.extend([0x0f, 0x0b]);
+        code_buf.extend([0x90; 7]);
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: X86_64Register) {
@@ -357,19 +358,20 @@ mod tests {
         let mut v: Vec<u8> = vec![0; 9];
         X86_64Inter::jump_open(&mut v, 0, X86_64Register::Rdi, 9).unwrap();
         X86_64Inter::jump_close(&mut v, X86_64Register::Rdi, -18).unwrap();
-        X86_64Inter::nop_loop_open(&mut v);
+        X86_64Inter::pad_loop_open(&mut v);
         let mut disasm_lines = disassembler().disassemble(v).into_iter();
         // NOTE: the disassembly uses absolute addresses, not relative addresses.
         assert_eq!(disasm_lines.next().unwrap(), "test byte ptr [rdi], -0x1");
         assert_eq!(disasm_lines.next().unwrap(), "je 0x9");
         assert_eq!(disasm_lines.next().unwrap(), "test byte ptr [rdi], -0x1");
         assert_eq!(disasm_lines.next().unwrap(), "jne -0x12");
-        // ensure that there are 9 1-byte NOP instructions remaining.
-        for i in 0..9 {
+        assert_eq!(disasm_lines.next().unwrap(), "ud2");
+        // ensure that there are 7 1-byte NOP instructions remaining.
+        for i in 0..7 {
             assert_eq!(
                 disasm_lines.next().unwrap(),
                 "nop",
-                "only {i}/9 nop bytes were matched"
+                "only {i}/7 nop bytes were matched"
             );
         }
         assert!(disasm_lines.next().is_none());
