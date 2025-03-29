@@ -264,13 +264,8 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
         }
         let arg_bytes = arg.as_bytes();
         if arg_bytes[0] != b'-' {
-            #[cfg_attr(
-                any(unix, target_os = "wasi"),
-                expect(clippy::useless_conversion, reason = "not useless on other targets")
-            )]
-            let mut source_files: Vec<OsString> = vec![arg.into()];
-            pcfg.source_files.extend(args);
-            break;
+            pcfg.source_files.push(arg);
+            continue;
         }
 
         let mut arg_byte_iter = arg_bytes[1..].iter().copied();
@@ -384,11 +379,11 @@ mod tests {
     }
 
     #[test]
-    fn options_dont_mix_with_files() {
+    fn options_can_mix_with_files() {
         // ensure that -h is interpreted as a file name
         assert_eq!(
-            parse_standard(vec![arg("e.bf"), arg("-h")]).source_files,
-            vec![arg("e.bf"), arg("-h"),]
+            parse_standard(vec![arg("e.bf"), arg("-O")]).source_files,
+            vec![arg("e.bf")]
         );
     }
 
