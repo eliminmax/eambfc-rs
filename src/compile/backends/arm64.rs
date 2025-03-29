@@ -4,9 +4,9 @@
 
 use crate::err::{BFCompileError, BFErrorID};
 
+use super::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::{ByteOrdering, ElfArch};
-use super::MinimumBits;
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit
 // forms. w8 is the 32-bit form for register #8, and x0 is the 64-bit form for register #0.

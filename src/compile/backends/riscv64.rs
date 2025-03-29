@@ -628,7 +628,10 @@ mod test {
         assert_eq!(v.len(), 12);
         // the defined illegal instruction 0x0000_0000 is interpreted as two unimplemented 0x0000
         // instructions by LLVM
-        assert_eq!(disassembler().disassemble(v), ["unimp", "unimp", "nop", "nop"]);
+        assert_eq!(
+            disassembler().disassemble(v),
+            ["unimp", "unimp", "nop", "nop"]
+        );
     }
 
     #[disasm_test]
