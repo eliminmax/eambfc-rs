@@ -5,7 +5,10 @@ use super::RunConfig;
 use crate::err::{BFCompileError, BFErrorID};
 use crate::OutMode;
 use std::ffi::OsString;
+#[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
+#[cfg(target_os = "wasi")]
+use std::os::wasi::ffi::{OsStrExt, OsStringExt};
 
 pub(crate) fn parse_args_long(
     args: impl Iterator<Item = OsString>,
@@ -14,6 +17,21 @@ pub(crate) fn parse_args_long(
     let mut pcfg = super::PartialRunConfig::default();
     let mut parser = lexopt::Parser::from_args(args);
     loop {
+        macro_rules! param_arg {
+            ($inner_func: ident, $convert_func: ident, $arg: literal) => {{
+                if let Ok(val) = parser.value() {
+                    pcfg.$inner_func(val.$convert_func())?;
+                } else {
+                    return Err(pcfg.gen_err(
+                        BFErrorID::MissingOperand,
+                        concat!($arg, " requires an additional argument"),
+                    ));
+                }
+            }};
+            ($inner_func: ident, $arg: literal) => {{
+                param_arg!($inner_func, into_vec, $arg)
+            }};
+        }
         match parser.next() {
             Ok(None) => break,
             Ok(Some(Short('h') | Long("help"))) => return Ok(RunConfig::ShowHelp),
@@ -24,46 +42,14 @@ pub(crate) fn parse_args_long(
             Ok(Some(Short('k') | Long("keep-failed"))) => pcfg.keep = true,
             Ok(Some(Short('c') | Long("continue"))) => pcfg.cont = true,
             Ok(Some(Short('A') | Long("list-targets"))) => return Ok(RunConfig::ListArches),
-            Ok(Some(Short('a') | Long("target-arch"))) => {
-                if let Ok(val) = parser.value() {
-                    pcfg.set_arch(val.as_bytes())?;
-                } else {
-                    return Err(pcfg.gen_err(
-                        BFErrorID::MissingOperand,
-                        "-a requires an additional argument",
-                    ));
-                }
-            }
-            Ok(Some(Short('t') | Long("tape-size"))) => {
-                if let Ok(val) = parser.value() {
-                    pcfg.set_tape_size(val.into_vec())?;
-                } else {
-                    return Err(pcfg.gen_err(
-                        BFErrorID::MissingOperand,
-                        "-t requires an additional argument",
-                    ));
-                }
-            }
-            Ok(Some(Short('e') | Long("source-suffix"))) => {
-                if let Ok(val) = parser.value() {
-                    pcfg.set_ext(val.into_vec())?;
-                } else {
-                    return Err(pcfg.gen_err(
-                        BFErrorID::MissingOperand,
-                        "-e requires an additional argument",
-                    ));
-                }
-            }
-            Ok(Some(Short('s') | Long("output-suffix"))) => {
-                if let Ok(val) = parser.value() {
-                    pcfg.set_suffix(val.into_vec())?;
-                } else {
-                    return Err(pcfg.gen_err(
-                        BFErrorID::MissingOperand,
-                        "-s requires an additional argument",
-                    ));
-                }
-            }
+            Ok(Some(Short('a'))) => param_arg!(set_arch, as_bytes, "-a"),
+            Ok(Some(Long("target-arch"))) => param_arg!(set_arch, as_bytes, "--target-arch"),
+            Ok(Some(Short('t'))) => param_arg!(set_tape_size, "-t"),
+            Ok(Some(Long("tape-size"))) => param_arg!(set_tape_size, "-t"),
+            Ok(Some(Short('e'))) => param_arg!(set_ext, "-e"),
+            Ok(Some(Long("source-suffix"))) => param_arg!(set_ext, "--source-suffix"),
+            Ok(Some(Short('s'))) => param_arg!(set_suffix, "-s"),
+            Ok(Some(Long("output-suffix"))) => param_arg!(set_suffix, "--output-suffix"),
             Ok(Some(Short(c))) => {
                 return Err(pcfg.gen_err(
                     BFErrorID::UnknownArg,
