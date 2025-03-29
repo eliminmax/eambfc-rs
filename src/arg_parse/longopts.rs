@@ -2,237 +2,101 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 use super::RunConfig;
-use crate::OutMode;
 use crate::err::{BFCompileError, BFErrorID};
-use libc::{c_char, c_int, getopt_long, option};
-use std::ffi::{CStr, CString, OsStr, OsString};
+use crate::OutMode;
+use std::ffi::OsString;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::ptr::{null, null_mut};
 
-enum ArgRequirements {
-    None = 0,
-    Required = 1,
-    #[expect(
-        dead_code,
-        reason = "Variant not needed, included for completeness's sake"
-    )]
-    Optional = 2,
-}
-
-unsafe extern "C" {
-    /// Global value set within `libc` by the POSIX `getopt` and GNU `getopt_long` functions -
-    /// pointer to the parameter that was provided to the current argument
-    ///
-    /// # SAFETY: not safe to access in multi-threaded contexts, and not safe to access if it's not
-    ///   already set by a libc function.
-    static mut optarg: *mut c_char;
-    /// Global value set within `libc` by the POSIX `getopt` and GNU `getopt_long` functions -
-    ///   the index within `argv` of the next element to process
-    ///
-    /// # SAFETY: not safe to access in multi-threaded contexts, and not safe to access if it's not
-    ///   already set by a libc function.
-    static mut optind: c_int;
-    /// Global value set within `libc` by the POSIX `getopt` and GNU `getopt_long` functions -
-    ///   the ASCII character option that was passed, or -1 if no option was passed.
-    ///
-    /// # SAFETY: not safe to access in multi-threaded contexts, and not safe to access if it's not
-    ///   already set by a libc function.
-    static mut optopt: c_int;
-}
-
-/// Construct a new `option` with a null `flag`, and the provided parameters for the other fields.
-const fn new_opt(name: &'static CStr, has_arg: ArgRequirements, val: u8) -> option {
-    option {
-        name: name.as_ptr(),
-        has_arg: has_arg as c_int,
-        flag: null_mut(),
-        val: val as c_int,
-    }
-}
-
-/// Return an `option` for use with `getopt_long` as the final option in its
-/// `const *option longopts` array parameter
-const fn final_opt() -> option {
-    option {
-        name: null(),
-        has_arg: 0,
-        flag: null_mut(),
-        val: 0,
-    }
-}
-
-/// A wrapper around a `Vec<*mut c_char>`, where each contained pointer was created with
-/// `CString::into_raw`. Constructing it any other way will result in undefined behavior when
-/// dropping it. Derefs to the underlying `Vec`
-struct CCompatibleArgs(Vec<*mut c_char>);
-
-impl std::ops::Deref for CCompatibleArgs {
-    type Target = Vec<*mut c_char>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for CCompatibleArgs {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Drop for CCompatibleArgs {
-    fn drop(&mut self) {
-        self.0
-            .drain(..)
-            // SAFETY: As long as pointers in CCompatibleArgs all came from CString::into_raw,
-            // this is safe.
-            .for_each(|ptr| unsafe { drop(CString::from_raw(ptr)) });
-    }
-}
-
-/// use glibc's `getopt_long` to parse `args`.
-///
-/// # panics if any arg within `args` contains embedded null bytes
-///
-/// # SAFETY
-///
-/// While this function **does** handle most of the safety invariants needed for `getopt_long`
-/// internally, there is no way to use `getopt_long` safely in a multi-threaded context, so this
-/// function is only safe to call in a single-threaded context.
-pub(crate) unsafe fn parse_args_long(
+pub(crate) fn parse_args_long(
     args: impl Iterator<Item = OsString>,
 ) -> Result<RunConfig, (BFCompileError, OutMode)> {
+    use lexopt::prelude::*;
     let mut pcfg = super::PartialRunConfig::default();
-    let mut args: Vec<_> = args.collect();
-    args.insert(0, OsString::from("placeholder"));
-
-    let mut raw_args = CCompatibleArgs(
-        args.into_iter()
-            .map(|arg| {
-                let mut arg = arg.into_vec();
-                arg.push(0);
-                CString::from_vec_with_nul(arg)
-                    .expect("Args should not have null bytes embedded!")
-                    .into_raw()
-            })
-            .collect(),
-    );
-
-    let longopts = [
-        new_opt(c"help", ArgRequirements::None, b'h'),
-        new_opt(c"version", ArgRequirements::None, b'V'),
-        new_opt(c"quiet", ArgRequirements::None, b'q'),
-        new_opt(c"json", ArgRequirements::None, b'j'),
-        new_opt(c"optimize", ArgRequirements::None, b'O'),
-        new_opt(c"keep-failed", ArgRequirements::None, b'k'),
-        new_opt(c"continue", ArgRequirements::None, b'c'),
-        new_opt(c"list-targets", ArgRequirements::None, b'A'),
-        new_opt(c"target-arch", ArgRequirements::Required, b'a'),
-        new_opt(c"tape-size", ArgRequirements::Required, b't'),
-        new_opt(c"source-suffix", ArgRequirements::Required, b'e'),
-        new_opt(c"output-suffix", ArgRequirements::Required, b's'),
-        final_opt(),
-    ];
+    let mut parser = lexopt::Parser::from_args(args);
     loop {
-        // SAFETY:
-        // By default, the glibc version of `getopt_long` violates its own function signature by
-        // swapping around the order of elements, but does not change them - so it's signature has
-        // the `argv` parameter declared as `char *const argv[]`, which is equivalent to its `libc`
-        // declaration for Rust as `*const *mut c_char`, but it behaves as though it were declared
-        // `const char *argv[]`, which is equivalent to a Rust declaration of `*mut *const c_char`.
-        //
-        // That seems deeply unsound to me.
-        //
-        // By prepending a `b'-'` to the optstring, it will instead pass non-option arguments as
-        // though they're parameters to the option character `1`.
-        //
-        // Additional preconditions for calling the function, and how they're met:
-        //
-        // * `getopt_long` must be passed an optstring that's either empty (not a NULL pointer), or
-        //   compatible with the GNU version of `getopt`. The one used here is the latter.
-        //
-        // * `argc` must be the number of elements in argv, which is a mutable array of *const
-        //   chars. The use of `raw_args.len()` for the former, and `raw_args` as the latter,
-        //   ensures that it is.
-        //
-        // * longopts must be terminated by an `options` struct with all values set to zero, which
-        //   it is.
-        //
-        // `longindex` may be null, in which case the related functionality is disabled. As that
-        // functionality is not used, a null pointer can be passed.
-        let opt = unsafe {
-            getopt_long(
-                raw_args.len() as c_int,
-                raw_args.as_mut_ptr(),
-                c"-:hVqjOkcAa:e:t:s:".as_ptr(),
-                longopts.as_ptr(),
-                null_mut(),
-            )
-        };
-        if opt == -1 {
-            break;
-        }
-        let opt = opt.to_le_bytes()[0];
-        match opt {
-            1 => pcfg
-                .source_files
-                .push(OsStr::from_bytes(unsafe { CStr::from_ptr(optarg) }.to_bytes()).to_owned()),
-            b'h' => return Ok(RunConfig::ShowHelp),
-            b'V' => return Ok(RunConfig::ShowVersion),
-            b'A' => return Ok(RunConfig::ListArches),
-            b'a' | b'e' | b's' | b't' => {
-                // SAFETY: optarg is a pointer to a null-terminated `c_char` sequence containing
-                // the parameter passed to the argument - assuming it's not `memcpy`ed, it's a
-                // pointer to somewhere within `raw_args`. This is safe as long as `raw_args` is
-                // allocated, which it definitely is at this point in the function, and is safe to
-                // pass to the `pcfg.*` functions so long as it does not overlap with any other
-                // pointers that it might have at the same time - which it won't.
-                let param = unsafe { CStr::from_ptr(optarg) }.to_bytes();
-                match opt {
-                    b'a' => pcfg.set_arch(param)?,
-                    b'e' => pcfg.set_ext(param.to_owned())?,
-                    b's' => pcfg.set_suffix(param.to_owned())?,
-                    b't' => pcfg.set_tape_size(param.to_owned())?,
-                    _ => unreachable!(),
+        match parser.next() {
+            Ok(None) => break,
+            Ok(Some(Short('h') | Long("help"))) => return Ok(RunConfig::ShowHelp),
+            Ok(Some(Short('V') | Long("version"))) => return Ok(RunConfig::ShowVersion),
+            Ok(Some(Short('q') | Long("quiet"))) => pcfg.out_mode.quiet(),
+            Ok(Some(Short('j') | Long("json"))) => pcfg.out_mode.json(),
+            Ok(Some(Short('O') | Long("optimize"))) => pcfg.optimize = true,
+            Ok(Some(Short('k') | Long("keep-failed"))) => pcfg.keep = true,
+            Ok(Some(Short('c') | Long("continue"))) => pcfg.cont = true,
+            Ok(Some(Short('A') | Long("list-targets"))) => return Ok(RunConfig::ListArches),
+            Ok(Some(Short('a') | Long("target-arch"))) => {
+                if let Ok(val) = parser.value() {
+                    pcfg.set_arch(val.as_bytes())?;
+                } else {
+                    return Err(pcfg.gen_err(
+                        BFErrorID::MissingOperand,
+                        "-a requires an additional argument",
+                    ));
                 }
             }
-            // value returned when an option that expects a parameter is missing one
-            b':' => {
+            Ok(Some(Short('t') | Long("tape-size"))) => {
+                if let Ok(val) = parser.value() {
+                    pcfg.set_tape_size(val.into_vec())?;
+                } else {
+                    return Err(pcfg.gen_err(
+                        BFErrorID::MissingOperand,
+                        "-t requires an additional argument",
+                    ));
+                }
+            }
+            Ok(Some(Short('e') | Long("source-suffix"))) => {
+                if let Ok(val) = parser.value() {
+                    pcfg.set_ext(val.into_vec())?;
+                } else {
+                    return Err(pcfg.gen_err(
+                        BFErrorID::MissingOperand,
+                        "-e requires an additional argument",
+                    ));
+                }
+            }
+            Ok(Some(Short('s') | Long("output-suffix"))) => {
+                if let Ok(val) = parser.value() {
+                    pcfg.set_suffix(val.into_vec())?;
+                } else {
+                    return Err(pcfg.gen_err(
+                        BFErrorID::MissingOperand,
+                        "-s requires an additional argument",
+                    ));
+                }
+            }
+            Ok(Some(Short(c))) => {
+                return Err(pcfg.gen_err(
+                    BFErrorID::UnknownArg,
+                    format!("'-{c}' is not a recognized argument"),
+                ))
+            }
+            Ok(Some(Long(l))) => {
+                return Err(pcfg.gen_err(
+                    BFErrorID::UnknownArg,
+                    format!("\"--{l}\" is not a recognized argument"),
+                ))
+            }
+            Ok(Some(Value(v))) => pcfg.source_files.push(v),
+            Err(lexopt::Error::UnexpectedValue { option, .. }) => {
+                return Err(pcfg.gen_err(
+                    BFErrorID::UnexpectedArgValue,
+                    format!("Option {option} doesn't take a value"),
+                ));
+            }
+            Err(lexopt::Error::MissingValue { option: None }) => {
+                // I don't see how this could be reached - how could a nonexistent option be
+                // missing an argument?
+                return Err(pcfg.gen_err(BFErrorID::MissingOperand, "additional argument required"));
+            }
+            Err(lexopt::Error::MissingValue {
+                option: Some(option),
+            }) => {
                 return Err(pcfg.gen_err(
                     BFErrorID::MissingOperand,
-                    format!(
-                        "-{} requires an additional argument",
-                        // SAFETY: optopt will be set to a c_char option missing its expected
-                        // value, so it will be one of `b'a' as c_char`, `b'e' as c_char`,
-                        // `b's' as c_char`, or `b't' as c_char` In a single-threaded context, it's
-                        // safe.
-                        unsafe { optopt as u8 }.escape_ascii()
-                    ),
+                    format!("{option} requires an additional argument"),
                 ));
             }
-            0 => {
-                return Err(pcfg.gen_err(
-                    BFErrorID::UnknownArg,
-                    format!(
-                        "\"{}\" is not a recognized argument.",
-                        // SAFETY: `optind` set by call to `getopt_long`, and safe to access in
-                        // single-threaded contexts, and the pointer came from a CString, so is
-                        // valid to use as a CStr
-                        unsafe { CStr::from_ptr(raw_args[optind as usize - 1]) }.to_string_lossy()
-                    ),
-                ));
-            }
-            b'?' => {
-                return Err(pcfg.gen_err(
-                    BFErrorID::UnknownArg,
-                    format!(
-                        "'-{}' is not a recognized argument",
-                        // SAFETY: `optopt` set by call to `getopt_long`, and safe to access in
-                        // single-threaded contexts
-                        unsafe { optopt as c_char as u8 }.escape_ascii()
-                    ),
-                ));
-            }
-            _ => pcfg.parse_standalone_flag(opt)?,
+            Err(_) => unreachable!("Remaining variants would require unused lexopt functionality"),
         }
     }
     Ok(RunConfig::StandardRun(pcfg.try_into()?))
@@ -241,37 +105,12 @@ pub(crate) unsafe fn parse_args_long(
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use std::sync::{LazyLock, Mutex};
-    static LIBC_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+    use super::parse_args_long;
 
     // a more concise way to write OsString::from(a)
     #[cfg(not(tarpaulin_include))]
     fn arg(a: impl Into<OsString>) -> OsString {
         a.into()
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    unsafe fn parse_args_long_locked(
-        args: impl Iterator<Item = OsString>,
-    ) -> Result<RunConfig, (BFCompileError, OutMode)> {
-        // SAFETY: the use of the libc_lock means that only 1 thread is accessing the libc arg
-        // parsing logic at a time, which should be safe, as there's nothing else in the program
-        // that would access them. That said, the function is marked in the manpage as MT-Unsafe,
-        // and if there's more than one thread running, this may be reasonably likely to be safe,
-        // but is not trule guaranteed to be truly safe to use.
-        //
-        // Given that this is exclusively used in unit tests, I'm reluctantly accepting the
-        // standard of "reasonably likely to be safe".
-        unsafe {
-            let libc_lock = LIBC_GUARD.lock().unwrap();
-            let ret = super::parse_args_long(args);
-            // if `getopt_long` is called multiple times, `optind` needs to be reset to 0 between
-            // calls to trigger glibc's reinitialization.
-            super::optind = 0;
-            // explicitly drop the lock to make its lifetime clearer.
-            drop(libc_lock);
-            ret
-        }
     }
 
     #[test]
@@ -290,8 +129,8 @@ mod tests {
         ];
         for (short_opt, long_opt) in pairs {
             assert_eq!(
-                unsafe { parse_args_long_locked(vec![arg(short_opt), arg("f.bf")].into_iter()) },
-                unsafe { parse_args_long_locked(vec![arg(long_opt), arg("f.bf")].into_iter()) },
+                parse_args_long(vec![arg(short_opt), arg("f.bf")].into_iter()),
+                parse_args_long(vec![arg(long_opt), arg("f.bf")].into_iter()),
             );
         }
 
@@ -319,16 +158,10 @@ mod tests {
                 let mut joined_long = arg(long);
                 joined_long.push("=");
                 joined_long.push(&param);
-                let a = unsafe {
-                    parse_args_long_locked(vec![arg(short), param.clone(), arg("f.bf")].into_iter())
-                };
-                let b = unsafe {
-                    parse_args_long_locked(vec![arg(long), param, arg("f.bf")].into_iter())
-                };
-                let c =
-                    unsafe { parse_args_long_locked(vec![joined_short, arg("f.bf")].into_iter()) };
-                let d =
-                    unsafe { parse_args_long_locked(vec![joined_long, arg("f.bf")].into_iter()) };
+                let a = parse_args_long(vec![arg(short), param.clone(), arg("f.bf")].into_iter());
+                let b = parse_args_long(vec![arg(long), param, arg("f.bf")].into_iter());
+                let c = parse_args_long(vec![joined_short, arg("f.bf")].into_iter());
+                let d = parse_args_long(vec![joined_long, arg("f.bf")].into_iter());
                 assert_eq!(a, b);
                 assert_eq!(a, c);
                 assert_eq!(a, d);
@@ -401,8 +234,8 @@ mod tests {
         for args in arg_groups {
             assert_eq!(
                 parse_args(args.clone().into_iter()),
-                unsafe { parse_args_long_locked(args.clone().into_iter()) },
-                "{args:?} were parsed differently by parse_args and parse_args_long_locked"
+                parse_args_long(args.clone().into_iter()),
+                "{args:?} were parsed differently by parse_args and parse_args_long"
             );
         }
     }
@@ -410,8 +243,7 @@ mod tests {
     #[test]
     fn options_can_mix_with_files() {
         use std::env::var_os;
-        let cfg =
-            unsafe { parse_args_long_locked(vec![arg("e.bf"), arg("-h")].into_iter()) }.unwrap();
+        let cfg = parse_args_long(vec![arg("e.bf"), arg("-h")].into_iter()).unwrap();
         if var_os("POSIXLY_CORRECT").is_some() {
             let RunConfig::StandardRun(StandardRunConfig { source_files, .. }) = cfg else {
                 panic!("Expected standard run config")
@@ -425,9 +257,8 @@ mod tests {
 
     #[test]
     fn unrecognized_longopts() {
-        let a = unsafe { parse_args_long_locked(vec![arg("-R")].into_iter()) }.unwrap_err();
-        let b = unsafe { parse_args_long_locked(vec![arg("--run-real-fast")].into_iter()) }
-            .unwrap_err();
+        let a = parse_args_long(vec![arg("-R")].into_iter()).unwrap_err();
+        let b = parse_args_long(vec![arg("--run-real-fast")].into_iter()).unwrap_err();
         assert_eq!(a.0.error_id(), b.0.error_id());
         assert_eq!(a.0.error_id(), BFErrorID::UnknownArg);
         assert_ne!(a.0, b.0);

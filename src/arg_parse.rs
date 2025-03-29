@@ -92,6 +92,7 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
 }
 
 impl PartialRunConfig {
+    #[cfg(any(not(feature = "longopts"), test))]
     fn parse_standalone_flag(&mut self, flag: u8) -> Result<(), (BFCompileError, OutMode)> {
         match flag {
             b'j' => self.out_mode.json(),
@@ -258,7 +259,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
         })?;
         // handle non-flag values
         if arg == "--" {
-            pcfg.source_files.extend(args.collect());
+            pcfg.source_files.extend(args);
             break;
         }
         let arg_bytes = arg.as_bytes();
