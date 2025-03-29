@@ -45,7 +45,7 @@ pub(crate) fn parse_args_long(
             Ok(Some(Short('t'))) => param_arg!(set_tape_size, "-t"),
             Ok(Some(Long("tape-size"))) => param_arg!(set_tape_size, "-t"),
             Ok(Some(Short('e'))) => param_arg!(set_ext, "-e"),
-            Ok(Some(Long("source-suffix"))) => param_arg!(set_ext, "--source-suffix"),
+            Ok(Some(Long("source-extension"))) => param_arg!(set_ext, "--source-extension"),
             Ok(Some(Short('s'))) => param_arg!(set_suffix, "-s"),
             Ok(Some(Long("output-suffix"))) => param_arg!(set_suffix, "--output-suffix"),
             Ok(Some(Short(c))) => {
@@ -132,7 +132,7 @@ mod tests {
                 "--tape-size",
                 vec![arg("1"), arg("###"), arg("0"), arg(u64::MAX.to_string())],
             ),
-            ("-e", "--source-suffix", vec![arg(".beef")]),
+            ("-e", "--source-extension", vec![arg(".beef")]),
             ("-s", "--output-suffix", vec![arg(".elf")]),
         ];
         for (short, long, test_params) in param_opts {
