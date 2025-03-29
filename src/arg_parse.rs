@@ -42,7 +42,7 @@ struct PartialRunConfig {
     cont: bool,
     tape_blocks: Option<u64>,
     extension: Option<OsString>,
-    source_files: Option<Vec<OsString>>,
+    source_files: Vec<OsString>,
     out_suffix: Option<OsString>,
     arch: Option<ElfArch>,
 }
@@ -71,10 +71,12 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
                 out_mode,
             ));
         }
-        let source_files = source_files.ok_or((
-            BFCompileError::basic(BFErrorID::NoSourceFiles, "No source files provided"),
-            out_mode,
-        ))?;
+        if source_files.is_empty() {
+            return Err((
+                BFCompileError::basic(BFErrorID::NoSourceFiles, "No source files provided"),
+                out_mode,
+            ));
+        }
         Ok(StandardRunConfig {
             out_mode,
             optimize,
@@ -256,7 +258,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
         })?;
         // handle non-flag values
         if arg == "--" {
-            pcfg.source_files = Some(args.collect());
+            pcfg.source_files.extend(args.collect());
             break;
         }
         let arg_bytes = arg.as_bytes();
@@ -266,8 +268,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                 expect(clippy::useless_conversion, reason = "not useless on other targets")
             )]
             let mut source_files: Vec<OsString> = vec![arg.into()];
-            source_files.extend(args);
-            pcfg.source_files = Some(source_files);
+            pcfg.source_files.extend(args);
             break;
         }
 

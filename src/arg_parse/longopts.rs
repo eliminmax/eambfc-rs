@@ -5,8 +5,8 @@ use super::RunConfig;
 use crate::OutMode;
 use crate::err::{BFCompileError, BFErrorID};
 use libc::{c_char, c_int, getopt_long, option};
-use std::ffi::{CStr, CString, OsString};
-use std::os::unix::ffi::OsStringExt;
+use std::ffi::{CStr, CString, OsStr, OsString};
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::ptr::{null, null_mut};
 
 enum ArgRequirements {
@@ -66,12 +66,6 @@ const fn final_opt() -> option {
 /// dropping it. Derefs to the underlying `Vec`
 struct CCompatibleArgs(Vec<*mut c_char>);
 
-impl CCompatibleArgs {
-    fn into_iter(mut self) -> impl Iterator<Item = *mut c_char> {
-        std::mem::take(&mut self.0).into_iter()
-    }
-}
-
 impl std::ops::Deref for CCompatibleArgs {
     type Target = Vec<*mut c_char>;
     fn deref(&self) -> &Self::Target {
@@ -107,8 +101,6 @@ impl Drop for CCompatibleArgs {
 pub(crate) unsafe fn parse_args_long(
     args: impl Iterator<Item = OsString>,
 ) -> Result<RunConfig, (BFCompileError, OutMode)> {
-    const OPTSTRING: &CStr = c":hVqjOkcAa:e:t:s:";
-
     let mut pcfg = super::PartialRunConfig::default();
     let mut args: Vec<_> = args.collect();
     args.insert(0, OsString::from("placeholder"));
@@ -142,21 +134,36 @@ pub(crate) unsafe fn parse_args_long(
     ];
     loop {
         // SAFETY:
-        // * `getopt_long` must be passed an optstring that's either empty or compatible with the
-        // GNU version of `getopt`. OPTSTRING is compatible with the GNU version of `getopt`.
+        // By default, the glibc version of `getopt_long` violates its own function signature by
+        // swapping around the order of elements, but does not change them - so it's signature has
+        // the `argv` parameter declared as `char *const argv[]`, which is equivalent to its `libc`
+        // declaration for Rust as `*const *mut c_char`, but it behaves as though it were declared
+        // `const char *argv[]`, which is equivalent to a Rust declaration of `*mut *const c_char`.
         //
-        // * argc must be the number of elements in argv, which is a mutable array of *const chars.
-        // The use of raw_args for both ensures that it is.
+        // That seems deeply unsound to me.
+        //
+        // By prepending a `b'-'` to the optstring, it will instead pass non-option arguments as
+        // though they're parameters to the option character `1`.
+        //
+        // Additional preconditions for calling the function, and how they're met:
+        //
+        // * `getopt_long` must be passed an optstring that's either empty (not a NULL pointer), or
+        //   compatible with the GNU version of `getopt`. The one used here is the latter.
+        //
+        // * `argc` must be the number of elements in argv, which is a mutable array of *const
+        //   chars. The use of `raw_args.len()` for the former, and `raw_args` as the latter,
+        //   ensures that it is.
         //
         // * longopts must be terminated by an `options` struct with all values set to zero, which
-        // it is.
+        //   it is.
         //
-        // `longindex` may be null, in which case the related functionality is disabled.
+        // `longindex` may be null, in which case the related functionality is disabled. As that
+        // functionality is not used, a null pointer can be passed.
         let opt = unsafe {
             getopt_long(
                 raw_args.len() as c_int,
                 raw_args.as_mut_ptr(),
-                OPTSTRING.as_ptr(),
+                c"-:hVqjOkcAa:e:t:s:".as_ptr(),
                 longopts.as_ptr(),
                 null_mut(),
             )
@@ -166,6 +173,9 @@ pub(crate) unsafe fn parse_args_long(
         }
         let opt = opt.to_le_bytes()[0];
         match opt {
+            1 => pcfg
+                .source_files
+                .push(OsStr::from_bytes(unsafe { CStr::from_ptr(optarg) }.to_bytes()).to_owned()),
             b'h' => return Ok(RunConfig::ShowHelp),
             b'V' => return Ok(RunConfig::ShowVersion),
             b'A' => return Ok(RunConfig::ListArches),
@@ -225,38 +235,7 @@ pub(crate) unsafe fn parse_args_long(
             _ => pcfg.parse_standalone_flag(opt)?,
         }
     }
-    let files = unsafe { get_files(raw_args.into_iter()) };
-    if !files.is_empty() {
-        pcfg.source_files = Some(files);
-    }
     Ok(RunConfig::StandardRun(pcfg.try_into()?))
-}
-
-/// Convert a null-terminated `Vec<*mut c_char>` into a Vec<OsString> containing parameters that
-/// did not contain command-line flags.
-///
-/// # SAFETY:
-/// * This function must be passed a `Vec<*mut c_char>` created from `CString::into_raw`.
-///   Anything else will result in undefined behavior.
-///
-/// * This function must only be called after calling a function that sets the `optind` global in
-///   libc (such as `libc::getopt_long`),
-///
-/// * This function is not safe to use in a multithreaded context, as it's impossible to safely
-///   access `optind` in a multithreaded context
-unsafe fn get_files(mut raw_args: impl Iterator<Item = *mut c_char>) -> Vec<OsString> {
-    raw_args
-        .by_ref()
-        // SAFETY: Only one thread can access optind at a time
-        .take(unsafe { optind } as usize)
-        // SAFETY: Only pointers originating from CString::into_raw can be safely passed here
-        .for_each(|ptr| unsafe { drop(CString::from_raw(ptr)) });
-    raw_args
-        .map(|ptr| {
-            // SAFETY: Only pointers originating from CString::into_raw can be safely passed here
-            OsString::from_vec(unsafe { CString::from_raw(ptr) }.into_bytes())
-        })
-        .collect()
 }
 
 #[cfg(test)]
