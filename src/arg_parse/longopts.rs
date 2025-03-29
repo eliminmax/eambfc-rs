@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 use super::RunConfig;
-use crate::err::{BFCompileError, BFErrorID};
 use crate::OutMode;
+use crate::err::{BFCompileError, BFErrorID};
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -28,9 +28,7 @@ pub(crate) fn parse_args_long(
                     ));
                 }
             }};
-            ($inner_func: ident, $arg: literal) => {{
-                param_arg!($inner_func, into_vec, $arg)
-            }};
+            ($inner_func: ident, $arg: literal) => {{ param_arg!($inner_func, into_vec, $arg) }};
         }
         match parser.next() {
             Ok(None) => break,
@@ -54,13 +52,13 @@ pub(crate) fn parse_args_long(
                 return Err(pcfg.gen_err(
                     BFErrorID::UnknownArg,
                     format!("'-{c}' is not a recognized argument"),
-                ))
+                ));
             }
             Ok(Some(Long(l))) => {
                 return Err(pcfg.gen_err(
                     BFErrorID::UnknownArg,
                     format!("\"--{l}\" is not a recognized argument"),
-                ))
+                ));
             }
             Ok(Some(Value(v))) => pcfg.source_files.push(v),
             Err(lexopt::Error::UnexpectedValue { option, .. }) => {
