@@ -228,17 +228,8 @@ mod tests {
 
     #[test]
     fn options_can_mix_with_files() {
-        use std::env::var_os;
         let cfg = parse_args_long(vec![arg("e.bf"), arg("-h")].into_iter()).unwrap();
-        if var_os("POSIXLY_CORRECT").is_some() {
-            let RunConfig::StandardRun(StandardRunConfig { source_files, .. }) = cfg else {
-                panic!("Expected standard run config")
-            };
-            assert_eq!(source_files, ["e.bf", "-h"]);
-        } else {
-            // ensure that -h is not interpreted as a file name (unlike parse_args)
-            assert_eq!(cfg, RunConfig::ShowHelp);
-        }
+        assert_eq!(cfg, RunConfig::ShowHelp);
     }
 
     #[test]
