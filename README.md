@@ -4,14 +4,12 @@ SPDX-FileCopyrightText: 2024 Eli Array Minkoff
 SPDX-License-Identifier: 0BSD
 -->
 
-# Eli Array Minkoff's BFC (Blazingly 🔥 Fast 🚀 version)\*
-
-**Also check out the [Original version](https://github.com/eliminmax/eambfc),
-written in C.**
+# Eli Array Minkoff's BFC (Rust version)\*
 
 An optimizing compiler for brainfuck, written in Rust for Unix-like systems.
 
-Outputs x86\_64 ELF executables that uses Linux system calls for I/O.
+Output 64-bit ELF executables that uses Linux system calls for I/O. Currently,
+it has x64_64, arm64, s390x, and riscv64 backends.
 
 I was trying to get a better understanding of C, so I wrote
 [an optimizing brainfuck compiler in C](https://github.com/eliminmax/eambfc).
@@ -19,37 +17,72 @@ While working on that project, C clicked for me in a way it hadn't previously.
 I have tried to learn Rust a few times, but it never clicked. I hoped that this
 rewrite in Rust does the same for the language I wanted to love. It did.
 
+<!-- vim-markdown-toc GFM -->
+
+* [Usage](#usage)
+* [Supported platforms](#supported-platforms)
+* [Building and Installing](#building-and-installing)
+* [Development Process and Standards](#development-process-and-standards)
+  * [Testing](#testing)
+* [Dependencies](#dependencies)
+* [Legal Stuff and Code Origins](#legal-stuff-and-code-origins)
+
+<!-- vim-markdown-toc -->
+
 ## Usage
 
+The most basic way to use `eambfc-rs` is to simply run it, passing files to
+compile as command-line arguments:
+
+```sh
+eambfc-rs foo.bf
 ```
-Usage: eambfc-rs [options] <program.bf> [<program2.bf> ...]
 
- -h        - display this help text and exit
- -V        - print version information and exit
- -j        - print errors in JSON format
- -q        - don't print errors unless -j was passed
- -O        - enable optimization*.
- -k        - keep files that failed to compile (for debugging)
- -c        - continue to the next file instead of quitting if a
-             file fails to compile
- -t count  - allocate <count> 4-KiB blocks for the tape
-             (defaults to 8 if not specified)**
- -e ext    - use 'ext' as the extension for source files instead of '.bf'
-             (This program will remove this at the end of the input
-             file to create the output file name)**
- -a arch   - compile for specified architecture
-             (defaults to x86_64 if not specified)**
- -s ext    - use 'ext' as the extension for compiled binaries
-             (they'll have no extension if -s is not passed)**
- -A        - list supported architectures and exit
+That will compile `foo.bf` into an ELF executable file named `foo`.
 
-* Optimization can make error reporting less precise.
-** -a, -t, -e, and -s can only be passed at most once each.
+It expects brainfuck source files to use the file extension `.bf`.
 
-Remaining options are treated as source file names. If they don't
-end with '.bf' (or the extension specified with '-e'), the program
-will raise an error.
-```
+If passed multiple files to compile, `eambfc-rs` will compile them in the
+provided order, stopping on the first error.
+
+Compiled files have a tape size of 8 4-KiB blocks, for a total of 32 KiB, so any
+program that works with Urban Müller's original implementation's 30 KB tape
+should work fine.
+
+| option     | effect                                                   |
+|------------|----------------------------------------------------------|
+| `-h`       | Display basic usage information, then exit               |
+| `-V`       | Display version and copyright information, then exit     |
+| `-j`       | Write JSON-formatted error messages to `stdout`          |
+| `-q`       | Don't write error messages to `stderr`                   |
+| `-O`       | Perform basic optimizations                              |
+| `-c`       | Continue to the next file instead of aborting on failure |
+| `-A`       | Display info about supported targets, and exit           |
+| `-k`       | Don't delete files after failed compilation              |
+| `-t count` | Use `count` 4-KiB blocks instead of the default 8        |
+| `-e ext`   | Use `ext` instead of `.bf` as the source extension       |
+| `-a arch`  | Use the `arch` backend instead of the default            |
+| `-s suf`   | Append `suf` to the ends of output filenames             |
+
+
+If compiled with the `longopts` feature, the following options are the long
+equivalents to the short options:
+
+| short      | long                     |
+|------------|--------------------------|
+| `-h`       | `--help`                 |
+| `-V`       | `--version`              |
+| `-j`       | `--json`                 |
+| `-q`       | `--quiet`                |
+| `-O`       | `--optimize`             |
+| `-c`       | `--continue`             |
+| `-A`       | `--list-targets`         |
+| `-k`       | `--keep-failed`          |
+| `-t count` | `--tape-size=count`      |
+| `-e ext`   | `--source-extension=ext` |
+| `-a arch`  | `--target-arch=arch`     |
+| `-s suf`   | `--output-suffix=suf`    |
+
 
 ## Supported platforms
 
@@ -82,7 +115,7 @@ goal has been met.
 Since then, I've used feature branches for large refactors or new features, and
 dev branches for new versions.
 
-## Testing
+### Testing
 
 The test suite is run with `cargo test`, as is typical of Rust projects. The
 tests require the `llvm_sys` crate, which has a bit of a complicated setup
@@ -111,28 +144,37 @@ compiled code will be skipped, as will tests that require Unix-specific
 functionality. Around half of the test suite is skipped on platforms that are
 both non-unix and lacking in support for the binaries compiled by `eambfc-rs`.
 
-## Legal Stuff
+## Dependencies
 
-`eambfc-rs` as a whole is licensed under the GNU General Public License version
-3. Some individual components of the source code, infrastructure, and test
-assets are licensed under the Zero-Clause BSD license,
-a public-domain-equivalent license.
+The `longopts` feature requires the `lexopt` crate, and the
 
-One test compiles a snippet of brainfuck code taken from the esolangs.org page
-[brainfuck constants](https://esolangs.org/wiki/Brainfuck_constants). The
-contents of that page are available under the public-domain-equivalent CC0
-license.
+## Legal Stuff and Code Origins
 
-Other than that one test, all content in this repository is my original work,
-based on the original `eambfc`
+`eambfc-rs` as a whole is licensed under the GNU General Public License
+version 3. Some individual components of the source code, infrastructure, and
+test assets are licensed under the Zero-Clause BSD license, a
+public-domain-equivalent license.
+
+Files have licensing information encoded in accordance with the REUSE
+Specification, using SPDX headers to encode the copyright info in a manner that
+is both human and machine readable.
+
+Some brainfuck test programs include snippets of sample code taken from the
+esolangs.org pages
+[brainfuck algorithms](https://esolangs.org/wiki/Brainfuck_algorithms) and
+[brainfuck constants](https://esolangs.org/wiki/Brainfuck_constants), which are
+available under the CC0 public-domain-equivalent license.
+
+One test uses a modified form of the brainfuck implementation of
+[colortest](https://github.com/eliminmax/colortest), which is a different hobby
+project of mine.
+
+An algorithm to pick a RISC-V instruction sequence to set a register to an
+immediate is adapted from the LLVM project.
+
+Other than that, all content in this repository is my original work, either
+created for `eambfc-rs`, or adapted from the the original `eambfc` project in C.
 
 All licenses used in any part of this repository are in the LICENSES/ directory,
 and every file has an SPDX License header identifying the license(s) it's under,
 either near the top of the file, or in an associated `.license` file.
-
-### Disclaimer
-
-\* *Blazingly 🔥 Fast 🚀 version may or may not actually run faster than the
-original implementation. "Blazingly 🔥 Fast 🚀" is not intended to be
-interpreted as any assertion of improved performance efficiency or ability to
-set fires.*
