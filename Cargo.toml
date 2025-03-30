@@ -4,7 +4,7 @@
 
 [package]
 name = "eambfc-rs"
-version = "4.0.0"
+version = "4.1.0-pre"
 edition = "2024"
 
 [features]
