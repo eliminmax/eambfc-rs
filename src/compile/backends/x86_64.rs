@@ -66,27 +66,6 @@ enum ArithOp {
 // when working on registers and 0 when working on memory, then doing some messy
 // bitwise hackery, the following enums and function can be used.
 
-#[repr(u8)]
-enum OffsetOp {
-    Inc = 0,
-    Dec = 8,
-}
-
-#[derive(Clone, Copy)]
-#[repr(u8)]
-enum OffsetMode {
-    BytePtr = 0,
-    Reg = 3,
-}
-
-fn x86_offset(code_buf: &mut Vec<u8>, op: OffsetOp, mode: OffsetMode, reg: X86_64Register) {
-    // as it's used more than once, cast mode in advance
-    code_buf.extend([
-        0xfe | (mode as u8 & 1),
-        (op as u8) | (reg as u8) | ((mode as u8) << 6),
-    ]);
-}
-
 #[derive(Clone, Copy)]
 #[repr(u8)]
 enum ConditionCode {
@@ -204,22 +183,22 @@ impl ArchInter for X86_64Inter {
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // INC reg
-        x86_offset(code_buf, OffsetOp::Inc, OffsetMode::Reg, reg);
+        code_buf.extend([0x48, 0xff, 0xc0 | (reg as u8)]);
     }
 
     fn inc_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // INC byte [reg]
-        x86_offset(code_buf, OffsetOp::Inc, OffsetMode::BytePtr, reg);
+        code_buf.extend([0xfe, reg as u8]);
     }
 
     fn dec_reg(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // DEC reg
-        x86_offset(code_buf, OffsetOp::Dec, OffsetMode::Reg, reg);
+        code_buf.extend([0x48, 0xff, 0xc8 | (reg as u8)]);
     }
 
     fn dec_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
         // DEC byte [reg]
-        x86_offset(code_buf, OffsetOp::Dec, OffsetMode::BytePtr, reg);
+        code_buf.extend([0xfe, (reg as u8) | 8]);
     }
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u64) {
@@ -259,20 +238,20 @@ impl ArchInter for X86_64Inter {
 }
 
 fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86_64Register, imm8: i8) {
-    code_buf.extend([0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
+    code_buf.extend([0x48, 0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
 }
 
 fn sub_reg_imm8(code_buf: &mut Vec<u8>, reg: X86_64Register, imm8: i8) {
-    code_buf.extend([0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
+    code_buf.extend([0x48, 0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
 }
 
 fn add_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
-    code_buf.extend([0x81, ArithOp::Add as u8 | reg as u8]);
+    code_buf.extend([0x48, 0x81, ArithOp::Add as u8 | reg as u8]);
     code_buf.extend(imm32.to_le_bytes());
 }
 
 fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
-    code_buf.extend([0x81, ArithOp::Sub as u8 | reg as u8]);
+    code_buf.extend([0x48, 0x81, ArithOp::Sub as u8 | reg as u8]);
     code_buf.extend(imm32.to_le_bytes());
 }
 
@@ -379,30 +358,30 @@ mod tests {
 
     #[disasm_test]
     fn add_sub_small_imm() {
-        let mut v = Vec::with_capacity(3);
+        let mut v = Vec::with_capacity(4);
         let mut ds = disassembler();
         X86_64Inter::add_reg(&mut v, X86_64Register::Rsi, 0x20);
-        assert_eq!(v.len(), 3);
-        assert_eq!(ds.disassemble(v), ["add esi, 0x20"]);
+        assert_eq!(v.len(), 4);
+        assert_eq!(ds.disassemble(v), ["add rsi, 0x20"]);
 
-        let mut v = Vec::with_capacity(3);
+        let mut v = Vec::with_capacity(4);
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rsi, 0x20);
-        assert_eq!(v.len(), 3);
-        assert_eq!(ds.disassemble(v), ["sub esi, 0x20"]);
+        assert_eq!(v.len(), 4);
+        assert_eq!(ds.disassemble(v), ["sub rsi, 0x20"]);
     }
 
     #[disasm_test]
     fn add_sub_medium_imm() {
-        let mut v = Vec::with_capacity(6);
+        let mut v = Vec::with_capacity(7);
         let mut ds = disassembler();
         X86_64Inter::add_reg(&mut v, X86_64Register::Rdx, 0xdead);
-        assert_eq!(v.len(), 6);
-        assert_eq!(ds.disassemble(v), ["add edx, 0xdead"]);
+        assert_eq!(v.len(), 7);
+        assert_eq!(ds.disassemble(v), ["add rdx, 0xdead"]);
 
-        let mut v = Vec::with_capacity(6);
+        let mut v = Vec::with_capacity(7);
         X86_64Inter::sub_reg(&mut v, X86_64Register::Rdx, 0xbeef);
-        assert_eq!(v.len(), 6);
-        assert_eq!(ds.disassemble(v), ["sub edx, 0xbeef"]);
+        assert_eq!(v.len(), 7);
+        assert_eq!(ds.disassemble(v), ["sub rdx, 0xbeef"]);
     }
 
     #[disasm_test]
@@ -442,5 +421,27 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         X86_64Inter::zero_byte(&mut v, X86_64Register::Rdx);
         assert_eq!(disassembler().disassemble(v), ["mov byte ptr [rdx], 0x0"]);
+    }
+
+    #[disasm_test]
+    /// ensure that `inc` and `dec` use the 64-bit register variants
+    fn test_inc_dec_is_64_bit() {
+        let mut v: Vec<u8> = Vec::new();
+        let mut ds = disassembler();
+
+        X86_64Inter::inc_reg(&mut v, X86_64Register::Rax);
+        X86_64Inter::dec_reg(&mut v, X86_64Register::Rax);
+        X86_64Inter::inc_byte(&mut v, X86_64Register::Rax);
+        X86_64Inter::dec_byte(&mut v, X86_64Register::Rax);
+
+        assert_eq!(
+            ds.disassemble(v),
+            [
+                "inc rax",
+                "dec rax",
+                "inc byte ptr [rax]",
+                "dec byte ptr [rax]"
+            ]
+        );
     }
 }
