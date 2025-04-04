@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+#
+# SPDX-License-Identifier: 0BSD
+
+/test_assets/bf_sources/non_ascii_positions.bf -text

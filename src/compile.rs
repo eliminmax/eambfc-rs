@@ -202,7 +202,9 @@ trait BFCompileHelper: ArchInter {
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
         if let Some(ref mut pos) = loc {
-            pos.col += 1;
+            if instr & 0xc0 != 0x80 {
+                pos.col += 1;
+            }
         }
         match instr {
             // decrement the tape pointer register

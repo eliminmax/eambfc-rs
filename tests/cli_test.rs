@@ -537,3 +537,20 @@ fn code_position_reporting() -> io::Result<()> {
     assert_eq!(errors[1].error_id, "UnmatchedOpen");
     Ok(())
 }
+
+#[test]
+fn non_utf8_code_position_reporting() {
+    let errors = get_errs(eambfc_with_args!(
+        "-j",
+        source_file("non_ascii_positions.bf")
+    ));
+    assert_eq!(errors[0].error_id, "UnmatchedClose");
+    assert_eq!(errors[0].line, Some(6));
+    assert_eq!(errors[0].column, Some(11));
+    assert_eq!(errors[1].error_id, "UnmatchedOpen");
+    assert_eq!(errors[1].line, Some(7));
+    assert_eq!(errors[1].column, Some(1));
+    assert_eq!(errors[2].error_id, "UnmatchedOpen");
+    assert_eq!(errors[2].line, Some(8));
+    assert_eq!(errors[2].column, Some(3));
+}
