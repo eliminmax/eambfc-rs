@@ -5,7 +5,7 @@
 use crate::err::{BFCompileError, BFErrorID};
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{ByteOrdering, ElfArch};
+use super::elf_tools::{Backend, ByteOrdering};
 
 // The z/Architecture Principles of Operation comprehensively documents the
 // z/Architecture ISA, and its 14th edition was the main source for information
@@ -326,7 +326,7 @@ impl ArchInter for S390xInter {
         exit: 1,
     };
 
-    const ARCH: ElfArch = ElfArch::S390x;
+    const ARCH: Backend = Backend::S390x;
     const EI_DATA: ByteOrdering = ByteOrdering::BigEndian;
 
     fn set_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
@@ -506,7 +506,7 @@ mod tests {
 
     #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
-        Disassembler::new(ElfArch::S390x)
+        Disassembler::new(Backend::S390x)
     }
 
     #[disasm_test]
@@ -567,7 +567,7 @@ mod tests {
 
     #[disasm_test]
     fn test_set_reg_large_imm() {
-        let mut ds = Disassembler::new(ElfArch::S390x);
+        let mut ds = Disassembler::new(Backend::S390x);
         // this one's messy, due to the number of possible combinations
         let mut v: Vec<u8> = Vec::new();
         S390xInter::set_reg(&mut v, S390xRegister::R1, 0xdead_0000_beef);
@@ -646,7 +646,7 @@ mod tests {
         //
         // * I ran `apt source llvm-19` on Debian Bookworm and found it in the file within the
         // source tree at llvm/lib/Target/SystemZ/SystemZInstrInfo.td
-        let mut disasm_lines = Disassembler::new(ElfArch::S390x).disassemble(v).into_iter();
+        let mut disasm_lines = Disassembler::new(Backend::S390x).disassemble(v).into_iter();
         assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
         assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
         assert_eq!(disasm_lines.next().unwrap(), "jge 0x12");
@@ -673,7 +673,7 @@ mod tests {
     fn syscall_test() {
         let mut v: Vec<u8> = Vec::new();
         S390xInter::syscall(&mut v);
-        assert_eq!(Disassembler::new(ElfArch::S390x).disassemble(v), ["svc 0"]);
+        assert_eq!(Disassembler::new(Backend::S390x).disassemble(v), ["svc 0"]);
     }
 
     #[disasm_test]

@@ -12,7 +12,7 @@ pub(crate) mod backends;
 pub(crate) mod elf_tools;
 
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
-use elf_tools::{EHDR_SIZE, ElfArch, PHDR_SIZE, PType};
+use elf_tools::Backend;
 
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
@@ -23,61 +23,39 @@ struct JumpLocation {
 }
 
 // ELF addressing stuff
-const PHTB_SIZE: u64 = (PHDR_SIZE * PHNUM) as u64;
 const TAPE_ADDR: u64 = 0x10000;
-const PHNUM: u16 = 2;
-const START_ADDR: u64 = (((EHDR_SIZE as u64) + PHTB_SIZE) & (!0xff)) + 0x100;
+const START_ADDR: u64 = 256;
 
 fn write_headers(
     output: &mut impl Write,
     codesize: usize,
     tape_blocks: u64,
-    ei_data: elf_tools::ByteOrdering,
-    elf_arch: ElfArch,
+    elf_arch: Backend,
     e_flags: u32,
 ) -> Result<(), BFCompileError> {
     // ELF addressing stuff that depends on tape_blocks, so can't be constant
     let tape_size: u64 = tape_blocks * 0x1000;
     let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffff)) + 0x10000;
     let start_virt_addr: u64 = START_ADDR + load_vaddr;
-    let ehdr = elf_tools::Ehdr {
-        ident: elf_tools::EIdent {
-            class: elf_tools::ElfClass::ELFClass64,
-            data: ei_data,
-            osabi: elf_tools::ElfOsAbi::None,
-        },
-        elf_type: elf_tools::ElfType::Exec,
-        machine: elf_arch,
-        version: elf_tools::ElfVersion::EvCurrent, // The only valid version number
-        phnum: PHNUM,
-        shnum: 0,
-        phoff: u64::from(EHDR_SIZE),
-        shoff: 0, // no section header table, must be 0
-        ehsize: EHDR_SIZE,
-        phentsize: PHDR_SIZE,
-        shentsize: 0, // no section header table, must be 0
-        shstrndx: 0,  // no section header table, must be 0
+    let ehdr = elf_tools::BinInfo {
+        arch: elf_arch,
         entry: start_virt_addr,
         flags: e_flags,
     };
     let tape_segment = elf_tools::Phdr {
-        byte_order: ei_data,
-        header_type: PType::Load, // loadable segment
-        flags: 4 | 2,             // PF_R | PF_W (readable and writable)
-        offset: 0,                // load bytes from this index in the file
-        vaddr: TAPE_ADDR,         // load segment into this section of memory
-        paddr: 0,                 // load from this physical address
-        filesz: 0,                // don't load anything from file, just zero-initialize it
-        memsz: tape_size,         // allocate this many bytes of memory for this segment
-        align: 0x1000,            // align with this power of 2
+        byte_order: elf_arch.ei_data(),
+        flags: 4 | 2,     // PF_R | PF_W (readable and writable)
+        offset: 0,        // load bytes from this index in the file
+        vaddr: TAPE_ADDR, // load segment into this section of memory
+        filesz: 0,        // don't load anything from file, just zero-initialize it
+        memsz: tape_size, // allocate this many bytes of memory for this segment
+        align: 0x1000,    // align with this power of 2
     };
     let code_segment = elf_tools::Phdr {
-        byte_order: ei_data,
-        header_type: PType::Load,             // loadable segment
+        byte_order: elf_arch.ei_data(),
         flags: 4 | 1,                         // PF_R | PF_X (readable and executable)
         offset: 0,                            // load bytes from this index in the file
         vaddr: load_vaddr,                    // load segment into this section of memory
-        paddr: 0,                             // load from this physical address
         filesz: START_ADDR + codesize as u64, // load this many bytes from file…
         memsz: START_ADDR + codesize as u64,  // allocate this many bytes of memory…
         align: 1,                             // align with this power of 2
@@ -376,14 +354,7 @@ impl<B: BFCompileHelper> BFCompile for B {
         Self::syscall(&mut code_buf);
 
         let code_sz = code_buf.len();
-        if let Err(e) = write_headers(
-            &mut out_f,
-            code_sz,
-            tape_blocks,
-            Self::EI_DATA,
-            Self::ARCH,
-            Self::E_FLAGS,
-        ) {
+        if let Err(e) = write_headers(&mut out_f, code_sz, tape_blocks, Self::ARCH, Self::E_FLAGS) {
             errs.push(e);
         }
         match out_f.write(code_buf.as_slice()) {

@@ -7,7 +7,7 @@
     expect(unused_imports, reason = "Used without longopts")
 )]
 use crate::OutMode;
-use crate::compile::elf_tools::{ElfArch, ElfClass};
+use crate::compile::elf_tools::{Backend, ElfClass};
 use crate::err::{BFCompileError, BFErrorID};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
@@ -31,7 +31,7 @@ pub(crate) struct StandardRunConfig {
     pub extension: OsString,
     pub source_files: Vec<OsString>,
     pub out_suffix: Option<OsString>,
-    pub arch: ElfArch,
+    pub arch: Backend,
 }
 
 #[derive(Default)]
@@ -44,7 +44,7 @@ struct PartialRunConfig {
     extension: Option<OsString>,
     source_files: Vec<OsString>,
     out_suffix: Option<OsString>,
-    arch: Option<ElfArch>,
+    arch: Option<Backend>,
 }
 
 impl TryFrom<PartialRunConfig> for StandardRunConfig {
@@ -127,13 +127,13 @@ impl PartialRunConfig {
         }
         self.arch = match param {
             #[cfg(feature = "arm64")]
-            b"arm64" | b"aarch64" => Some(ElfArch::Arm64),
+            b"arm64" | b"aarch64" => Some(Backend::Arm64),
             #[cfg(feature = "riscv64")]
-            b"riscv64" | b"riscv" => Some(ElfArch::RiscV(ElfClass::ELFClass64)),
+            b"riscv64" | b"riscv" => Some(Backend::RiscV(ElfClass::ELFClass64)),
             #[cfg(feature = "s390x")]
-            b"s390x" | b"s390" | b"z/architecture" => Some(ElfArch::S390x),
+            b"s390x" | b"s390" | b"z/architecture" => Some(Backend::S390x),
             #[cfg(feature = "x86_64")]
-            b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(ElfArch::X86_64),
+            b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(Backend::X86_64),
             f => {
                 return Err((
                     BFCompileError::basic(
@@ -525,11 +525,11 @@ mod tests {
             {
                 assert_eq!(
                     parse_standard(vec![arg("-aarm64"), arg("foo.bf")]).arch,
-                    ElfArch::Arm64
+                    Backend::Arm64
                 );
                 assert_eq!(
                     parse_standard(vec![arg("-aaarch64"), arg("foo.bf")]).arch,
-                    ElfArch::Arm64
+                    Backend::Arm64
                 );
             };
         } else {
@@ -543,11 +543,11 @@ mod tests {
             {
                 assert_eq!(
                     parse_standard(vec![arg("-ariscv64"), arg("foo.bf")]).arch,
-                    ElfArch::RiscV(ElfClass::ELFClass64)
+                    Backend::RiscV(ElfClass::ELFClass64)
                 );
                 assert_eq!(
                     parse_standard(vec![arg("-ariscv"), arg("foo.bf")]).arch,
-                    ElfArch::RiscV(ElfClass::ELFClass64)
+                    Backend::RiscV(ElfClass::ELFClass64)
                 );
             };
         } else {
@@ -561,15 +561,15 @@ mod tests {
             {
                 assert_eq!(
                     parse_standard(vec![arg("-as390x"), arg("foo.bf")]).arch,
-                    ElfArch::S390x
+                    Backend::S390x
                 );
                 assert_eq!(
                     parse_standard(vec![arg("-as390"), arg("foo.bf")]).arch,
-                    ElfArch::S390x
+                    Backend::S390x
                 );
                 assert_eq!(
                     parse_standard(vec![arg("-az/architecture"), arg("foo.bf")]).arch,
-                    ElfArch::S390x
+                    Backend::S390x
                 );
             };
         } else {
@@ -583,19 +583,19 @@ mod tests {
             {
                 assert_eq!(
                     parse_standard(vec![arg("-ax86_64"), arg("foo.bf")]).arch,
-                    ElfArch::X86_64
+                    Backend::X86_64
                 );
                 assert_eq!(
                     parse_standard(vec![arg("-ax64"), arg("foo.bf")]).arch,
-                    ElfArch::X86_64
+                    Backend::X86_64
                 );
                 assert_eq!(
                     parse_standard(vec![arg("-aamd64"), arg("foo.bf")]).arch,
-                    ElfArch::X86_64
+                    Backend::X86_64
                 );
                 assert_eq!(
                     parse_standard(vec![arg("-ax86-64"), arg("foo.bf")]).arch,
-                    ElfArch::X86_64
+                    Backend::X86_64
                 );
             };
         } else {

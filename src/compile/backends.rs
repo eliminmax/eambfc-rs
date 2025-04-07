@@ -104,7 +104,7 @@ mod test_min_bits {
 #[cfg(all(test, feature = "disasmtests"))]
 mod test_utils {
 
-    use super::elf_tools::{ElfArch, ElfClass};
+    use super::elf_tools::{Backend, ElfClass};
     use llvm_sys::disassembler;
     use std::ffi::CStr;
     use std::sync::OnceLock;
@@ -134,20 +134,20 @@ mod test_utils {
     /// ```sh
     /// llc -march="$arch" -mattr=help
     /// ```
-    fn target_info(arch: ElfArch) -> (&'static CStr, Option<&'static CStr>) {
+    fn target_info(arch: Backend) -> (&'static CStr, Option<&'static CStr>) {
         match arch {
             #[cfg(feature = "arm64")]
             // use a generic CPU for the arm64 and x86_64 backends.
-            ElfArch::Arm64 => (c"aarch64-linux-gnu", None),
+            Backend::Arm64 => (c"aarch64-linux-gnu", None),
             #[cfg(feature = "x86_64")]
-            ElfArch::X86_64 => (c"x86_64-linux-gnu", None),
+            Backend::X86_64 => (c"x86_64-linux-gnu", None),
             #[cfg(feature = "riscv64")]
             // for riscv64, use the `C` "(Compressed Instructions)" extension
-            ElfArch::RiscV(ElfClass::ELFClass64) => (c"riscv64-linux-gnu", Some(c"+c")),
+            Backend::RiscV(ElfClass::ELFClass64) => (c"riscv64-linux-gnu", Some(c"+c")),
             // for s390x, use the `high-word` to have access to the high-word facility needed for
             // some instructions used for larger values
             #[cfg(feature = "s390x")]
-            ElfArch::S390x => (c"systemz-linux-gnu", Some(c"+high-word")),
+            Backend::S390x => (c"systemz-linux-gnu", Some(c"+high-word")),
         }
     }
 
@@ -160,7 +160,7 @@ mod test_utils {
         /// hexadecimal. If `target` is `ElfArch::X86_64`, then
         /// `LLVMDisassembler_Option_AsmPrinterVariant` will also be passed, to use Intel syntax
         /// for the disassembly.
-        pub fn new(target: ElfArch) -> Self {
+        pub fn new(target: Backend) -> Self {
             init_llvm();
             let (triple, features) = target_info(target);
             // SAFETY: LLVMCreateDisasmCPU takes the target triple, cpu, disassembly info block, tag
@@ -188,7 +188,7 @@ mod test_utils {
                 // If this were after the PrintImmHex call or bitmasked in with it, it would
                 // override it, resulting in decimal immediates, so it needs to be a separate call.
                 #[cfg(feature = "x86_64")]
-                if target == ElfArch::X86_64 {
+                if target == Backend::X86_64 {
                     assert_eq!(
                         1,
                         disassembler::LLVMSetDisasmOptions(

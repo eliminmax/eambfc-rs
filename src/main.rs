@@ -24,7 +24,7 @@ use std::process::ExitCode;
 use arg_parse::{RunConfig, help_fmt};
 use compile::{
     BFCompile,
-    elf_tools::{ElfArch, ElfClass},
+    elf_tools::{Backend, ElfClass},
 };
 use err::OutMode;
 
@@ -93,13 +93,13 @@ fn main() -> ExitCode {
                 }
                 let comp_result = match rc.arch {
                     #[cfg(feature = "arm64")]
-                    ElfArch::Arm64 => compile_with!(Arm64Inter),
+                    Backend::Arm64 => compile_with!(Arm64Inter),
                     #[cfg(feature = "riscv64")]
-                    ElfArch::RiscV(ElfClass::ELFClass64) => compile_with!(RiscV64Inter),
+                    Backend::RiscV(ElfClass::ELFClass64) => compile_with!(RiscV64Inter),
                     #[cfg(feature = "s390x")]
-                    ElfArch::S390x => compile_with!(S390xInter),
+                    Backend::S390x => compile_with!(S390xInter),
                     #[cfg(feature = "x86_64")]
-                    ElfArch::X86_64 => compile_with!(X86_64Inter),
+                    Backend::X86_64 => compile_with!(X86_64Inter),
                 };
                 if let Err(errs) = comp_result {
                     errs.into_iter().for_each(|e| e.report(rc.out_mode));

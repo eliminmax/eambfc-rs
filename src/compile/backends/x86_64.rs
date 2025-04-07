@@ -31,7 +31,7 @@
 use crate::err::{BFCompileError, BFErrorID};
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{ByteOrdering, ElfArch};
+use super::elf_tools::{Backend, ByteOrdering};
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -118,7 +118,7 @@ impl ArchInter for X86_64Inter {
         write: 1,
         exit: 60,
     };
-    const ARCH: ElfArch = ElfArch::X86_64;
+    const ARCH: Backend = Backend::X86_64;
     const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
     // XOR reg, reg
@@ -296,7 +296,7 @@ mod tests {
 
     #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
-        Disassembler::new(ElfArch::X86_64)
+        Disassembler::new(Backend::X86_64)
     }
 
     #[disasm_test]

@@ -4,7 +4,7 @@
 
 use super::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{ByteOrdering, ElfArch, ElfClass};
+use super::elf_tools::{Backend, ByteOrdering, ElfClass};
 use crate::err::{BFCompileError, BFErrorID};
 
 use std::num::NonZeroI8;
@@ -249,7 +249,7 @@ impl ArchInter for RiscV64Inter {
         exit: 93,
     };
     const JUMP_SIZE: usize = 12;
-    const ARCH: ElfArch = ElfArch::RiscV(ElfClass::ELFClass64);
+    const ARCH: Backend = Backend::RiscV(ElfClass::ELFClass64);
     const E_FLAGS: u32 = 5; // EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE (chosen to match Debian)
     const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
 
@@ -379,7 +379,7 @@ mod test {
 
     #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
-        Disassembler::new(ElfArch::RiscV(ElfClass::ELFClass64))
+        Disassembler::new(Backend::RiscV(ElfClass::ELFClass64))
     }
 
     #[disasm_test]

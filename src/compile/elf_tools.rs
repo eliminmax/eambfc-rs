@@ -7,6 +7,19 @@ pub(crate) enum ElfClass {
     ELFClass64 = 2,
 }
 
+impl ElfClass {
+    pub(super) const fn ehdr_sz(self) -> u16 {
+        match self {
+            ElfClass::ELFClass64 => 64,
+        }
+    }
+    pub(super) const fn phdr_sz(self) -> u16 {
+        match self {
+            ElfClass::ELFClass64 => 56,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum ByteOrdering {
     #[cfg(any(feature = "x86_64", feature = "riscv64", feature = "arm64"))]
@@ -17,104 +30,100 @@ pub(super) enum ByteOrdering {
 
 /// Enum of supported backends
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum ElfArch {
+pub(crate) enum Backend {
     #[cfg(feature = "arm64")]
-    /// `EM_AARCH64` (i.e. 64-bit ARM architecture)
     Arm64,
-
     #[cfg(feature = "riscv64")]
-    /// `EM_RISCV` (i.e. RISC-V architecture, 32 or 64 bit)
     RiscV(ElfClass),
-
     #[cfg(feature = "s390x")]
-    S390x, // EM_S390
-
+    S390x,
     #[cfg(feature = "x86_64")]
-    X86_64, // EM_X86_64 (i.e. amd64)
+    X86_64,
 }
 
-impl ElfArch {
+impl Backend {
     /// Get the `e_machine` value for the architecture
     pub(crate) const fn e_machine(self) -> u16 {
         match self {
+            #[cfg(feature = "arm64")]
             Self::Arm64 => 183,
+            #[cfg(feature = "riscv64")]
             Self::RiscV(_) => 243,
+            #[cfg(feature = "s390x")]
             Self::S390x => 22,
+            #[cfg(feature = "x86_64")]
             Self::X86_64 => 62,
+        }
+    }
+    /// Get the `ElfClass` for the architecture
+    #[expect(
+        clippy::unused_self,
+        reason = "Once 32-bit architectures are used, won't be unused"
+    )]
+    pub(super) const fn ei_class(self) -> ElfClass {
+        ElfClass::ELFClass64
+    }
+
+    /// Get the `ByteOrdering` for the architecture
+    pub(super) const fn ei_data(self) -> ByteOrdering {
+        match self {
+            #[cfg(feature = "s390x")]
+            Self::S390x => ByteOrdering::BigEndian,
+            #[cfg(any(feature = "x86_64", feature = "riscv64", feature = "arm64"))]
+            _ => ByteOrdering::LittleEndian,
         }
     }
 }
 
-impl std::fmt::Display for ElfArch {
+impl std::fmt::Display for Backend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
             "{}",
             match *self {
                 #[cfg(feature = "arm64")]
-                ElfArch::Arm64 => "arm64",
+                Backend::Arm64 => "arm64",
                 #[cfg(feature = "riscv64")]
-                ElfArch::RiscV(ElfClass::ELFClass64) => "riscv64",
+                Backend::RiscV(ElfClass::ELFClass64) => "riscv64",
                 #[cfg(feature = "s390x")]
-                ElfArch::S390x => "s390x",
+                Backend::S390x => "s390x",
                 #[cfg(feature = "x86_64")]
-                ElfArch::X86_64 => "x86_64",
+                Backend::X86_64 => "x86_64",
             }
         )
     }
 }
 
-impl Default for ElfArch {
+impl Default for Backend {
     fn default() -> Self {
         match env!("EAMBFC_DEFAULT_ARCH") {
             #[cfg(feature = "arm64")]
-            "arm64" => ElfArch::Arm64,
+            "arm64" => Backend::Arm64,
             #[cfg(feature = "riscv64")]
-            "riscv64" => ElfArch::RiscV(ElfClass::ELFClass64),
+            "riscv64" => Backend::RiscV(ElfClass::ELFClass64),
             #[cfg(feature = "s390x")]
-            "s390x" => ElfArch::S390x,
+            "s390x" => Backend::S390x,
             #[cfg(feature = "x86_64")]
-            "x86_64" => ElfArch::X86_64,
+            "x86_64" => Backend::X86_64,
             _ => unreachable!("build.rs sets this to valid values only"),
         }
     }
 }
 
-pub(super) enum ElfVersion {
-    EvCurrent = 1,
-}
-
-pub(super) enum ElfOsAbi {
-    None,
-}
-
-pub(super) enum ElfType {
-    Exec = 2,
-}
-
-pub(super) struct EIdent {
-    pub class: ElfClass,
-    pub data: ByteOrdering,
-    pub osabi: ElfOsAbi,
-}
-
-impl From<EIdent> for [u8; 16] {
-    fn from(e_ident: EIdent) -> [u8; 16] {
-        let (osabi, abi_version) = match e_ident.osabi {
-            ElfOsAbi::None => (0, 0),
-        };
+impl From<Backend> for [u8; 16] {
+    fn from(earch: Backend) -> [u8; 16] {
         #[rustfmt::skip]
         let arr: [u8; 16] = [
-            // magic numbers
+            // magic bytes
             0x7f, b'E', b'L', b'F',
             // 32 or 64 bit
-            e_ident.class as u8,
-            // byte ordering
-            e_ident.data as u8,
+            earch.ei_class() as u8,
+            // byte ordering for architecture
+            earch.ei_data() as u8,
             // Version of an ELF file - only valid value
-            ElfVersion::EvCurrent as u8,
-            // ABI and ABI version
-            osabi, abi_version,
+            1,
+            // SYSV ABI with unspecified version
+            0, 0,
             // padding bytes
             0, 0, 0, 0, 0, 0, 0
         ];
@@ -122,72 +131,77 @@ impl From<EIdent> for [u8; 16] {
     }
 }
 
-pub(super) struct Ehdr {
-    pub ident: EIdent,
-    pub elf_type: ElfType,
-    pub machine: ElfArch,
-    pub version: ElfVersion,
+/// The information needed to construct an ELF Ehdr, not including information which is always the
+/// same across all ELF executables generated by `eambfc-rs`
+pub(super) struct BinInfo {
+    /// The target backend - used to determine the pointer size, byte ordering, and `e_machine`
+    /// value for the Ehdr
+    pub arch: Backend,
     pub entry: u64,
-    pub phoff: u64,
-    pub shoff: u64,
     pub flags: u32,
-    pub ehsize: u16,
-    pub phentsize: u16,
-    pub phnum: u16,
-    pub shentsize: u16,
-    pub shnum: u16,
-    pub shstrndx: u16,
-}
-
-pub(super) enum PType {
-    Load = 1,
 }
 
 pub(super) struct Phdr {
     pub byte_order: ByteOrdering,
-    pub header_type: PType,
     pub flags: u32,
     pub offset: u64,
     pub vaddr: u64,
-    pub paddr: u64,
     pub filesz: u64,
     pub memsz: u64,
     pub align: u64,
 }
 
-pub(super) const EHDR_SIZE: u16 = 64;
-pub(super) const PHDR_SIZE: u16 = 56;
-// better this than having identical implementations, differing only in whether to_le_bytes or
-// to_be_bytes are called.
 macro_rules! serialize_ehdr {
-    ($item:ident, $func:ident) => {{
-        let mut v = Vec::with_capacity(usize::from(EHDR_SIZE));
-        v.extend(<[u8; 16]>::from($item.ident));
-        v.extend(($item.elf_type as u16).$func());
-        v.extend($item.machine.e_machine().$func());
-        v.extend(($item.version as u32).$func());
-        v.extend($item.entry.$func());
-        v.extend($item.phoff.$func());
-        v.extend($item.shoff.$func());
+    ($item: ident, $func: ident, $addr_type: ty) => {{
+        let mut v = Vec::with_capacity($item.arch.ei_class().ehdr_sz().into());
+        v.extend(<[u8; 16]>::from($item.arch));
+        // e_type = ET_EXEC
+        v.extend(u16::$func(2));
+        // e_machine depends on architecture
+        v.extend($item.arch.e_machine().$func());
+        // e_version = 1
+        v.extend(u32::$func(1));
+        // e_entry
+        v.extend(
+            <$addr_type>::try_from($item.entry)
+                .expect("Validated tape size")
+                .$func(),
+        );
+        // e_phoff is always equal to e_ehsize, which depends on the architecture class
+        v.extend(<$addr_type>::from($item.arch.ei_class().ehdr_sz()).$func());
+        // e_shoff is always zero
+        v.extend(<$addr_type>::$func(0));
+        // e_flags depends on the architecture and is specified in the backend
         v.extend($item.flags.$func());
-        v.extend($item.ehsize.$func());
-        v.extend($item.phentsize.$func());
-        v.extend($item.phnum.$func());
-        v.extend($item.shentsize.$func());
-        v.extend($item.shnum.$func());
-        v.extend($item.shstrndx.$func());
+        // e_ehsize depends on the architecture class
+        v.extend($item.arch.ei_class().ehdr_sz().$func());
+        // e_phentsize depends on the architecture class
+        v.extend($item.arch.ei_class().phdr_sz().$func());
+        // e_phnum is always 2: 1 for the code segment and 1 for the tape segment
+        v.extend(u16::$func(2));
+        // e_shentsize is zero as there is no section header table
+        v.extend(u16::$func(0));
+        // e_shnum is zero as there is no section header table
+        v.extend(u16::$func(0));
+        // e_shstrndx is zero as there is no section header table
+        v.extend(u16::$func(0));
         v
     }};
 }
+// better this than having identical implementations, differing only in whether to_le_bytes or
+// to_be_bytes are called.
+macro_rules! serialize_ehdr64 {
+    ($item:ident, $func:ident) => {{ serialize_ehdr!($item, $func, u64) }};
+}
 
-macro_rules! serialize_phdr {
+macro_rules! serialize_phdr64 {
     ($item:ident, $func:ident) => {{
-        let mut v = Vec::with_capacity(usize::from(PHDR_SIZE));
-        v.extend(($item.header_type as u32).$func());
+        let mut v = Vec::with_capacity(56);
+        v.extend(u32::$func(1));
         v.extend($item.flags.$func());
         v.extend($item.offset.$func());
         v.extend($item.vaddr.$func());
-        v.extend($item.paddr.$func());
+        v.extend(u64::$func(0));
         v.extend($item.filesz.$func());
         v.extend($item.memsz.$func());
         v.extend($item.align.$func());
@@ -195,13 +209,13 @@ macro_rules! serialize_phdr {
     }};
 }
 
-impl From<Ehdr> for Vec<u8> {
-    fn from(item: Ehdr) -> Self {
-        match item.ident.data {
+impl From<BinInfo> for Vec<u8> {
+    fn from(item: BinInfo) -> Self {
+        match item.arch.ei_data() {
             #[cfg(any(feature = "arm64", feature = "riscv64", feature = "x86_64"))]
-            ByteOrdering::LittleEndian => serialize_ehdr!(item, to_le_bytes),
+            ByteOrdering::LittleEndian => serialize_ehdr64!(item, to_le_bytes),
             #[cfg(feature = "s390x")]
-            ByteOrdering::BigEndian => serialize_ehdr!(item, to_be_bytes),
+            ByteOrdering::BigEndian => serialize_ehdr64!(item, to_be_bytes),
         }
     }
 }
@@ -212,28 +226,29 @@ impl From<Phdr> for Vec<u8> {
     fn from(item: Phdr) -> Self {
         match item.byte_order {
             #[cfg(any(feature = "arm64", feature = "riscv64", feature = "x86_64"))]
-            ByteOrdering::LittleEndian => serialize_phdr!(item, to_le_bytes),
+            ByteOrdering::LittleEndian => serialize_phdr64!(item, to_le_bytes),
             #[cfg(feature = "s390x")]
-            ByteOrdering::BigEndian => serialize_phdr!(item, to_be_bytes),
+            ByteOrdering::BigEndian => serialize_phdr64!(item, to_be_bytes),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ElfArch;
+    use super::Backend;
+    use super::ElfClass;
     #[test]
     fn display_elfarch() {
         #[cfg(feature = "arm64")]
-        assert_eq!(format!("{}", ElfArch::Arm64), String::from("arm64"));
+        assert_eq!(format!("{}", Backend::Arm64), String::from("arm64"));
         #[cfg(feature = "riscv64")]
         assert_eq!(
-            format!("{}", ElfArch::RiscV(super::ElfClass::ELFClass64)),
+            format!("{}", Backend::RiscV(ElfClass::ELFClass64)),
             String::from("riscv64")
         );
         #[cfg(feature = "s390x")]
-        assert_eq!(format!("{}", ElfArch::S390x), String::from("s390x"));
+        assert_eq!(format!("{}", Backend::S390x), String::from("s390x"));
         #[cfg(feature = "x86_64")]
-        assert_eq!(format!("{}", ElfArch::X86_64), String::from("x86_64"));
+        assert_eq!(format!("{}", Backend::X86_64), String::from("x86_64"));
     }
 }

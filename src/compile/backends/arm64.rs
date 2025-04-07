@@ -6,7 +6,7 @@ use crate::err::{BFCompileError, BFErrorID};
 
 use super::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{ByteOrdering, ElfArch};
+use super::elf_tools::{Backend, ByteOrdering};
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit
 // forms. w8 is the 32-bit form for register #8, and x0 is the 64-bit form for register #0.
@@ -166,7 +166,7 @@ impl ArchInter for Arm64Inter {
         exit: 93,
     };
 
-    const ARCH: ElfArch = ElfArch::Arm64;
+    const ARCH: Backend = Backend::Arm64;
     const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
     fn set_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
         set_raw_reg(code_buf, reg.into(), imm);
@@ -326,7 +326,7 @@ mod tests {
 
     #[cfg(feature = "disasmtests")]
     fn disassembler() -> Disassembler {
-        Disassembler::new(ElfArch::Arm64)
+        Disassembler::new(Backend::Arm64)
     }
 
     #[disasm_test]

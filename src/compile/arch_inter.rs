@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::compile::elf_tools::{ByteOrdering, ElfArch};
+use crate::compile::elf_tools::{Backend, ByteOrdering};
 use crate::err::BFCompileError;
 
 pub(super) type FailableInstrEncoding = Result<(), BFCompileError>;
@@ -24,9 +24,10 @@ pub(super) trait ArchInter {
     /// The syscall numbers of the read, write, and exit Linux system calls for this architecture
     const SC_NUMS: SyscallNums;
     /// The `ElfArch` value for this architecture
-    const ARCH: ElfArch;
+    const ARCH: Backend;
     /// The cpu flags needed in the `E_FLAGS` field of the ELF header for this architecture
     const E_FLAGS: u32;
+    #[deprecated]
     /// the byte ordering for this architecture
     const EI_DATA: ByteOrdering;
     /// append code to `code_buf` that sets `reg` to `imm`
