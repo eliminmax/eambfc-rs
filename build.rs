@@ -5,6 +5,7 @@
 
 #[cfg(feature = "bintests")]
 use std::collections::HashSet;
+
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::Command;
