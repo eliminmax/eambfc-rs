@@ -7,7 +7,7 @@
     expect(unused_imports, reason = "Used without longopts")
 )]
 use crate::OutMode;
-use crate::compile::elf_tools::ElfArch;
+use crate::compile::elf_tools::{ElfArch, ElfClass};
 use crate::err::{BFCompileError, BFErrorID};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;
@@ -129,7 +129,7 @@ impl PartialRunConfig {
             #[cfg(feature = "arm64")]
             b"arm64" | b"aarch64" => Some(ElfArch::Arm64),
             #[cfg(feature = "riscv64")]
-            b"riscv64" | b"riscv" => Some(ElfArch::RiscV64),
+            b"riscv64" | b"riscv" => Some(ElfArch::RiscV(ElfClass::ELFClass64)),
             #[cfg(feature = "s390x")]
             b"s390x" | b"s390" | b"z/architecture" => Some(ElfArch::S390x),
             #[cfg(feature = "x86_64")]
@@ -543,11 +543,11 @@ mod tests {
             {
                 assert_eq!(
                     parse_standard(vec![arg("-ariscv64"), arg("foo.bf")]).arch,
-                    ElfArch::RiscV64
+                    ElfArch::RiscV(ElfClass::ELFClass64)
                 );
                 assert_eq!(
                     parse_standard(vec![arg("-ariscv"), arg("foo.bf")]).arch,
-                    ElfArch::RiscV64
+                    ElfArch::RiscV(ElfClass::ELFClass64)
                 );
             };
         } else {

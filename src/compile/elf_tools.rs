@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-pub(super) enum ElfClass {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum ElfClass {
     ELFClass64 = 2,
 }
 
@@ -14,16 +15,34 @@ pub(super) enum ByteOrdering {
     BigEndian = 2,
 }
 
+/// Enum of supported backends
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ElfArch {
     #[cfg(feature = "arm64")]
-    Arm64 = 183, // EM_AARCH64
+    /// `EM_AARCH64` (i.e. 64-bit ARM architecture)
+    Arm64,
+
     #[cfg(feature = "riscv64")]
-    RiscV64 = 243, // EM_RISCV
+    /// `EM_RISCV` (i.e. RISC-V architecture, 32 or 64 bit)
+    RiscV(ElfClass),
+
     #[cfg(feature = "s390x")]
-    S390x = 22, // EM_S390
+    S390x, // EM_S390
+
     #[cfg(feature = "x86_64")]
-    X86_64 = 62, // EM_X86_64 (i.e. amd64)
+    X86_64, // EM_X86_64 (i.e. amd64)
+}
+
+impl ElfArch {
+    /// Get the `e_machine` value for the architecture
+    pub(crate) const fn e_machine(self) -> u16 {
+        match self {
+            Self::Arm64 => 183,
+            Self::RiscV(_) => 243,
+            Self::S390x => 22,
+            Self::X86_64 => 62,
+        }
+    }
 }
 
 impl std::fmt::Display for ElfArch {
@@ -35,7 +54,7 @@ impl std::fmt::Display for ElfArch {
                 #[cfg(feature = "arm64")]
                 ElfArch::Arm64 => "arm64",
                 #[cfg(feature = "riscv64")]
-                ElfArch::RiscV64 => "riscv64",
+                ElfArch::RiscV(ElfClass::ELFClass64) => "riscv64",
                 #[cfg(feature = "s390x")]
                 ElfArch::S390x => "s390x",
                 #[cfg(feature = "x86_64")]
@@ -51,7 +70,7 @@ impl Default for ElfArch {
             #[cfg(feature = "arm64")]
             "arm64" => ElfArch::Arm64,
             #[cfg(feature = "riscv64")]
-            "riscv64" => ElfArch::RiscV64,
+            "riscv64" => ElfArch::RiscV(ElfClass::ELFClass64),
             #[cfg(feature = "s390x")]
             "s390x" => ElfArch::S390x,
             #[cfg(feature = "x86_64")]
@@ -145,7 +164,7 @@ macro_rules! serialize_ehdr {
         let mut v = Vec::with_capacity(usize::from(EHDR_SIZE));
         v.extend(<[u8; 16]>::from($item.ident));
         v.extend(($item.elf_type as u16).$func());
-        v.extend(($item.machine as u16).$func());
+        v.extend($item.machine.e_machine().$func());
         v.extend(($item.version as u32).$func());
         v.extend($item.entry.$func());
         v.extend($item.phoff.$func());
@@ -208,7 +227,10 @@ mod tests {
         #[cfg(feature = "arm64")]
         assert_eq!(format!("{}", ElfArch::Arm64), String::from("arm64"));
         #[cfg(feature = "riscv64")]
-        assert_eq!(format!("{}", ElfArch::RiscV64), String::from("riscv64"));
+        assert_eq!(
+            format!("{}", ElfArch::RiscV(super::ElfClass::ELFClass64)),
+            String::from("riscv64")
+        );
         #[cfg(feature = "s390x")]
         assert_eq!(format!("{}", ElfArch::S390x), String::from("s390x"));
         #[cfg(feature = "x86_64")]
