@@ -90,8 +90,14 @@ Portability to non-Linux *target* platforms is outside of the scope of this
 project, as Linux is unique in providing a stable syscall ABI. That said, it
 should be possible to compile a properly-working build of `eambfc-rs` itself for
 any fully-supported Rust target, though the test suite has non-portable
-dependencies, and non-`cfg(unix)` targets are not able to handle non-Unicode
-arguments properly, or mark the output binaries as executable.
+dependencies, and non-unix, non-wasm targets are not able to handle non-Unicode
+arguments properly, and non-unix platforms can't mark the output binaries as
+executable.
+
+Development is done primarily on the current stable release of Rust, without any
+effort to ensure compatibility with previous Rust versions, so there's no
+guaranteed minimum supported Rust version beyond the stable release at the time
+of the most recent commit.
 
 ## Building and Installing
 
