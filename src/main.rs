@@ -22,10 +22,7 @@ use std::env::args_os;
 use std::process::ExitCode;
 
 use arg_parse::{RunConfig, help_fmt};
-use compile::{
-    BFCompile,
-    elf_tools::{Backend, ElfClass},
-};
+use compile::{BFCompile, elf_tools::Backend};
 use err::OutMode;
 
 // architecture interfaces
@@ -95,7 +92,7 @@ fn main() -> ExitCode {
                     #[cfg(feature = "arm64")]
                     Backend::Arm64 => compile_with!(Arm64Inter),
                     #[cfg(feature = "riscv64")]
-                    Backend::RiscV(ElfClass::ELFClass64) => compile_with!(RiscV64Inter),
+                    Backend::RiscV64 => compile_with!(RiscV64Inter),
                     #[cfg(feature = "s390x")]
                     Backend::S390x => compile_with!(S390xInter),
                     #[cfg(feature = "x86_64")]

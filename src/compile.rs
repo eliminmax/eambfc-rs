@@ -43,7 +43,7 @@ fn write_headers(
         flags: e_flags,
     };
     let tape_segment = elf_tools::Phdr {
-        byte_order: elf_arch.ei_data(),
+        arch: elf_arch,
         flags: 4 | 2,     // PF_R | PF_W (readable and writable)
         offset: 0,        // load bytes from this index in the file
         vaddr: TAPE_ADDR, // load segment into this section of memory
@@ -52,7 +52,7 @@ fn write_headers(
         align: 0x1000,    // align with this power of 2
     };
     let code_segment = elf_tools::Phdr {
-        byte_order: elf_arch.ei_data(),
+        arch: elf_arch,
         flags: 4 | 1,                         // PF_R | PF_X (readable and executable)
         offset: 0,                            // load bytes from this index in the file
         vaddr: load_vaddr,                    // load segment into this section of memory

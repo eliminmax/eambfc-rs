@@ -104,7 +104,7 @@ mod test_min_bits {
 #[cfg(all(test, feature = "disasmtests"))]
 mod test_utils {
 
-    use super::elf_tools::{Backend, ElfClass};
+    use super::elf_tools::Backend;
     use llvm_sys::disassembler;
     use std::ffi::CStr;
     use std::sync::OnceLock;
@@ -143,7 +143,7 @@ mod test_utils {
             Backend::X86_64 => (c"x86_64-linux-gnu", None),
             #[cfg(feature = "riscv64")]
             // for riscv64, use the `C` "(Compressed Instructions)" extension
-            Backend::RiscV(ElfClass::ELFClass64) => (c"riscv64-linux-gnu", Some(c"+c")),
+            Backend::RiscV64 => (c"riscv64-linux-gnu", Some(c"+c")),
             // for s390x, use the `high-word` to have access to the high-word facility needed for
             // some instructions used for larger values
             #[cfg(feature = "s390x")]

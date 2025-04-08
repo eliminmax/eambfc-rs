@@ -3,17 +3,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum ElfClass {
+enum ElfClass {
     ELFClass64 = 2,
 }
 
 impl ElfClass {
-    pub(super) const fn ehdr_sz(self) -> u16 {
+    const fn ehdr_sz(self) -> u16 {
         match self {
             ElfClass::ELFClass64 => 64,
         }
     }
-    pub(super) const fn phdr_sz(self) -> u16 {
+    const fn phdr_sz(self) -> u16 {
         match self {
             ElfClass::ELFClass64 => 56,
         }
@@ -34,7 +34,7 @@ pub(crate) enum Backend {
     #[cfg(feature = "arm64")]
     Arm64,
     #[cfg(feature = "riscv64")]
-    RiscV(ElfClass),
+    RiscV64,
     #[cfg(feature = "s390x")]
     S390x,
     #[cfg(feature = "x86_64")]
@@ -43,12 +43,12 @@ pub(crate) enum Backend {
 
 impl Backend {
     /// Get the `e_machine` value for the architecture
-    pub(crate) const fn e_machine(self) -> u16 {
+    const fn e_machine(self) -> u16 {
         match self {
             #[cfg(feature = "arm64")]
             Self::Arm64 => 183,
             #[cfg(feature = "riscv64")]
-            Self::RiscV(_) => 243,
+            Self::RiscV64 => 243,
             #[cfg(feature = "s390x")]
             Self::S390x => 22,
             #[cfg(feature = "x86_64")]
@@ -60,7 +60,7 @@ impl Backend {
         clippy::unused_self,
         reason = "Once 32-bit architectures are used, won't be unused"
     )]
-    pub(super) const fn ei_class(self) -> ElfClass {
+    const fn ei_class(self) -> ElfClass {
         ElfClass::ELFClass64
     }
 
@@ -84,7 +84,7 @@ impl std::fmt::Display for Backend {
                 #[cfg(feature = "arm64")]
                 Backend::Arm64 => "arm64",
                 #[cfg(feature = "riscv64")]
-                Backend::RiscV(ElfClass::ELFClass64) => "riscv64",
+                Backend::RiscV64 => "riscv64",
                 #[cfg(feature = "s390x")]
                 Backend::S390x => "s390x",
                 #[cfg(feature = "x86_64")]
@@ -100,7 +100,7 @@ impl Default for Backend {
             #[cfg(feature = "arm64")]
             "arm64" => Backend::Arm64,
             #[cfg(feature = "riscv64")]
-            "riscv64" => Backend::RiscV(ElfClass::ELFClass64),
+            "riscv64" => Backend::RiscV64,
             #[cfg(feature = "s390x")]
             "s390x" => Backend::S390x,
             #[cfg(feature = "x86_64")]
@@ -142,7 +142,7 @@ pub(super) struct BinInfo {
 }
 
 pub(super) struct Phdr {
-    pub byte_order: ByteOrdering,
+    pub arch: Backend,
     pub flags: u32,
     pub offset: u64,
     pub vaddr: u64,
@@ -224,7 +224,7 @@ impl From<BinInfo> for Vec<u8> {
 // eambfc-rs for this.
 impl From<Phdr> for Vec<u8> {
     fn from(item: Phdr) -> Self {
-        match item.byte_order {
+        match item.arch.ei_data() {
             #[cfg(any(feature = "arm64", feature = "riscv64", feature = "x86_64"))]
             ByteOrdering::LittleEndian => serialize_phdr64!(item, to_le_bytes),
             #[cfg(feature = "s390x")]
@@ -236,16 +236,12 @@ impl From<Phdr> for Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::Backend;
-    use super::ElfClass;
     #[test]
     fn display_elfarch() {
         #[cfg(feature = "arm64")]
         assert_eq!(format!("{}", Backend::Arm64), String::from("arm64"));
         #[cfg(feature = "riscv64")]
-        assert_eq!(
-            format!("{}", Backend::RiscV(ElfClass::ELFClass64)),
-            String::from("riscv64")
-        );
+        assert_eq!(format!("{}", Backend::RiscV64), String::from("riscv64"));
         #[cfg(feature = "s390x")]
         assert_eq!(format!("{}", Backend::S390x), String::from("s390x"));
         #[cfg(feature = "x86_64")]
