@@ -111,15 +111,15 @@ impl Default for Backend {
 }
 
 impl From<Backend> for [u8; 16] {
-    fn from(earch: Backend) -> [u8; 16] {
+    fn from(e_arch: Backend) -> [u8; 16] {
         #[rustfmt::skip]
         let arr: [u8; 16] = [
             // magic bytes
             0x7f, b'E', b'L', b'F',
             // 32 or 64 bit
-            earch.ei_class() as u8,
+            e_arch.ei_class() as u8,
             // byte ordering for architecture
-            earch.ei_data() as u8,
+            e_arch.ei_data() as u8,
             // Version of an ELF file - only valid value
             1,
             // SYSV ABI with unspecified version
