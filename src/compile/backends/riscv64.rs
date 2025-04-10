@@ -4,7 +4,7 @@
 
 use super::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{Backend, ByteOrdering};
+use super::elf_tools::Backend;
 use crate::err::{BFCompileError, BFErrorID};
 
 use std::num::NonZeroI8;
@@ -251,7 +251,6 @@ impl ArchInter for RiscV64Inter {
     const JUMP_SIZE: usize = 12;
     const ARCH: Backend = Backend::RiscV64;
     const E_FLAGS: u32 = 5; // EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE (chosen to match Debian)
-    const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
 
     fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) {
         encode_li(code_buf, reg.into(), imm);

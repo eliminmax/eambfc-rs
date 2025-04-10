@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::compile::elf_tools::{Backend, ByteOrdering};
+use crate::compile::elf_tools::Backend;
 use crate::err::BFCompileError;
 
 pub(super) type FailableInstrEncoding = Result<(), BFCompileError>;
@@ -27,9 +27,6 @@ pub(super) trait ArchInter {
     const ARCH: Backend;
     /// The cpu flags needed in the `E_FLAGS` field of the ELF header for this architecture
     const E_FLAGS: u32;
-    #[deprecated]
-    /// the byte ordering for this architecture
-    const EI_DATA: ByteOrdering;
     /// append code to `code_buf` that sets `reg` to `imm`
     fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64);
     /// append code to `code_buf` that copies the value in `src` to `dst`

@@ -5,7 +5,7 @@
 use crate::err::{BFCompileError, BFErrorID};
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{Backend, ByteOrdering};
+use super::elf_tools::Backend;
 
 // The z/Architecture Principles of Operation comprehensively documents the
 // z/Architecture ISA, and its 14th edition was the main source for information
@@ -327,7 +327,6 @@ impl ArchInter for S390xInter {
     };
 
     const ARCH: Backend = Backend::S390x;
-    const EI_DATA: ByteOrdering = ByteOrdering::BigEndian;
 
     fn set_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         if imm == 0 {

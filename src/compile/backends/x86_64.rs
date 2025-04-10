@@ -31,7 +31,7 @@
 use crate::err::{BFCompileError, BFErrorID};
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::{Backend, ByteOrdering};
+use super::elf_tools::Backend;
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -119,7 +119,6 @@ impl ArchInter for X86_64Inter {
         exit: 60,
     };
     const ARCH: Backend = Backend::X86_64;
-    const EI_DATA: ByteOrdering = ByteOrdering::LittleEndian;
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
     // XOR reg, reg
     // MOV reg, imm32
