@@ -4,17 +4,26 @@
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ElfClass {
+    #[cfg(have_32bit_targets)]
+    ElfClass32 = 1,
+    #[cfg(have_64bit_targets)]
     ELFClass64 = 2,
 }
 
 impl ElfClass {
     const fn ehdr_sz(self) -> u16 {
         match self {
+            #[cfg(have_32bit_targets)]
+            ElfClass::ElfClass32 => 52,
+            #[cfg(have_64bit_targets)]
             ElfClass::ELFClass64 => 64,
         }
     }
     const fn phdr_sz(self) -> u16 {
         match self {
+            #[cfg(have_32bit_targets)]
+            ElfClass::ElfClass32 => 32,
+            #[cfg(have_64bit_targets)]
             ElfClass::ELFClass64 => 56,
         }
     }
