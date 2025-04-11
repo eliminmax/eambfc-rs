@@ -66,21 +66,12 @@ fn write_headers(
 
     // add padding bytes
     to_write.resize(START_ADDR as usize, 0);
-    match output.write(to_write.as_slice()) {
-        Ok(count) if count == to_write.len() => Ok(()),
-        Ok(count) => Err(BFCompileError::basic(
+    output.write_all(to_write.as_slice()).map_err(|e| {
+        BFCompileError::basic(
             BFErrorID::FailedWrite,
-            format!(
-                "Expected to write {} bytes of ELF header and program header table, wrote {}",
-                to_write.len(),
-                count,
-            ),
-        )),
-        Err(_) => Err(BFCompileError::basic(
-            BFErrorID::FailedWrite,
-            "Failed to write ELF header and program header table",
-        )),
-    }
+            format!("Failed to write ELF header and program header table: {e:?}"),
+        )
+    })
 }
 
 pub(crate) trait BFCompile {
@@ -357,16 +348,11 @@ impl<B: BFCompileHelper> BFCompile for B {
         if let Err(e) = write_headers(&mut out_f, code_sz, tape_blocks, Self::ARCH, Self::E_FLAGS) {
             errs.push(e);
         }
-        match out_f.write(code_buf.as_slice()) {
-            Ok(count) if count == code_sz => (),
-            Ok(count) => errs.push(BFCompileError::basic(
+        if let Err(e) = out_f.write_all(code_buf.as_slice()) {
+            errs.push(BFCompileError::basic(
                 BFErrorID::FailedWrite,
-                format!("Only wrote {count} out of expected {code_sz} machine code bytes"),
-            )),
-            Err(_) => errs.push(BFCompileError::basic(
-                BFErrorID::FailedWrite,
-                "Failed to write internal code buffer to output file",
-            )),
+                format!("Failed to write internal code buffer to output file: {e:?}"),
+            ));
         }
         if errs.is_empty() { Ok(()) } else { Err(errs) }
     }
