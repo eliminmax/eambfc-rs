@@ -12,7 +12,7 @@ pub(crate) mod backends;
 pub(crate) mod elf_tools;
 
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
-use elf_tools::Backend;
+use elf_tools::{Backend, BinInfo, SegmentInfo};
 
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
@@ -23,9 +23,18 @@ struct JumpLocation {
 }
 
 // ELF addressing stuff
+/// Memory address of tape segment
 const TAPE_ADDR: u64 = 0x10000;
-const START_ADDR: u64 = 256;
 
+/// The address within the file of the first machine code - must be able to fit an Ehdr and 2 Phdr
+/// entries.
+///
+/// 256 was chosen as it's an easy enough number to work with, and it gives enough padding for both
+/// 32-bit and 64-bit backends - 32-bit ELFs will have 140 bytes of padding, and 64-bit ELFs will
+/// have 80 bytes of padding.
+const START_ADDR: usize = 256;
+
+/// Write the headers and padding bytes to `output`
 fn write_headers(
     output: &mut impl Write,
     codesize: usize,
@@ -36,36 +45,39 @@ fn write_headers(
     // ELF addressing stuff that depends on tape_blocks, so can't be constant
     let tape_size: u64 = tape_blocks * 0x1000;
     let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffff)) + 0x10000;
-    let start_virt_addr: u64 = START_ADDR + load_vaddr;
-    let ehdr = elf_tools::BinInfo {
+    let start_virt_addr = u64::try_from(START_ADDR).unwrap_or_else(|_| unreachable!()) + load_vaddr;
+    let ehdr = BinInfo {
         arch: elf_arch,
         entry: start_virt_addr,
         flags: e_flags,
     };
-    let tape_segment = elf_tools::Phdr {
+    let tape_segment = SegmentInfo {
         arch: elf_arch,
-        flags: 4 | 2,     // PF_R | PF_W (readable and writable)
-        offset: 0,        // load bytes from this index in the file
+        flags: 6,         // PF_R | PF_W (readable and writable)
         vaddr: TAPE_ADDR, // load segment into this section of memory
-        filesz: 0,        // don't load anything from file, just zero-initialize it
-        memsz: tape_size, // allocate this many bytes of memory for this segment
-        align: 0x1000,    // align with this power of 2
+        size: tape_size,  // allocate this many bytes of memory for this segment
+        file_backed: false,
+        align: 0x1000, // align with this power of 2
     };
-    let code_segment = elf_tools::Phdr {
+    let code_segment = SegmentInfo {
         arch: elf_arch,
-        flags: 4 | 1,                         // PF_R | PF_X (readable and executable)
-        offset: 0,                            // load bytes from this index in the file
-        vaddr: load_vaddr,                    // load segment into this section of memory
-        filesz: START_ADDR + codesize as u64, // load this many bytes from file…
-        memsz: START_ADDR + codesize as u64,  // allocate this many bytes of memory…
-        align: 1,                             // align with this power of 2
+        flags: 5,          // PF_R | PF_X (readable and executable)
+        vaddr: load_vaddr, // load segment into this section of memory
+        size: (START_ADDR + codesize).try_into().map_err(|e| {
+            BFCompileError::basic(
+                BFErrorID::CodeTooLarge,
+                format!("code size of {e} is too large to fit in a u64"),
+            )
+        })?, // load this many bytes from file…
+        file_backed: true,
+        align: 1, // align with this power of 2
     };
     let mut to_write = Vec::<u8>::from(ehdr);
     to_write.extend(Vec::<u8>::from(tape_segment));
     to_write.extend(Vec::<u8>::from(code_segment));
 
     // add padding bytes
-    to_write.resize(START_ADDR as usize, 0);
+    to_write.resize(START_ADDR, 0);
     output.write_all(to_write.as_slice()).map_err(|e| {
         BFCompileError::basic(
             BFErrorID::FailedWrite,
@@ -442,9 +454,9 @@ mod tests {
         // partial write failure while writing code
         assert!(
             TestInter::compile(
-                b"[-]".as_slice(),
+                b">>[-]".as_slice(),
                 FailingWriter {
-                    fail_after: START_ADDR as usize + 1
+                    fail_after: START_ADDR + 1
                 },
                 true,
                 8
@@ -456,7 +468,7 @@ mod tests {
             TestInter::compile(
                 b"[-]".as_slice(),
                 FailingWriter {
-                    fail_after: START_ADDR as usize
+                    fail_after: START_ADDR
                 },
                 true,
                 8

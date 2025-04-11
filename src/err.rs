@@ -51,6 +51,7 @@ pub(crate) enum BFErrorID {
     UnknownArg,
     UnmatchedClose,
     UnmatchedOpen,
+    CodeTooLarge,
     #[cfg(feature = "longopts")]
     UnexpectedArgValue,
     #[cfg(not(any(unix, target_os = "wasi")))]
