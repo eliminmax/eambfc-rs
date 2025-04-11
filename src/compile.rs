@@ -76,7 +76,7 @@ fn write_headers(
     to_write.extend(Vec::<u8>::from(tape_segment));
     to_write.extend(Vec::<u8>::from(code_segment));
 
-    // add padding bytes
+    // pad until start address
     to_write.resize(START_ADDR, 0);
     output.write_all(to_write.as_slice()).map_err(|e| {
         BFCompileError::basic(
