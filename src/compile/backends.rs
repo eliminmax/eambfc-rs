@@ -25,8 +25,14 @@ pub(crate) use x86_64::X86_64Inter;
 use super::arch_inter;
 use super::elf_tools;
 
+/// An extension trait that's used to provide a `fits_within_bits` method used within some backends
 #[allow(dead_code, reason = "Not used by all backends")]
 trait MinimumBits {
+    /// Returns `true` if the value of `self` can be stored within an integer of size `bits`
+    ///
+    /// For signed types, acts as though the hypothetical `i{bits}` type is a 2's complement signed
+    /// type, and for unsigned types, acts as though the the hypothetical `u{bits}` type is also
+    /// unsigned.
     fn fits_within_bits(self, bits: u32) -> bool;
 }
 
@@ -98,6 +104,7 @@ mod test_min_bits {
         test_for!(i64);
     }
 }
+
 /// Provides a safe way to use LLVM's disassembler for backends to use for unit testing, using the
 /// `Disassembler` struct.
 #[cfg(not(tarpaulin_include))]
