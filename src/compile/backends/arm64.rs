@@ -167,8 +167,9 @@ impl ArchInter for Arm64Inter {
     };
 
     const ARCH: Backend = Backend::Arm64;
-    fn set_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) {
+    fn set_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: i64) -> FailableInstrEncoding {
         set_raw_reg(code_buf, reg.into(), imm);
+        Ok(())
     }
 
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Arm64Register, src: Arm64Register) {
@@ -208,12 +209,14 @@ impl ArchInter for Arm64Inter {
         ));
     }
 
-    fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) -> FailableInstrEncoding {
         add_sub(code_buf, reg, imm, ArithOp::Add);
+        Ok(())
     }
 
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) {
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) -> FailableInstrEncoding {
         add_sub(code_buf, reg, imm, ArithOp::Sub);
+        Ok(())
     }
 
     fn zero_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
@@ -333,19 +336,19 @@ mod tests {
         let mut ds = disassembler();
         // the following can be set with 1 instruction each.
         let mut v: Vec<u8> = Vec::with_capacity(4);
-        Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0).unwrap();
         assert_eq!(ds.disassemble(v), ["mov x0, #0x0"]);
 
         let mut v: Vec<u8> = Vec::with_capacity(4);
-        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -1);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -1).unwrap();
         assert_eq!(ds.disassemble(v), ["mov x0, #-0x1"]);
 
         let mut v: Vec<u8> = Vec::with_capacity(4);
-        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, -0x100_001).unwrap();
         assert_eq!(ds.disassemble(v), ["mov x0, #-0x100001"]);
 
         let mut v: Vec<u8> = Vec::with_capacity(4);
-        Arm64Inter::set_reg(&mut v, Arm64Register::X1, 0xbeef);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X1, 0xbeef).unwrap();
         assert_eq!(ds.disassemble(v), ["mov x1, #0xbeef"]);
     }
 
@@ -359,7 +362,7 @@ mod tests {
     fn test_reg_multiple() {
         let mut v: Vec<u8> = Vec::with_capacity(8);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X0, 0xdeadbeef).unwrap();
         assert_eq!(
             disassembler().disassemble(v),
             ["mov x0, #0xbeef", "movk x0, #0xdead, lsl #16"],
@@ -369,7 +372,7 @@ mod tests {
     #[disasm_test]
     fn test_reg_split() {
         let mut v: Vec<u8> = Vec::with_capacity(8);
-        Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead_0000_beef);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, 0xdead_0000_beef).unwrap();
         assert_eq!(
             disassembler().disassemble(v),
             ["mov x19, #0xbeef", "movk x19, #0xdead, lsl #32"],
@@ -380,7 +383,7 @@ mod tests {
     fn test_reg_neg() {
         let mut v: Vec<u8> = Vec::with_capacity(8);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdeadbeef).unwrap();
         assert_eq!(
             disassembler().disassemble(v),
             [
@@ -394,7 +397,7 @@ mod tests {
     #[disasm_test]
     fn test_reg_split_neg() {
         let mut v: Vec<u8> = Vec::with_capacity(8);
-        Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdead_0000_beef);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X19, -0xdead_0000_beef).unwrap();
         assert_eq!(
             disassembler().disassemble(v),
             [
@@ -404,7 +407,7 @@ mod tests {
             ]
         );
         let mut v: Vec<u8> = Vec::with_capacity(12);
-        Arm64Inter::set_reg(&mut v, Arm64Register::X8, -0xdead_beef_0000);
+        Arm64Inter::set_reg(&mut v, Arm64Register::X8, -0xdead_beef_0000).unwrap();
         assert_eq!(
             disassembler().disassemble(v),
             [
@@ -472,9 +475,9 @@ mod tests {
 
         let mut v: Vec<u8> = Vec::with_capacity(24);
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        Arm64Inter::add_reg(&mut v, Arm64Register::X8, 0xdeadbeef);
+        Arm64Inter::add_reg(&mut v, Arm64Register::X8, 0xdeadbeef).unwrap();
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        Arm64Inter::sub_reg(&mut v, Arm64Register::X8, 0xdeadbeef);
+        Arm64Inter::sub_reg(&mut v, Arm64Register::X8, 0xdeadbeef).unwrap();
         assert_eq!(
             ds.disassemble(v),
             [

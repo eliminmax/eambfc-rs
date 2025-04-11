@@ -161,10 +161,10 @@ trait BFCompileHelper: ArchInter {
     ///
     /// Due to their similarity, `b','` and b`'.'` are both implemented with `bf_io`.
     fn bf_io(code_buf: &mut Vec<u8>, sc: i64, fd: i64) {
-        Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc);
-        Self::set_reg(code_buf, Self::REGISTERS.arg1, fd);
+        Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc).expect("sc nums fits in regs");
+        Self::set_reg(code_buf, Self::REGISTERS.arg1, fd).expect("stdin/stdout fds fit in regs");
         Self::reg_copy(code_buf, Self::REGISTERS.arg2, Self::REGISTERS.bf_ptr);
-        Self::set_reg(code_buf, Self::REGISTERS.arg3, 1);
+        Self::set_reg(code_buf, Self::REGISTERS.arg3, 1).expect("1 fits in regs");
         Self::syscall(code_buf);
     }
 
@@ -254,8 +254,8 @@ trait BFCompileHelper: ArchInter {
             FI::SetZero => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
             FI::Add => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
             FI::Sub => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
-            FI::MoveL => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as u64),
-            FI::MoveR => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as u64),
+            FI::MoveL => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as u64)?,
+            FI::MoveR => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as u64)?,
             _ => {
                 for _ in 0..count {
                     Self::compile_instr(instr as u8, dst, None, jump_stack)?;
@@ -302,7 +302,8 @@ impl<B: BFCompileHelper> BFCompile for B {
         let mut jump_stack = Vec::<JumpLocation>::new();
         let mut loc = CodePosition { line: 1, col: 0 };
         let mut code_buf: Vec<u8> = Vec::new();
-        Self::set_reg(&mut code_buf, Self::REGISTERS.bf_ptr, TAPE_ADDR as i64);
+        Self::set_reg(&mut code_buf, Self::REGISTERS.bf_ptr, TAPE_ADDR as i64)
+            .expect("tape address fits in regs");
         let mut errs = Vec::<BFCompileError>::new();
 
         let reader = BufReader::new(in_f);
@@ -349,8 +350,9 @@ impl<B: BFCompileHelper> BFCompile for B {
             ));
         }
         // finally, after that mess, end with an exit(0)
-        Self::set_reg(&mut code_buf, Self::REGISTERS.sc_num, Self::SC_NUMS.exit);
-        Self::set_reg(&mut code_buf, Self::REGISTERS.arg1, 0);
+        Self::set_reg(&mut code_buf, Self::REGISTERS.sc_num, Self::SC_NUMS.exit)
+            .expect("sc nums fit in regs");
+        Self::set_reg(&mut code_buf, Self::REGISTERS.arg1, 0).expect("0 fits in regs");
         Self::syscall(&mut code_buf);
 
         let code_sz = code_buf.len();

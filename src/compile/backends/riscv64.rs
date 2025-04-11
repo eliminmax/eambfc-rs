@@ -252,8 +252,9 @@ impl ArchInter for RiscV64Inter {
     const ARCH: Backend = Backend::RiscV64;
     const E_FLAGS: u32 = 5; // EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE (chosen to match Debian)
 
-    fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) {
+    fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) -> FailableInstrEncoding {
         encode_li(code_buf, reg.into(), imm);
+        Ok(())
     }
 
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType) {
@@ -309,8 +310,8 @@ impl ArchInter for RiscV64Inter {
         }
     }
 
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) {
-        Self::add_reg(code_buf, reg, (imm as i64).wrapping_neg() as u64);
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) -> FailableInstrEncoding {
+        Self::add_reg(code_buf, reg, (imm as i64).wrapping_neg() as u64)
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
@@ -325,7 +326,7 @@ impl ArchInter for RiscV64Inter {
         }
     }
 
-    fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) -> FailableInstrEncoding {
         match imm as i64 {
             0 => (),
             -32..0 | 1..32 => code_buf.extend(c_addi(
@@ -341,6 +342,7 @@ impl ArchInter for RiscV64Inter {
                 ));
             }
         }
+        Ok(())
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: Self::RegType) {
@@ -385,23 +387,23 @@ mod test {
     /// test `RiscV64Inter::set_reg` for immediates that fit within 32 bits
     fn test_set_reg_32() {
         let mut v = Vec::with_capacity(32);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, 0);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, 0).unwrap();
         assert_eq!(v.len(), 2);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 1);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 1).unwrap();
         assert_eq!(v.len(), 4);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A2, -2);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A2, -2).unwrap();
         assert_eq!(v.len(), 6);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x123);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x123).unwrap();
         assert_eq!(v.len(), 10);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, -0x123);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, -0x123).unwrap();
         assert_eq!(v.len(), 14);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::S0, 0x100_000);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::S0, 0x100_000).unwrap();
         assert_eq!(v.len(), 18);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x123_456);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x123_456).unwrap();
         assert_eq!(v.len(), 26);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, 0x1000);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A0, 0x1000).unwrap();
         assert_eq!(v.len(), 28);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 0x1001);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 0x1001).unwrap();
         assert_eq!(v.len(), 32);
         assert_eq!(
             disassembler().disassemble(v),
@@ -430,7 +432,7 @@ mod test {
         let mut expected: Vec<Cow<'_, str>> = Vec::new();
         let mut expected_len = 4;
         while val < i64::MAX / 2 {
-            RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, val);
+            RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, val).unwrap();
             val <<= 1;
             expected.push("li a7, 0x1".into());
             let shift_lvl = val.trailing_zeros() - 1;
@@ -445,15 +447,15 @@ mod test {
         //
         // Try with both 48 and 64 bit values
         let mut v = Vec::with_capacity(6);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x5555 << 24);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A7, 0x5555 << 24).unwrap();
         assert_eq!(ds.disassemble(v), ["lui a7, 0x5555", "slli a7, a7, 0xc"]);
 
         let mut v12 = Vec::with_capacity(40);
-        RiscV64Inter::set_reg(&mut v12, RiscVRegister::S0, 0x5555_5555_5555);
-        RiscV64Inter::set_reg(&mut v12, RiscVRegister::A7, -0x5555_5555_5555);
+        RiscV64Inter::set_reg(&mut v12, RiscVRegister::S0, 0x5555_5555_5555).unwrap();
+        RiscV64Inter::set_reg(&mut v12, RiscVRegister::A7, -0x5555_5555_5555).unwrap();
         let mut v16 = Vec::with_capacity(56);
-        RiscV64Inter::set_reg(&mut v16, RiscVRegister::S0, 0x5555_5555_5555_5555);
-        RiscV64Inter::set_reg(&mut v16, RiscVRegister::A7, -0x5555_5555_5555_5555);
+        RiscV64Inter::set_reg(&mut v16, RiscVRegister::S0, 0x5555_5555_5555_5555).unwrap();
+        RiscV64Inter::set_reg(&mut v16, RiscVRegister::A7, -0x5555_5555_5555_5555).unwrap();
         assert_eq!(
             ds.disassemble(v12),
             // this is what LLVM 19 generates for these instructions:
@@ -511,7 +513,7 @@ mod test {
     fn compressed_set_reg_64() {
         // make sure that when it can use compressed instructions, it does so
         let mut v = Vec::with_capacity(12);
-        RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 0xf_0000_0010);
+        RiscV64Inter::set_reg(&mut v, RiscVRegister::A1, 0xf_0000_0010).unwrap();
         assert_eq!(v.len(), 6);
         let mut expected =
             vec![["li a1, 0xf"], ["slli a1, a1, 0x20"], ["addi a1, a1, 0x10"]].into_iter();
@@ -681,14 +683,14 @@ mod test {
     fn sub_reg_is_negative_add_reg() {
         let mut a = Vec::new();
         let mut b = Vec::new();
-        RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 0);
-        RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, 0);
+        RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 0).unwrap();
+        RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, 0).unwrap();
         assert_eq!(a, b);
         for i in 0..63 {
             a.clear();
             b.clear();
-            RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 1_u64 << i);
-            RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, (-1_i64 << i) as u64);
+            RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 1_u64 << i).unwrap();
+            RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, (-1_i64 << i) as u64).unwrap();
             assert_eq!(a, b);
         }
     }
@@ -698,11 +700,11 @@ mod test {
     fn add_reg() {
         let mut ds = disassembler();
         let mut v = Vec::with_capacity(6);
-        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0);
+        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0).unwrap();
         assert!(v.is_empty());
-        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0x12);
+        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0x12).unwrap();
         assert_eq!(v.len(), 2);
-        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0x123);
+        RiscV64Inter::add_reg(&mut v, RiscVRegister::S0, 0x123).unwrap();
         assert_eq!(v.len(), 6);
         assert_eq!(
             ds.disassemble(v),
@@ -710,7 +712,7 @@ mod test {
         );
         let mut a = Vec::new();
         let mut b = Vec::new();
-        RiscV64Inter::add_reg(&mut a, RiscVRegister::S0, 0xdeadbeef);
+        RiscV64Inter::add_reg(&mut a, RiscVRegister::S0, 0xdeadbeef).unwrap();
         encode_li(&mut b, TEMP_REG, 0xdeadbeef);
         assert_eq!(a.len(), b.len() + 2);
         let mut a = ds.disassemble(a);
