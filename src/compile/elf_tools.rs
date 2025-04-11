@@ -22,9 +22,9 @@ impl ElfClass {
 
 #[derive(Clone, Copy)]
 pub(super) enum ByteOrdering {
-    #[cfg(any(feature = "x86_64", feature = "riscv64", feature = "arm64"))]
+    #[cfg(have_le_targets)]
     LittleEndian = 1,
-    #[cfg(feature = "s390x")]
+    #[cfg(have_be_targets)]
     BigEndian = 2,
 }
 
@@ -56,12 +56,17 @@ impl Backend {
         }
     }
     /// Get the `ElfClass` for the architecture
-    #[expect(
-        clippy::unused_self,
-        reason = "Once 32-bit architectures are used, won't be unused"
-    )]
     const fn ei_class(self) -> ElfClass {
-        ElfClass::ELFClass64
+        match self {
+            #[cfg(feature = "arm64")]
+            Self::Arm64 => ElfClass::ELFClass64,
+            #[cfg(feature = "riscv64")]
+            Self::RiscV64 => ElfClass::ELFClass64,
+            #[cfg(feature = "s390x")]
+            Self::S390x => ElfClass::ELFClass64,
+            #[cfg(feature = "x86_64")]
+            Self::X86_64 => ElfClass::ELFClass64,
+        }
     }
 
     /// Get the `ByteOrdering` for the architecture
@@ -69,7 +74,7 @@ impl Backend {
         match self {
             #[cfg(feature = "s390x")]
             Self::S390x => ByteOrdering::BigEndian,
-            #[cfg(any(feature = "x86_64", feature = "riscv64", feature = "arm64"))]
+            #[cfg(have_le_targets)]
             _ => ByteOrdering::LittleEndian,
         }
     }

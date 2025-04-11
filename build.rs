@@ -18,6 +18,33 @@ use std::process::Command;
 )))]
 compile_error!("Must have at least one architecture enabled");
 
+fn set_cfg_metavalues() {
+    if cfg!(any(unix, target_os = "wasi")) {
+        println!("cargo::rustc-cfg=unixy_osstrings");
+    }
+
+    if cfg!(any(
+        feature = "arm64",
+        feature = "riscv64",
+        feature = "s390x",
+        feature = "x86_64"
+    )) {
+        println!("cargo::rustc-cfg=have_64bit_targets");
+    }
+
+    if cfg!(any(
+        feature = "arm64",
+        feature = "riscv64",
+        feature = "x86_64"
+    )) {
+        println!("cargo::rustc-cfg=have_le_targets");
+    }
+
+    if cfg!(feature = "s390x") {
+        println!("cargo::rustc-cfg=have_be_targets");
+    }
+}
+
 fn set_default_arch() {
     #[cfg(feature = "bintests")]
     let mut runnable_arches: HashSet<&'static str> = HashSet::new();
@@ -113,6 +140,7 @@ fn set_default_arch() {
 fn main() {
     println!("cargo::rerun-if-changed=.git/index");
     println!("cargo::rerun-if-env-changed=EAMBFC_DEFAULT_ARCH");
+    set_cfg_metavalues();
     set_default_arch();
     if !PathBuf::from(".git").exists() {
         println!("cargo::rustc-env=EAMBFC_RS_GIT_COMMIT=unknown: not built from git repository");

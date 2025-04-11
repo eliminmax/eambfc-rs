@@ -147,7 +147,7 @@ impl PartialRunConfig {
         Ok(())
     }
 
-    #[cfg(any(unix, target_os = "wasi"))]
+    #[cfg(unixy_osstrings)]
     fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.extension.is_none() {
             self.extension = Some(OsString::from_vec(param));
@@ -158,7 +158,7 @@ impl PartialRunConfig {
     }
 
     #[cfg(not(tarpaulin_include))]
-    #[cfg(not(any(unix, target_os = "wasi")))]
+    #[cfg(not(unixy_osstrings))]
     fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.extension.is_some() {
             return Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"));
@@ -176,12 +176,12 @@ impl PartialRunConfig {
 
     fn set_suffix(&mut self, suf: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
         if self.out_suffix.is_none() {
-            #[cfg(any(unix, target_os = "wasi"))]
+            #[cfg(unixy_osstrings)]
             {
                 self.out_suffix = Some(OsString::from_vec(suf));
             };
             #[cfg(not(tarpaulin_include))]
-            #[cfg(not(any(unix, target_os = "wasi")))]
+            #[cfg(not(unixy_osstrings))]
             {
                 self.out_suffix = Some(
                     String::from_utf8(suf)
@@ -250,7 +250,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
 
     while let Some(arg) = args.next() {
         #[cfg(not(tarpaulin_include))]
-        #[cfg(not(any(unix, target_os = "wasi")))]
+        #[cfg(not(unixy_osstrings))]
         let arg = arg.into_string().map_err(|a| {
             pcfg.gen_err(
                 BFErrorID::NonUTF8,
@@ -265,7 +265,7 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
         let arg_bytes = arg.as_bytes();
         if arg_bytes[0] != b'-' {
             #[cfg_attr(
-                any(unix, target_os = "wasi"),
+                unixy_osstrings,
                 expect(
                     clippy::useless_conversion,
                     reason = "Not useless on platforms w/o unix-like OsStrings"
@@ -286,10 +286,10 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                     let mut remainder: Vec<u8> = arg_byte_iter.collect();
                     if remainder.is_empty() {
                         if let Some(next_arg) = args.next() {
-                            #[cfg(any(unix, target_os = "wasi"))]
+                            #[cfg(unixy_osstrings)]
                             remainder.extend_from_slice(next_arg.as_bytes());
                             #[cfg(not(tarpaulin_include))]
-                            #[cfg(not(any(unix, target_os = "wasi")))]
+                            #[cfg(not(unixy_osstrings))]
                             remainder.extend(
                                 next_arg
                                     .into_string()
