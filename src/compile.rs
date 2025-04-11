@@ -239,10 +239,7 @@ trait BFCompileHelper: ArchInter {
         Ok(())
     }
 
-    /// Compile a sequence of `count` copies of `instr` in a row. If `count` is more than 1, and
-    /// `instr` is one of `b'+'`, `b'-'`, `b'<'`, or `b'>'`, it's able to combine them into more
-    /// efficient machine code. If `instr` is `b'@'`, then it was originally `[-]` or `[+]`, and
-    /// it should be zeroed out.
+    /// Compile a sequence of `count` copies of `instr` in a row
     fn compile_condensed_instr(
         instr: optimize::FilteredInstr,
         count: usize,
