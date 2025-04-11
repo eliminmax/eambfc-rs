@@ -9,8 +9,9 @@ edition = "2024"
 
 [features]
 default = ["all_backends", "bintests", "disasmtests"]
-all_backends = ["arm64", "riscv64", "s390x", "x86_64"]
+all_backends = ["arm64", "riscv64", "s390x", "x86_64", "i386"]
 arm64 = []
+i386 = []
 riscv64 = []
 s390x = []
 x86_64 = []

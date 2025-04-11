@@ -14,7 +14,8 @@ use std::process::Command;
     feature = "x86_64",
     feature = "arm64",
     feature = "riscv64",
-    feature = "s390x"
+    feature = "s390x",
+    feature = "i386",
 )))]
 compile_error!("Must have at least one architecture enabled");
 
@@ -32,8 +33,13 @@ fn set_cfg_metavalues() {
         println!("cargo::rustc-cfg=have_64bit_targets");
     }
 
+    if cfg!(feature = "i386") {
+        println!("cargo::rustc-cfg=have_32bit_targets");
+    }
+
     if cfg!(any(
         feature = "arm64",
+        feature = "i386",
         feature = "riscv64",
         feature = "x86_64"
     )) {
