@@ -3,24 +3,37 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::err::{BFCompileError, BFErrorID};
-use std::io::Read;
+use std::io::BufRead;
 
+/// Either a brainfuck instruction or `FilteredInstr::SetZero` for sequences of instructions that
+/// set the current cell to zero with no side effects.
 #[derive(PartialEq, Clone, Copy)]
 #[cfg_attr(test, derive(Debug))]
 #[repr(u8)]
 pub(super) enum FilteredInstr {
+    /// The brainfuck `+` instruction
     Add = b'+',
+    /// The brainfuck `-` instruction
     Sub = b'-',
+    /// The brainfuck `<` instruction
     MoveL = b'<',
+    /// The brainfuck `>` instruction
     MoveR = b'>',
+    /// The brainfuck `,` instruction
     Read = b',',
+    /// The brainfuck `.` instruction
     Write = b'.',
+    /// The brainfuck `[` instruction
     LoopOpen = b'[',
+    /// The brainfuck `]` instruction
     LoopClose = b']',
-    SetZero = b'@',
+    /// A sequence of brainfuck instructions that can be easily determined to set the current cell
+    /// to zero no matter what.
+    SetZero = b'z',
 }
 
 impl FilteredInstr {
+    /// return `Some(FilteredInstr)` if `b` is a brainfuck instruction, and `None` otherwise
     fn from_byte(b: u8) -> Option<Self> {
         match b {
             b'+' => Some(FI::Add),
@@ -35,6 +48,8 @@ impl FilteredInstr {
         }
     }
 
+    /// return `true` if executing `other` right after `self` is equivalent to a no-op, or `false`
+    /// otherwise.
     fn cancels(self, other: Self) -> bool {
         match self {
             FI::Add => other == FI::Sub,
@@ -47,29 +62,26 @@ impl FilteredInstr {
 }
 
 use FilteredInstr as FI;
-/// Read `file` into a `Vec<u8>`, omitting dead code and non-brainfuck instructions, and replacing
-/// `b"[-]"` and `b"[+]"` with `b"@"`, which is EAMBFC's internal "`zero_byte`" extra instruction.
-///
-/// NOTE: uses `std::io::Read::bytes` internally, which is "inefficient for data that's not in
-/// memory". It's best if `file` implements `std::io::BufRead`.
-pub(super) fn filtered_read(file: impl Read) -> Result<Vec<FilteredInstr>, BFCompileError> {
+/// Read `file`, filtering dead loops and redundant code like `+-` or `><`, into an
+/// `Ok(Vec<FilteredInstr>)`.
+pub(super) fn filtered_read(file: impl BufRead) -> Result<Vec<FilteredInstr>, BFCompileError> {
     let mut code_buf: Vec<FI> = file
         .bytes()
-        .filter_map(|res| match res {
-            Ok(b) => FilteredInstr::from_byte(b).map(Ok),
-            Err(_) => Some(Err(BFCompileError::basic(
+        .filter_map(|res| res.map(FilteredInstr::from_byte).transpose())
+        .collect::<Result<_, _>>()
+        .map_err(|e| {
+            BFCompileError::basic(
                 BFErrorID::FailedRead,
-                "Failed to read file into buffer",
-            ))),
-        })
-        .collect::<Result<_, _>>()?;
+                format!("Failed to read filtered brainfuck from file: {e:?}"),
+            )
+        })?;
     loops_match(code_buf.as_slice())?;
     strip_dead_code(&mut code_buf);
     // because strip_dead_code was called, code_buf[0] can't be `b'['`, so skip it.
     let mut search_start: usize = 1;
-    while let Some(i) = set_zero_code(&code_buf, search_start) {
+    while let Some((i, sz)) = set_zero_code(&code_buf, search_start) {
         code_buf[i] = FI::SetZero;
-        code_buf.drain(i + 1..=i + 2);
+        code_buf.drain(i + 1..=i + (sz - 1));
         // start the next search right after the replaced byte
         search_start = i + 1;
     }
@@ -219,20 +231,24 @@ fn find_dead_loop(code_bytes: &[FI], search_start: usize) -> Option<usize> {
     None
 }
 
-/// Try to find a `b"[-]"` or `b"[+]"` sequence to zero out the current byte. If one is found,
-/// returns `Some(i)`, where `i` is the index of the `b'['` within the sequence.
+/// Try to find a sequence that zeroes out the current byte without side effects. If one is found,
+/// returns `Some((i, sz))`, where `i` is the index of the `b'['` within the sequence, and `sz` is
+/// the length of the sequence.
+///
 /// Otherwise, it returns `None`.
 ///
 /// searching starts from `search_start`, so code known not to be part of such a sequence can be
 /// skipped over.
-fn set_zero_code(code_bytes: &[FI], search_start: usize) -> Option<usize> {
+fn set_zero_code(code_bytes: &[FI], search_start: usize) -> Option<(usize, usize)> {
     if code_bytes.is_empty() {
         return None;
     }
 
+    // TODO: Handle all sequences where the number of consecutive `-` or `+` instructions is
+    // coprime with 256.
     for (i, window) in code_bytes[search_start..].windows(3).enumerate() {
         if matches!(window, [FI::LoopOpen, FI::Add | FI::Sub, FI::LoopClose]) {
-            return Some(search_start + i);
+            return Some((search_start + i, 3));
         }
     }
     None
@@ -241,6 +257,7 @@ fn set_zero_code(code_bytes: &[FI], search_start: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
 
     impl PartialEq<u8> for FI {
         fn eq(&self, other: &u8) -> bool {
@@ -251,11 +268,14 @@ mod tests {
     #[test]
     fn strip_dead_code_test() {
         let mut code = Vec::from(b"[+++++]><+---+++-[-][,[-][+>-<]]-+[-+]-+[]+-[]");
-        code.extend(b"+".repeat(256));
+        code.extend([b'+'; 256]);
         code.extend(b"[+-]>");
-        code.extend(b"-".repeat(256));
+        code.extend([b'-'; 256]);
         code.extend(b"[->+<][,.]");
-        let mut code: Vec<_> = code.into_iter().filter_map(FI::from_byte).collect();
+        let mut code = code
+            .into_iter()
+            .filter_map(FI::from_byte)
+            .collect::<Vec<_>>();
         strip_dead_code(&mut code);
         assert_eq!(code, b">[->+<]");
     }
@@ -270,7 +290,8 @@ mod tests {
 
     #[test]
     fn read_failure_handled() {
-        let unreadable = Unreadable;
+        use std::io::BufReader;
+        let unreadable = BufReader::new(Unreadable);
 
         assert!(filtered_read(unreadable).is_err_and(|e| e.error_id() == BFErrorID::FailedRead));
     }
