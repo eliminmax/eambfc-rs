@@ -34,16 +34,17 @@ import sys
 
 
 def gen_headers(
-    target_id: int, instr_len: int, be=False, flags: int = 0
+    target_id: int, instr_len: int, is64bit=True, be=False, flags: int = 0
 ) -> bytes:
     """Return the bytes of the ELF header and program header table"""
 
     LOAD_ADDR = 0x10000
-    # size of the EHDR - 64 bytes for 64-bit ELF files
-    EHDR_SIZE = 64
-    # size of the program header table - each entry is 56 bytes on 64-bit ELF
-    # files, and there's only 1 entry
-    PHTB_SIZE = 56
+
+    # values dependent on ELF size
+    # EHDR_SIZE is the size in bytes of the EHDR, PHTB_SIZE is the size in
+    # bytes of the program header table, and ADDR_SIZE is the size of a memory
+    # address or file offset.
+    EHDR_SIZE, PHTB_SIZE, ADDR_SIZE = (64, 56, 8) if is64bit else (52, 32, 4)
     # combined header size
     HEADER_SIZE = EHDR_SIZE + PHTB_SIZE
 
@@ -54,11 +55,10 @@ def gen_headers(
     # EHDR
     # e_ident
     ret = b"\x7fELF" + (
-        bytes([2])  # ELFCLASS64
+        bytes([2 if is64bit else 1])  # ELFCLASS64 or ELFCLASS32
         + bytes([2 if be else 1])  # ELFDATA2MSB, ELFDATA2LSB
         + bytes([1])  # EV_CURRENT
-        + bytes([0])  # ELFOSABI_NONE
-        + bytes([0])  # no ABI version specified
+        + bytes([0, 0])  # ELFOSABI_NONE, no ABI version specified
         + bytes([0] * 7)  # padding bytes
     )
     # e_type
@@ -68,11 +68,13 @@ def gen_headers(
     # e_version
     ret += int_encode(1, 4)  # EV_CURRENT
     # e_entry
-    ret += int_encode(LOAD_ADDR + HEADER_SIZE, 8)  # entry follows headers
+    # entry follows headers
+    ret += int_encode(LOAD_ADDR + HEADER_SIZE, ADDR_SIZE)
     # e_phoff
-    ret += int_encode(EHDR_SIZE, 8)  # PHDR table is right after the EHDR
+    # PHDR table is right after the EHDR
+    ret += int_encode(EHDR_SIZE, ADDR_SIZE)
     # e_shoff
-    ret += int_encode(0, 8)  # no shdr table
+    ret += int_encode(0, ADDR_SIZE)  # no shdr table
     # e_flags
     ret += int_encode(flags, 4)
     # e_ehsize
@@ -91,20 +93,25 @@ def gen_headers(
     # PHDR entry
     # p_type
     ret += int_encode(1, 4)  # PT_LOAD
-    # p_flags
-    ret += int_encode((1 << 0) | (1 << 2), 4)  # PF_ X | PF_R
+    # p_flags is moved to the second-to-last spon in 32-bit ELF files
+    if is64bit:
+        # p_flags
+        ret += int_encode((1 << 0) | (1 << 2), 4)  # PF_X | PF_R
     # p_offset
-    ret += int_encode(0x0, 8)  # offset in file segment is loaded from
+    ret += int_encode(0x0, ADDR_SIZE)  # offset in file segment is loaded from
     # p_vaddr
-    ret += int_encode(LOAD_ADDR, 8)  # address in virtual memory of segment
+    ret += int_encode(LOAD_ADDR, ADDR_SIZE)  # address in virtual memory
     # p_paddr
-    ret += int_encode(0x0, 8)  # (unused) address in physical memory
+    ret += int_encode(0x0, ADDR_SIZE)  # (unused) address in physical memory
     # p_filesz
-    ret += int_encode(HEADER_SIZE + instr_len, 8)  # size in file of segment
+    ret += int_encode(HEADER_SIZE + instr_len, ADDR_SIZE)  # size in file
     # p_memsz
-    ret += int_encode(HEADER_SIZE + instr_len, 8)  # size in memory of segment
+    ret += int_encode(HEADER_SIZE + instr_len, ADDR_SIZE)  # size in memory
+    if not is64bit:
+        # p_flags
+        ret += int_encode((1 << 0 | 1 << 2), 4)  # PF_X | PF_R
     # p_align
-    ret += int_encode(2, 8)  # segment alignment
+    ret += int_encode(2, ADDR_SIZE)  # segment alignment
 
     return ret
 
@@ -120,6 +127,20 @@ ARM64_INSTRUCTIONS = (
     + bytes.fromhex("000080d2")
     # svc 0 (syscall)
     + bytes.fromhex("010000d4")
+)
+
+"""validate i386 bytes with radare2:
+rasm2 -ax86 -b32 -D ''
+"""
+I386_INSTRUCTIONS = (
+    # push 1 (push exit syscall number to stack)
+    bytes.fromhex("6a01")
+    # pop eax (pop top of stack into syscall register)
+    + bytes.fromhex("58")
+    # xor edx, edx (zero out arg1 register)
+    + bytes.fromhex("31d2")
+    # int 0x80 (syscall)
+    + bytes.fromhex("cd80")
 )
 
 """
@@ -169,6 +190,13 @@ expected_arm64_bytes = (
     + ARM64_INSTRUCTIONS
 )
 
+i386_bytes = Path(__file__).parent.joinpath("i386").read_bytes()
+expected_i386_bytes = (
+    # 3 is EM_386
+    gen_headers(3, len(I386_INSTRUCTIONS), is64bit=False)
+    + I386_INSTRUCTIONS
+)
+
 riscv64_bytes = Path(__file__).parent.joinpath("riscv64").read_bytes()
 expected_riscv64_bytes = (
     # 243 is EM_RISCV, 5 is EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE
@@ -194,6 +222,10 @@ fails = 0
 
 if arm64_bytes != expected_arm64_bytes:
     print("MISMATCH! arm64_bytes != expected_arm64_bytes")
+    fails += 1
+
+if i386_bytes != expected_i386_bytes:
+    print("MISMATCH! i386_bytes != expected_i386_bytes")
     fails += 1
 
 if riscv64_bytes != expected_riscv64_bytes:
