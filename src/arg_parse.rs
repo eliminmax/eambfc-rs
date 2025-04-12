@@ -375,7 +375,7 @@ mod tests {
 
     #[test]
     fn options_can_mix_with_files() {
-        // ensure that -h is interpreted as a file name
+        // ensure that -O isn't interpreted as a file name
         assert_eq!(
             parse_standard(vec![arg("e.bf"), arg("-O")]).source_files,
             vec![arg("e.bf")]
