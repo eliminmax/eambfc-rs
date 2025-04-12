@@ -241,7 +241,7 @@ macro_rules! serialize_ehdr {
     }};
 }
 
-/// pass a `Phdr` binding, followed by `LE` or `BE` for little or big-endian backends respecitvely,
+/// pass a `Phdr` binding, followed by `LE` or `BE` for little or big-endian backends respectively,
 /// followed by `64` or `32` for 64-bit or 32-bit backends respectively.
 ///
 /// It will use the appropriate struct member sizes and order for the provided size, and write the
