@@ -20,11 +20,6 @@ use std::process::Command;
 compile_error!("Must have at least one architecture enabled");
 
 fn set_cfg_metavalues() {
-    println!("cargo::rustc-check-cfg=cfg(unixy_osstrings)");
-    if cfg!(any(unix, target_os = "wasi")) {
-        println!("cargo::rustc-cfg=unixy_osstrings");
-    }
-
     println!("cargo::rustc-check-cfg=cfg(have_64bit_targets)");
     if cfg!(any(
         feature = "arm64",

@@ -54,7 +54,7 @@ pub(crate) enum BFErrorID {
     CodeTooLarge,
     #[cfg(feature = "longopts")]
     UnexpectedArgValue,
-    #[cfg(not(unixy_osstrings))]
+    #[cfg(not(any(unix, target_os = "wasi")))]
     NonUTF8,
 }
 
