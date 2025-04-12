@@ -23,21 +23,7 @@ longopts = ["dep:lexopt"]
 # don't warn on tarpaulin code coverage cfg conditions or custom cfgs
 [lints.rust.unexpected_cfgs]
 level = "warn"
-check-cfg = [
-    'cfg(tarpaulin_include)',
-    'cfg(can_run_arm64)',
-    'cfg(can_run_riscv64)',
-    'cfg(can_run_s390x)',
-    'cfg(can_run_i386)',
-    'cfg(can_run_x86_64)',
-    'cfg(can_run_default)',
-    'cfg(eambfc_default_arch, values("arm64", "i386", "riscv64", "s390x", "x86_64")',
-    'cfg(unixy_osstrings)',
-    'cfg(have_32bit_targets)',
-    'cfg(have_64bit_targets)',
-    'cfg(have_le_targets)',
-    'cfg(have_be_targets)'
-]
+check-cfg = ['cfg(tarpaulin_include)']
 
 [lints.clippy]
 # enable these categories with a negative priority, so that individual lints can

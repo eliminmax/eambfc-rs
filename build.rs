@@ -20,10 +20,12 @@ use std::process::Command;
 compile_error!("Must have at least one architecture enabled");
 
 fn set_cfg_metavalues() {
+    println!("cargo::rustc-check-cfg=cfg(unixy_osstrings)");
     if cfg!(any(unix, target_os = "wasi")) {
         println!("cargo::rustc-cfg=unixy_osstrings");
     }
 
+    println!("cargo::rustc-check-cfg=cfg(have_64bit_targets)");
     if cfg!(any(
         feature = "arm64",
         feature = "riscv64",
@@ -33,10 +35,12 @@ fn set_cfg_metavalues() {
         println!("cargo::rustc-cfg=have_64bit_targets");
     }
 
+    println!("cargo::rustc-check-cfg=cfg(have_32bit_targets)");
     if cfg!(feature = "i386") {
         println!("cargo::rustc-cfg=have_32bit_targets");
     }
 
+    println!("cargo::rustc-check-cfg=cfg(have_le_targets)");
     if cfg!(any(
         feature = "arm64",
         feature = "i386",
@@ -46,9 +50,11 @@ fn set_cfg_metavalues() {
         println!("cargo::rustc-cfg=have_le_targets");
     }
 
+    println!("cargo::rustc-check-cfg=cfg(have_be_targets)");
     if cfg!(feature = "s390x") {
         println!("cargo::rustc-cfg=have_be_targets");
     }
+
 }
 
 fn set_default_arch() {
@@ -56,6 +62,7 @@ fn set_default_arch() {
     let mut runnable_arches: HashSet<&'static str> = HashSet::new();
     macro_rules! check_exec_support {
         ($platform: literal) => {
+            println!("cargo::rustc-check-cfg=cfg(can_run_{})", $platform);
             #[cfg(feature = "bintests")]
             if Command::new(concat!("./test_assets/exec_support/", $platform))
                 .status()
@@ -137,7 +144,12 @@ fn set_default_arch() {
     };
     println!("cargo::rustc-env=EAMBFC_DEFAULT_ARCH={arch}");
     println!("cargo::rustc-cfg=eambfc_default_arch={arch:?}");
+    println!(
+        "cargo::rustc-check-cfg=cfg(eambfc_default_arch, values({}))",
+        stringify!("arm64", "i386", "riscv64", "s390x", "x86_64")
+    );
 
+    println!("cargo::rustc-check-cfg=cfg(can_run_default)");
     #[cfg(feature = "bintests")]
     if runnable_arches.contains(&arch) {
         println!("cargo::rustc-cfg=can_run_default");
