@@ -54,7 +54,6 @@ fn set_cfg_metavalues() {
     if cfg!(feature = "s390x") {
         println!("cargo::rustc-cfg=have_be_targets");
     }
-
 }
 
 fn set_default_arch() {
@@ -95,6 +94,8 @@ fn set_default_arch() {
         "x86_64"
     } else if cfg!(feature = "arm64") {
         "arm64"
+    } else if cfg!(feature = "i386") {
+        "i386"
     } else if cfg!(feature = "riscv64") {
         "riscv64"
     } else {
@@ -114,6 +115,13 @@ fn set_default_arch() {
             "aarch64" => {
                 if cfg!(feature = "arm64") {
                     "arm64"
+                } else {
+                    fallback
+                }
+            }
+            "i386" | "i486" | "i586" | "i686" => {
+                if cfg!(feature = "i386") {
+                    "i386"
                 } else {
                     fallback
                 }
