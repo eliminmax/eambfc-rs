@@ -518,94 +518,34 @@ mod tests {
         );
     }
 
+    macro_rules! test_arch_args {
+        ($arch: literal, $backend: ident, $($aliases: literal),*) => {
+            for arch_id in [$arch, $($aliases,)*] {
+                if cfg!(feature = $arch) {
+                    #[cfg(feature = $arch)]
+                    {
+                        assert_eq!(
+                            parse_standard(vec![arg("-a"), arg(arch_id), arg("foo.bf")]).arch,
+                            Backend::$backend
+                        );
+                    }
+                } else {
+                    assert!(
+                        parse_args(vec![arg("-a"), arg(arch_id), arg("foo.bf")].into_iter())
+                            .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn arch_selection() {
-        // use these ugly double-checking constructs to avoid trying to construct nonexistent enum
-        // variants when architectures are disabled.
-        if cfg!(feature = "arm64") {
-            #[cfg(feature = "arm64")]
-            {
-                assert_eq!(
-                    parse_standard(vec![arg("-aarm64"), arg("foo.bf")]).arch,
-                    Backend::Arm64
-                );
-                assert_eq!(
-                    parse_standard(vec![arg("-aaarch64"), arg("foo.bf")]).arch,
-                    Backend::Arm64
-                );
-            };
-        } else {
-            assert!(
-                parse_args(vec![arg("-aarm64"), arg("foo.bf")].into_iter())
-                    .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
-            );
-        }
-        if cfg!(feature = "riscv64") {
-            #[cfg(feature = "riscv64")]
-            {
-                assert_eq!(
-                    parse_standard(vec![arg("-ariscv64"), arg("foo.bf")]).arch,
-                    Backend::RiscV64
-                );
-                assert_eq!(
-                    parse_standard(vec![arg("-ariscv"), arg("foo.bf")]).arch,
-                    Backend::RiscV64
-                );
-            };
-        } else {
-            assert!(
-                parse_args(vec![arg("-ariscv"), arg("foo.bf")].into_iter())
-                    .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
-            );
-        }
-        if cfg!(feature = "s390x") {
-            #[cfg(feature = "s390x")]
-            {
-                assert_eq!(
-                    parse_standard(vec![arg("-as390x"), arg("foo.bf")]).arch,
-                    Backend::S390x
-                );
-                assert_eq!(
-                    parse_standard(vec![arg("-as390"), arg("foo.bf")]).arch,
-                    Backend::S390x
-                );
-                assert_eq!(
-                    parse_standard(vec![arg("-az/architecture"), arg("foo.bf")]).arch,
-                    Backend::S390x
-                );
-            };
-        } else {
-            assert!(
-                parse_args(vec![arg("-as390x"), arg("foo.bf")].into_iter())
-                    .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
-            );
-        }
-        if cfg!(feature = "x86_64") {
-            #[cfg(feature = "x86_64")]
-            {
-                assert_eq!(
-                    parse_standard(vec![arg("-ax86_64"), arg("foo.bf")]).arch,
-                    Backend::X86_64
-                );
-                assert_eq!(
-                    parse_standard(vec![arg("-ax64"), arg("foo.bf")]).arch,
-                    Backend::X86_64
-                );
-                assert_eq!(
-                    parse_standard(vec![arg("-aamd64"), arg("foo.bf")]).arch,
-                    Backend::X86_64
-                );
-                assert_eq!(
-                    parse_standard(vec![arg("-ax86-64"), arg("foo.bf")]).arch,
-                    Backend::X86_64
-                );
-            };
-        } else {
-            assert!(
-                parse_args(vec![arg("-ax86_64"), arg("foo.bf")].into_iter())
-                    .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
-            );
-        }
+        test_arch_args!("arm64", Arm64, "aarch64");
+        test_arch_args!("i386", I386, "i486", "i586", "i686", "x86");
+        test_arch_args!("riscv64", RiscV64, "riscv");
+        test_arch_args!("s390x", S390x, "s390", "z/architecture");
+        test_arch_args!("x86_64", X86_64, "x64", "amd64", "x86-64");
         assert!(
             parse_args(vec![arg("-apdp11"), arg("foo.bf")].into_iter())
                 .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
