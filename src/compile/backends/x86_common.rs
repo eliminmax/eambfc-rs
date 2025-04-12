@@ -56,13 +56,10 @@ pub(super) fn conditional_jump(
         })?
         .to_le_bytes();
     let mut code_buf = [0; 9];
-    #[rustfmt::skip]
-    code_buf[..5].copy_from_slice(&[
-        // TEST byte [reg], 0xff
-        0xf6, reg as u8, 0xff,
-        // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
-        0x0f, 0x80| (condition as u8)
-    ]);
+    // TEST byte ptr [reg], 0xff
+    code_buf[..3].copy_from_slice(&[0xf6, reg as u8, 0xff]);
+    // Jcc|tttn offset_bytes
+    code_buf[3..5].copy_from_slice(&[0x0f, 0x80 | (condition as u8)]);
     code_buf[5..].copy_from_slice(&offset_bytes);
     Ok(code_buf)
 }
