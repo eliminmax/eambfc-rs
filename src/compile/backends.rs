@@ -22,6 +22,9 @@ mod x86_64;
 #[cfg(feature = "x86_64")]
 pub(crate) use x86_64::X86_64Inter;
 
+#[cfg(any(feature = "i386", feature = "x86_64"))]
+mod x86_common;
+
 use super::arch_inter;
 use super::elf_tools;
 

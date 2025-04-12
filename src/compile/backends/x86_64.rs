@@ -28,29 +28,9 @@
 // * RDX is 010b
 // * RBX is 011b
 
-use crate::err::{BFCompileError, BFErrorID};
-
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use super::elf_tools::Backend;
-
-#[derive(Clone, Copy)]
-#[repr(u8)]
-pub(in super::super) enum X86_64Register {
-    Rax = 0b000,
-    Rdi = 0b111,
-    Rsi = 0b110,
-    Rdx = 0b010,
-    Rbx = 0b011,
-}
-
-// many add/subtract instructions use these bit values for the upper five bits and the target
-// register for the lower 3 bits to encode instructions.
-#[derive(Clone, Copy)]
-#[repr(u8)]
-enum ArithOp {
-    Add = 0xc0,
-    Sub = 0xe8,
-}
+use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
 
 // INC and DEC are encoded very similarly with very few differences between
 // the encoding for operating on registers and operating on bytes pointed to by
@@ -66,52 +46,15 @@ enum ArithOp {
 // when working on registers and 0 when working on memory, then doing some messy
 // bitwise hackery, the following enums and function can be used.
 
-#[derive(Clone, Copy)]
-#[repr(u8)]
-enum ConditionCode {
-    // according to B.1.4.7 Table B-10 in the Intel Manual, 0101 is not equal/not zero
-    Zero = 0b0100,
-    // according to B.1.4.7 Table B-10 in the Intel Manual, 0100 is equal/zero
-    NotZero = 0b0101,
-}
-
-fn conditional_jump(
-    reg: X86_64Register,
-    offset: i64,
-    condition: ConditionCode,
-) -> Result<[u8; 9], BFCompileError> {
-    let offset_bytes = i32::try_from(offset)
-        .map_err(|_| {
-            BFCompileError::basic(
-                BFErrorID::JumpTooLong,
-                format!("{offset} is outside the range of possible 32-bit signed values"),
-            )
-        })?
-        .to_le_bytes();
-    let mut code_buf = [0; 9];
-    #[rustfmt::skip]
-    code_buf[..5].copy_from_slice(&[
-        // TEST byte [reg], 0xff
-        0xf6, reg as u8, 0xff,
-        // Jcc|tttn (must be followed by a 32-bit immediate jump offset)
-        0x0f, 0x80| (condition as u8)
-    ]);
-    code_buf[5..].copy_from_slice(&offset_bytes);
-    Ok(code_buf)
-}
-
 pub(crate) struct X86_64Inter;
 impl ArchInter for X86_64Inter {
-    type RegType = X86_64Register;
-    const JUMP_SIZE: usize = 9;
-    const E_FLAGS: u32 = 0;
 
-    const REGISTERS: Registers<X86_64Register> = Registers {
-        sc_num: X86_64Register::Rax,
-        arg1: X86_64Register::Rdi,
-        arg2: X86_64Register::Rsi,
-        arg3: X86_64Register::Rdx,
-        bf_ptr: X86_64Register::Rbx,
+    const REGISTERS: Registers<X86Register> = Registers {
+        sc_num: X86Register::Eax,
+        arg1: X86Register::Edi,
+        arg2: X86Register::Esi,
+        arg3: X86Register::Edx,
+        bf_ptr: X86Register::Ebx,
     };
     const SC_NUMS: SyscallNums = SyscallNums {
         read: 0,
@@ -119,11 +62,13 @@ impl ArchInter for X86_64Inter {
         exit: 60,
     };
     const ARCH: Backend = Backend::X86_64;
+    x86_common_impl!();
+
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
     // XOR reg, reg
     // MOV reg, imm32
     // MOV reg, imm64
-    fn set_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: i64) -> FailableInstrEncoding {
+    fn set_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: i64) -> FailableInstrEncoding {
         let reg = reg as u8;
         match imm {
             // XOR reg, reg
@@ -142,7 +87,7 @@ impl ArchInter for X86_64Inter {
         Ok(())
     }
 
-    fn reg_copy(code_buf: &mut Vec<u8>, dst: X86_64Register, src: X86_64Register) {
+    fn reg_copy(code_buf: &mut Vec<u8>, dst: X86Register, src: X86Register) {
         // MOV dst, src
         code_buf.extend([0x89, 0xc0 + ((src as u8) << 3) + dst as u8]);
     }
@@ -152,56 +97,18 @@ impl ArchInter for X86_64Inter {
         code_buf.extend([0x0f, 0x05]);
     }
 
-    fn jump_open(
-        code_buf: &mut [u8],
-        index: usize,
-        reg: Self::RegType,
-        offset: i64,
-    ) -> FailableInstrEncoding {
-        code_buf[index..index + Self::JUMP_SIZE].copy_from_slice(&conditional_jump(
-            reg,
-            offset,
-            ConditionCode::Zero,
-        )?);
-        Ok(())
-    }
-
-    fn jump_close(
-        code_buf: &mut Vec<u8>,
-        reg: Self::RegType,
-        offset: i64,
-    ) -> FailableInstrEncoding {
-        code_buf.extend(conditional_jump(reg, offset, ConditionCode::NotZero)?);
-        Ok(())
-    }
-
-    fn pad_loop_open(code_buf: &mut Vec<u8>) {
-        // UD2; times 7 NOP
-        code_buf.extend([0x0f, 0x0b]);
-        code_buf.extend([0x90; 7]);
-    }
-
-    fn inc_reg(code_buf: &mut Vec<u8>, reg: X86_64Register) {
+    fn inc_reg(code_buf: &mut Vec<u8>, reg: X86Register) {
         // INC reg
         code_buf.extend([0x48, 0xff, 0xc0 | (reg as u8)]);
     }
 
-    fn inc_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
-        // INC byte [reg]
-        code_buf.extend([0xfe, reg as u8]);
-    }
-
-    fn dec_reg(code_buf: &mut Vec<u8>, reg: X86_64Register) {
+    fn dec_reg(code_buf: &mut Vec<u8>, reg: X86Register) {
         // DEC reg
         code_buf.extend([0x48, 0xff, 0xc8 | (reg as u8)]);
     }
 
-    fn dec_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
-        // DEC byte [reg]
-        code_buf.extend([0xfe, (reg as u8) | 8]);
-    }
 
-    fn add_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u64) -> FailableInstrEncoding {
+    fn add_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
         if let Ok(imm8) = i8::try_from(imm) {
             add_reg_imm8(code_buf, reg, imm8);
         } else if let Ok(imm32) = i32::try_from(imm) {
@@ -212,12 +119,7 @@ impl ArchInter for X86_64Inter {
         Ok(())
     }
 
-    fn add_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u8) {
-        // ADD byte [reg], imm8
-        code_buf.extend([0x80, reg as u8, imm]);
-    }
-
-    fn sub_reg(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u64) -> FailableInstrEncoding {
+    fn sub_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
         if let Ok(imm8) = i8::try_from(imm) {
             sub_reg_imm8(code_buf, reg, imm8);
         } else if let Ok(imm32) = i32::try_from(imm) {
@@ -227,33 +129,23 @@ impl ArchInter for X86_64Inter {
         }
         Ok(())
     }
-
-    fn sub_byte(code_buf: &mut Vec<u8>, reg: X86_64Register, imm: u8) {
-        // SUB byte [reg], imm8
-        code_buf.extend([0x80, 0x28 | (reg as u8), imm]);
-    }
-
-    fn zero_byte(code_buf: &mut Vec<u8>, reg: X86_64Register) {
-        // MOV byte [reg], 0
-        code_buf.extend([0xc6, reg as u8, 0x00]);
-    }
 }
 
-fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86_64Register, imm8: i8) {
-    code_buf.extend([0x48, 0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
+fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
+    code_buf.extend([0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
 }
 
-fn sub_reg_imm8(code_buf: &mut Vec<u8>, reg: X86_64Register, imm8: i8) {
-    code_buf.extend([0x48, 0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
+fn sub_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
+    code_buf.extend([0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
 }
 
-fn add_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
-    code_buf.extend([0x48, 0x81, ArithOp::Add as u8 | reg as u8]);
+fn add_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {
+    code_buf.extend([0x81, ArithOp::Add as u8 | reg as u8]);
     code_buf.extend(imm32.to_le_bytes());
 }
 
-fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
-    code_buf.extend([0x48, 0x81, ArithOp::Sub as u8 | reg as u8]);
+fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {
+    code_buf.extend([0x81, ArithOp::Sub as u8 | reg as u8]);
     code_buf.extend(imm32.to_le_bytes());
 }
 
@@ -262,7 +154,7 @@ fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86_64Register, imm32: i32) {
 // the 64-bit immediate to that register, ADD/SUB that register to the
 // target register, then POP that temporary register, to restore its
 // original value.
-fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: u64, op: ArithOp) {
+fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86Register, imm64: u64, op: ArithOp) {
     // cast reg in advanced as it's used multiple times
     // the temporary register shouldn't be the target register, so using RCX, which is a volatile
     // register not used anywhere else in eambfc, encoded as 0b001.
@@ -281,11 +173,11 @@ fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: u64, op: Arith
     ]);
 }
 
-fn add_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: u64) {
+fn add_reg_imm64(code_buf: &mut Vec<u8>, reg: X86Register, imm64: u64) {
     add_sub_qw(code_buf, reg, imm64, ArithOp::Add);
 }
 
-fn sub_reg_imm64(code_buf: &mut Vec<u8>, reg: X86_64Register, imm64: u64) {
+fn sub_reg_imm64(code_buf: &mut Vec<u8>, reg: X86Register, imm64: u64) {
     add_sub_qw(code_buf, reg, imm64, ArithOp::Sub);
 }
 
@@ -307,14 +199,14 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         let mut ds = disassembler();
 
-        X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 0).unwrap();
+        X86_64Inter::set_reg(&mut v, X86Register::Ebx, 0).unwrap();
         assert_eq!(ds.disassemble(v.clone()), ["xor ebx, ebx"]);
         v.clear();
-        X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, 128).unwrap();
+        X86_64Inter::set_reg(&mut v, X86Register::Ebx, 128).unwrap();
         assert_eq!(ds.disassemble(v.clone()), ["mov ebx, 0x80"]);
 
         v.clear();
-        X86_64Inter::set_reg(&mut v, X86_64Register::Rbx, i64::MAX - 0xffff).unwrap();
+        X86_64Inter::set_reg(&mut v, X86Register::Ebx, i64::MAX - 0xffff).unwrap();
         assert_eq!(
             ds.disassemble(v),
             // movabs is an internal term some dis/assemblers have for MOV variant for large
@@ -323,22 +215,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_jump_too_large_error() {
-        let err = conditional_jump(
-            X86_64Register::Rdx,
-            i64::from(i32::MAX) + 1,
-            ConditionCode::Zero,
-        )
-        .unwrap_err();
-        assert_eq!(err.error_id(), BFErrorID::JumpTooLong);
-    }
-
     #[disasm_test]
     fn test_jump_instructions() {
         let mut v: Vec<u8> = vec![0; 9];
-        X86_64Inter::jump_open(&mut v, 0, X86_64Register::Rdi, 9).unwrap();
-        X86_64Inter::jump_close(&mut v, X86_64Register::Rdi, -18).unwrap();
+        X86_64Inter::jump_open(&mut v, 0, X86Register::Edi, 9).unwrap();
+        X86_64Inter::jump_close(&mut v, X86Register::Edi, -18).unwrap();
         X86_64Inter::pad_loop_open(&mut v);
         let mut disasm_lines = disassembler().disassemble(v).into_iter();
         // NOTE: the disassembly uses absolute addresses, not relative addresses.
@@ -362,12 +243,12 @@ mod tests {
     fn add_sub_small_imm() {
         let mut v = Vec::with_capacity(4);
         let mut ds = disassembler();
-        X86_64Inter::add_reg(&mut v, X86_64Register::Rsi, 0x20).unwrap();
+        X86_64Inter::add_reg(&mut v, X86Register::Esi, 0x20).unwrap();
         assert_eq!(v.len(), 4);
         assert_eq!(ds.disassemble(v), ["add rsi, 0x20"]);
 
         let mut v = Vec::with_capacity(4);
-        X86_64Inter::sub_reg(&mut v, X86_64Register::Rsi, 0x20).unwrap();
+        X86_64Inter::sub_reg(&mut v, X86Register::Esi, 0x20).unwrap();
         assert_eq!(v.len(), 4);
         assert_eq!(ds.disassemble(v), ["sub rsi, 0x20"]);
     }
@@ -376,12 +257,12 @@ mod tests {
     fn add_sub_medium_imm() {
         let mut v = Vec::with_capacity(7);
         let mut ds = disassembler();
-        X86_64Inter::add_reg(&mut v, X86_64Register::Rdx, 0xdead).unwrap();
+        X86_64Inter::add_reg(&mut v, X86Register::Edx, 0xdead).unwrap();
         assert_eq!(v.len(), 7);
         assert_eq!(ds.disassemble(v), ["add rdx, 0xdead"]);
 
         let mut v = Vec::with_capacity(7);
-        X86_64Inter::sub_reg(&mut v, X86_64Register::Rdx, 0xbeef).unwrap();
+        X86_64Inter::sub_reg(&mut v, X86Register::Edx, 0xbeef).unwrap();
         assert_eq!(v.len(), 7);
         assert_eq!(ds.disassemble(v), ["sub rdx, 0xbeef"]);
     }
@@ -392,7 +273,7 @@ mod tests {
         let mut ds = disassembler();
 
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        X86_64Inter::add_reg(&mut v, X86_64Register::Rbx, 0xdeadbeef).unwrap();
+        X86_64Inter::add_reg(&mut v, X86Register::Ebx, 0xdeadbeef).unwrap();
         assert_eq!(
             ds.disassemble(v),
             ["movabs rcx, 0xdeadbeef", "add rbx, rcx",]
@@ -400,7 +281,7 @@ mod tests {
 
         let mut v: Vec<u8> = Vec::new();
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        X86_64Inter::sub_reg(&mut v, X86_64Register::Rbx, 0xdeadbeef).unwrap();
+        X86_64Inter::sub_reg(&mut v, X86Register::Ebx, 0xdeadbeef).unwrap();
         assert_eq!(
             ds.disassemble(v),
             ["movabs rcx, 0xdeadbeef", "sub rbx, rcx",]
@@ -410,8 +291,8 @@ mod tests {
     #[disasm_test]
     fn test_add_sub_byte() {
         let mut v: Vec<u8> = Vec::new();
-        X86_64Inter::add_byte(&mut v, X86_64Register::Rdi, 0x23);
-        X86_64Inter::sub_byte(&mut v, X86_64Register::Rdi, 0x23);
+        X86_64Inter::add_byte(&mut v, X86Register::Edi, 0x23);
+        X86_64Inter::sub_byte(&mut v, X86Register::Edi, 0x23);
         assert_eq!(
             disassembler().disassemble(v),
             ["add byte ptr [rdi], 0x23", "sub byte ptr [rdi], 0x23"]
@@ -421,7 +302,7 @@ mod tests {
     #[disasm_test]
     fn test_zero_byte() {
         let mut v: Vec<u8> = Vec::new();
-        X86_64Inter::zero_byte(&mut v, X86_64Register::Rdx);
+        X86_64Inter::zero_byte(&mut v, X86Register::Edx);
         assert_eq!(disassembler().disassemble(v), ["mov byte ptr [rdx], 0x0"]);
     }
 
@@ -431,10 +312,10 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         let mut ds = disassembler();
 
-        X86_64Inter::inc_reg(&mut v, X86_64Register::Rax);
-        X86_64Inter::dec_reg(&mut v, X86_64Register::Rax);
-        X86_64Inter::inc_byte(&mut v, X86_64Register::Rax);
-        X86_64Inter::dec_byte(&mut v, X86_64Register::Rax);
+        X86_64Inter::inc_reg(&mut v, X86Register::Eax);
+        X86_64Inter::dec_reg(&mut v, X86Register::Eax);
+        X86_64Inter::inc_byte(&mut v, X86Register::Eax);
+        X86_64Inter::dec_byte(&mut v, X86Register::Eax);
 
         assert_eq!(
             ds.disassemble(v),
