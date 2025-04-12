@@ -125,27 +125,13 @@ impl PartialRunConfig {
         if self.arch.is_some() {
             return Err(self.gen_err(BFErrorID::MultipleArchitectures, "passed -a multiple times"));
         }
-        self.arch = match param {
-            #[cfg(feature = "arm64")]
-            b"arm64" | b"aarch64" => Some(Backend::Arm64),
-            #[cfg(feature = "i386")]
-            b"i386" | b"x86" | b"i686" => Some(Backend::I386),
-            #[cfg(feature = "riscv64")]
-            b"riscv64" | b"riscv" => Some(Backend::RiscV64),
-            #[cfg(feature = "s390x")]
-            b"s390x" | b"s390" | b"z/architecture" => Some(Backend::S390x),
-            #[cfg(feature = "x86_64")]
-            b"x86_64" | b"x64" | b"amd64" | b"x86-64" => Some(Backend::X86_64),
-            f => {
-                return Err((
-                    BFCompileError::basic(
-                        BFErrorID::UnknownArch,
-                        format!("{} is not a recognized architecture", f.escape_ascii()),
-                    ),
-                    self.out_mode,
-                ));
-            }
-        };
+        self.arch = Some(
+            param
+                .escape_ascii()
+                .to_string()
+                .parse()
+                .map_err(|e| (e, self.out_mode))?,
+        );
         Ok(())
     }
 
