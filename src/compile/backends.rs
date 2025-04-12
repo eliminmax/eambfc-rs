@@ -2,33 +2,25 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#[cfg(feature = "arm64")]
-mod arm64;
-#[cfg(feature = "arm64")]
-pub(crate) use arm64::Arm64Inter;
-
-#[cfg(feature = "i386")]
-mod i386;
-#[cfg(feature = "i386")]
-pub(crate) use i386::I386Inter;
-
-#[cfg(feature = "riscv64")]
-mod riscv64;
-#[cfg(feature = "riscv64")]
-pub(crate) use riscv64::RiscV64Inter;
-
-#[cfg(feature = "s390x")]
-mod s390x;
-#[cfg(feature = "s390x")]
-pub(crate) use s390x::S390xInter;
-
-#[cfg(feature = "x86_64")]
-mod x86_64;
-#[cfg(feature = "x86_64")]
-pub(crate) use x86_64::X86_64Inter;
-
 #[cfg(any(feature = "i386", feature = "x86_64"))]
 mod x86_common;
+
+/// `use_backend!($module, $feature, $inter)`: Export `$module::$inter` at a crate level if
+/// `$feature` is enabled
+macro_rules! use_backend {
+    ($module: ident, $feature: literal, $inter: ident) => {
+        #[cfg(feature = $feature)]
+        mod $module;
+        #[cfg(feature = $feature)]
+        pub(crate) use $module::$inter;
+    }
+}
+
+use_backend!(arm64, "arm64", Arm64Inter);
+use_backend!(i386, "i386", I386Inter);
+use_backend!(riscv64, "riscv64", RiscV64Inter);
+use_backend!(s390x, "s390x", S390xInter);
+use_backend!(x86_64, "x86_64", X86_64Inter);
 
 use super::arch_inter;
 use super::elf_tools;
