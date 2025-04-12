@@ -436,7 +436,6 @@ fn test_i386() -> io::Result<()> {
     test_arch("i386")
 }
 
-
 #[bin_test(riscv64)]
 fn test_riscv64() -> io::Result<()> {
     test_arch("riscv64")

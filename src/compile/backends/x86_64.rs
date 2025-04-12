@@ -48,7 +48,6 @@ use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
 
 pub(crate) struct X86_64Inter;
 impl ArchInter for X86_64Inter {
-
     const REGISTERS: Registers<X86Register> = Registers {
         sc_num: X86Register::Eax,
         arg1: X86Register::Edi,
@@ -106,7 +105,6 @@ impl ArchInter for X86_64Inter {
         // DEC reg
         code_buf.extend([0x48, 0xff, 0xc8 | (reg as u8)]);
     }
-
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
         if let Ok(imm8) = i8::try_from(imm) {
