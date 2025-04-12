@@ -16,6 +16,73 @@ macro_rules! use_backend {
     };
 }
 
+/// Enum of supported backends
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Backend {
+    #[cfg(feature = "arm64")]
+    Arm64,
+    #[cfg(feature = "i386")]
+    I386,
+    #[cfg(feature = "riscv64")]
+    RiscV64,
+    #[cfg(feature = "s390x")]
+    S390x,
+    #[cfg(feature = "x86_64")]
+    X86_64,
+}
+
+impl std::fmt::Display for Backend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match self {
+                #[cfg(feature = "arm64")]
+                Backend::Arm64 => "arm64",
+                #[cfg(feature = "i386")]
+                Backend::I386 => "i386",
+                #[cfg(feature = "riscv64")]
+                Backend::RiscV64 => "riscv64",
+                #[cfg(feature = "s390x")]
+                Backend::S390x => "s390x",
+                #[cfg(feature = "x86_64")]
+                Backend::X86_64 => "x86_64",
+            }
+        )
+    }
+}
+
+use crate::err::{BFCompileError, BFErrorID};
+impl std::str::FromStr for Backend {
+    type Err = BFCompileError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            #[cfg(feature = "arm64")]
+            "arm64" | "aarch64" => Ok(Backend::Arm64),
+            #[cfg(feature = "i386")]
+            "i386" | "i486" | "i586" | "i686" | "x86" => Ok(Backend::I386),
+            #[cfg(feature = "riscv64")]
+            "riscv64" | "riscv" => Ok(Backend::RiscV64),
+            #[cfg(feature = "s390x")]
+            "s390x" | "s390" | "z/architecture" => Ok(Backend::S390x),
+            #[cfg(feature = "x86_64")]
+            "x86_64" | "x64" | "amd64" | "x86-64" => Ok(Backend::X86_64),
+            s => Err(BFCompileError::basic(
+                BFErrorID::UnknownArch,
+                format!("{s} is not a recognized architecture"),
+            )),
+        }
+    }
+}
+
+impl Default for Backend {
+    fn default() -> Self {
+        env!("EAMBFC_DEFAULT_ARCH")
+            .parse()
+            .expect("build.rs validates default arch")
+    }
+}
+
 use_backend!(arm64, "arm64", Arm64Inter);
 use_backend!(i386, "i386", I386Inter);
 use_backend!(riscv64, "riscv64", RiscV64Inter);
@@ -23,7 +90,6 @@ use_backend!(s390x, "s390x", S390xInter);
 use_backend!(x86_64, "x86_64", X86_64Inter);
 
 use super::arch_inter;
-use super::elf_tools;
 
 mod backend_utils;
 use backend_utils::MinimumBits;
@@ -34,7 +100,7 @@ use backend_utils::MinimumBits;
 #[cfg(all(test, feature = "disasmtests"))]
 mod test_utils {
 
-    use super::elf_tools::Backend;
+    use super::Backend;
     use llvm_sys::disassembler;
     use std::ffi::CStr;
     use std::sync::OnceLock;

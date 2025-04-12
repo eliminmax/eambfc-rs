@@ -12,7 +12,8 @@ pub(crate) mod backends;
 pub(crate) mod elf_tools;
 
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
-use elf_tools::{Backend, BinInfo, SegmentInfo};
+use backends::Backend;
+use elf_tools::{BinInfo, SegmentInfo};
 
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};

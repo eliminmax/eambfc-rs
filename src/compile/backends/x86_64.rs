@@ -29,7 +29,7 @@
 // * RBX is 011b
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::Backend;
+use crate::Backend;
 use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
 
 // INC and DEC are encoded very similarly with very few differences between

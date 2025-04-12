@@ -4,7 +4,7 @@
 
 use super::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::Backend;
+use crate::Backend;
 use crate::err::{BFCompileError, BFErrorID};
 
 use std::num::NonZeroI8;

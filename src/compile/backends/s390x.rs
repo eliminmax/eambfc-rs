@@ -5,7 +5,7 @@
 use crate::err::{BFCompileError, BFErrorID};
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::elf_tools::Backend;
+use crate::Backend;
 
 // The z/Architecture Principles of Operation comprehensively documents the
 // z/Architecture ISA, and its 14th edition was the main source for information

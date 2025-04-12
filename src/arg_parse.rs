@@ -7,7 +7,7 @@
     expect(unused_imports, reason = "Used without longopts")
 )]
 use crate::OutMode;
-use crate::compile::elf_tools::Backend;
+use crate::compile::backends::Backend;
 use crate::err::{BFCompileError, BFErrorID};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsString;

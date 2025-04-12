@@ -23,7 +23,7 @@ use std::env::args_os;
 use std::process::ExitCode;
 
 use arg_parse::{RunConfig, help_fmt};
-use compile::{BFCompile, elf_tools::Backend};
+use compile::{BFCompile, backends::Backend};
 use err::OutMode;
 
 // architecture interfaces

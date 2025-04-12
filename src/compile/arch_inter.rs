@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::compile::elf_tools::Backend;
+use super::backends::Backend;
 use crate::err::BFCompileError;
 
 pub(super) type FailableInstrEncoding = Result<(), BFCompileError>;
