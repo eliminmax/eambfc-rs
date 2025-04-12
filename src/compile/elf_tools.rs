@@ -5,7 +5,7 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ElfClass {
     #[cfg(have_32bit_targets)]
-    ElfClass32 = 1,
+    ELFClass32 = 1,
     #[cfg(have_64bit_targets)]
     ELFClass64 = 2,
 }
@@ -14,7 +14,7 @@ impl ElfClass {
     const fn ehdr_sz(self) -> u16 {
         match self {
             #[cfg(have_32bit_targets)]
-            ElfClass::ElfClass32 => 52,
+            ElfClass::ELFClass32 => 52,
             #[cfg(have_64bit_targets)]
             ElfClass::ELFClass64 => 64,
         }
@@ -22,7 +22,7 @@ impl ElfClass {
     const fn phdr_sz(self) -> u16 {
         match self {
             #[cfg(have_32bit_targets)]
-            ElfClass::ElfClass32 => 32,
+            ElfClass::ELFClass32 => 32,
             #[cfg(have_64bit_targets)]
             ElfClass::ELFClass64 => 56,
         }
@@ -291,10 +291,14 @@ macro_rules! serialize_phdr {
 impl From<BinInfo> for Vec<u8> {
     fn from(item: BinInfo) -> Self {
         match (item.arch.ei_class(), item.arch.ei_data()) {
-            #[cfg(any(feature = "arm64", feature = "riscv64", feature = "x86_64"))]
+            #[cfg(all(have_64bit_targets, have_le_targets))]
             (ElfClass::ELFClass64, ByteOrdering::LittleEndian) => serialize_ehdr!(item, LE, 64),
-            #[cfg(feature = "s390x")]
+            #[cfg(all(have_32bit_targets, have_le_targets))]
+            (ElfClass::ELFClass32, ByteOrdering::LittleEndian) => serialize_ehdr!(item, LE, 32),
+            #[cfg(all(have_64bit_targets, have_be_targets))]
             (ElfClass::ELFClass64, ByteOrdering::BigEndian) => serialize_ehdr!(item, BE, 64),
+            #[cfg(all(have_32bit_targets, have_be_targets))]
+            (ElfClass::ELFClass32, ByteOrdering::BigEndian) => serialize_ehdr!(item, BE, 64),
         }
     }
 }
