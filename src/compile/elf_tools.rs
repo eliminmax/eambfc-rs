@@ -316,6 +316,7 @@ impl From<BinInfo> for Vec<u8> {
 impl From<SegmentInfo> for Vec<u8> {
     fn from(item: SegmentInfo) -> Self {
         match (item.arch.ei_class(), item.arch.ei_data()) {
+            #[cfg(all(have_64bit_targets, have_le_targets))]
             (ElfClass::ELFClass64, ByteOrdering::LittleEndian) => serialize_phdr!(item, LE, 64),
             #[cfg(all(have_32bit_targets, have_le_targets))]
             (ElfClass::ELFClass32, ByteOrdering::LittleEndian) => serialize_phdr!(item, LE, 32),
