@@ -6,14 +6,22 @@
 //! all of their jump methods, and a macro to generate the code common to both implementations.
 
 use crate::err::{BFCompileError, BFErrorID};
+/// X86 register identifiers used within eambfc. The "RAX", "RCX", etc. identifiers are the 64-bit
+/// equivalents, and use the same register IDs, but in 64-bit instructions that either are
+/// identical to the 32-bit equivalent or have a REX.W prefix, so are not included in the enum
 #[derive(Clone, Copy)]
+#[repr(u8)]
 pub(in super::super) enum X86Register {
     Eax = 0b000,
-    Edi = 0b111,
-    Esi = 0b110,
-    Edx = 0b010,
     Ecx = 0b001,
+    Edx = 0b010,
     Ebx = 0b011,
+    #[expect(dead_code, reason = "included for completeness's sake")]
+    Esp = 0b100,
+    #[expect(dead_code, reason = "included for completeness's sake")]
+    Ebp = 0b101,
+    Esi = 0b110,
+    Edi = 0b111,
 }
 
 // many add/subtract instructions use these bit values for the upper five bits and the target
