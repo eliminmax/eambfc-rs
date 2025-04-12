@@ -128,6 +128,8 @@ impl PartialRunConfig {
         self.arch = match param {
             #[cfg(feature = "arm64")]
             b"arm64" | b"aarch64" => Some(Backend::Arm64),
+            #[cfg(feature = "i386")]
+            b"i386" | b"x86" | b"i686" => Some(Backend::I386),
             #[cfg(feature = "riscv64")]
             b"riscv64" | b"riscv" => Some(Backend::RiscV64),
             #[cfg(feature = "s390x")]

@@ -4,6 +4,7 @@
 
 //! This module provides types used for both the `i386` and `x86_64` backends, a function used in
 //! all of their jump methods, and a macro to generate the code common to both implementations.
+
 use crate::err::{BFCompileError, BFErrorID};
 #[derive(Clone, Copy)]
 pub(in super::super) enum X86Register {
@@ -11,6 +12,7 @@ pub(in super::super) enum X86Register {
     Edi = 0b111,
     Esi = 0b110,
     Edx = 0b010,
+    Ecx = 0b001,
     Ebx = 0b011,
 }
 

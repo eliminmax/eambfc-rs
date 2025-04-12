@@ -132,20 +132,20 @@ impl ArchInter for X86_64Inter {
 }
 
 fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
-    code_buf.extend([0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
+    code_buf.extend([0x48, 0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
 }
 
 fn sub_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
-    code_buf.extend([0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
+    code_buf.extend([0x48, 0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
 }
 
 fn add_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {
-    code_buf.extend([0x81, ArithOp::Add as u8 | reg as u8]);
+    code_buf.extend([0x48, 0x81, ArithOp::Add as u8 | reg as u8]);
     code_buf.extend(imm32.to_le_bytes());
 }
 
 fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {
-    code_buf.extend([0x81, ArithOp::Sub as u8 | reg as u8]);
+    code_buf.extend([0x48, 0x81, ArithOp::Sub as u8 | reg as u8]);
     code_buf.extend(imm32.to_le_bytes());
 }
 
@@ -155,21 +155,19 @@ fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {
 // target register, then POP that temporary register, to restore its
 // original value.
 fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86Register, imm64: u64, op: ArithOp) {
-    // cast reg in advanced as it's used multiple times
     // the temporary register shouldn't be the target register, so using RCX, which is a volatile
-    // register not used anywhere else in eambfc, encoded as 0b001.
-    const TMP_REG: u8 = 0b001;
+    // register not used anywhere else in this backend
     code_buf.extend([
         // MOV RCX, (imm64 to be appended)
         0x48,
-        0xb8 | TMP_REG,
+        0xb8 | X86Register::Ecx as u8,
     ]);
     code_buf.extend(imm64.to_le_bytes());
     code_buf.extend([
         // (ADD||SUB) reg, rcx
         0x48,
         (op as u8) - 0xbf,
-        0xc0 + (TMP_REG << 3) + (reg as u8),
+        0xc0 + ((X86Register::Ecx as u8) << 3) + (reg as u8),
     ]);
 }
 

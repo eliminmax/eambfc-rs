@@ -7,6 +7,10 @@ mod arm64;
 #[cfg(feature = "arm64")]
 pub(crate) use arm64::Arm64Inter;
 
+#[cfg(feature = "i386")]
+mod i386;
+#[cfg(feature = "i386")]
+pub(crate) use i386::I386Inter;
 #[cfg(feature = "riscv64")]
 mod riscv64;
 #[cfg(feature = "riscv64")]
@@ -151,6 +155,8 @@ mod test_utils {
             Backend::Arm64 => (c"aarch64-linux-gnu", None),
             #[cfg(feature = "x86_64")]
             Backend::X86_64 => (c"x86_64-linux-gnu", None),
+            #[cfg(feature = "i386")]
+            Backend::I386 => (c"i386-linux-gnu", None),
             #[cfg(feature = "riscv64")]
             // for riscv64, use the `C` "(Compressed Instructions)" extension
             Backend::RiscV64 => (c"riscv64-linux-gnu", Some(c"+c")),
@@ -194,9 +200,20 @@ mod test_utils {
                     !p.is_null(),
                     "Failed to create disassembler: LLVM returned null pointer"
                 );
-                // for x86_64, use Intel syntax.
+                // for x86 backends, use Intel syntax.
                 // If this were after the PrintImmHex call or bitmasked in with it, it would
                 // override it, resulting in decimal immediates, so it needs to be a separate call.
+                #[cfg(feature = "i386")]
+                if target == Backend::I386 {
+                    assert_eq!(
+                        1,
+                        disassembler::LLVMSetDisasmOptions(
+                            p,
+                            disassembler::LLVMDisassembler_Option_AsmPrinterVariant,
+                        ),
+                        "failed to switch to Intel syntax"
+                    );
+                }
                 #[cfg(feature = "x86_64")]
                 if target == Backend::X86_64 {
                     assert_eq!(

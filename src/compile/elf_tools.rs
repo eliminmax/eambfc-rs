@@ -42,6 +42,8 @@ pub(super) enum ByteOrdering {
 pub(crate) enum Backend {
     #[cfg(feature = "arm64")]
     Arm64,
+    #[cfg(feature = "i386")]
+    I386,
     #[cfg(feature = "riscv64")]
     RiscV64,
     #[cfg(feature = "s390x")]
@@ -56,6 +58,8 @@ impl Backend {
         match self {
             #[cfg(feature = "arm64")]
             Self::Arm64 => 183,
+            #[cfg(feature = "i386")]
+            Self::I386 => 3,
             #[cfg(feature = "riscv64")]
             Self::RiscV64 => 243,
             #[cfg(feature = "s390x")]
@@ -69,6 +73,8 @@ impl Backend {
         match self {
             #[cfg(feature = "arm64")]
             Self::Arm64 => ElfClass::ELFClass64,
+            #[cfg(feature = "i386")]
+            Self::I386 => ElfClass::ELFClass32,
             #[cfg(feature = "riscv64")]
             Self::RiscV64 => ElfClass::ELFClass64,
             #[cfg(feature = "s390x")]
@@ -97,6 +103,8 @@ impl std::fmt::Display for Backend {
             match *self {
                 #[cfg(feature = "arm64")]
                 Backend::Arm64 => "arm64",
+                #[cfg(feature = "i386")]
+                Backend::I386 => "i386",
                 #[cfg(feature = "riscv64")]
                 Backend::RiscV64 => "riscv64",
                 #[cfg(feature = "s390x")]
@@ -256,7 +264,7 @@ macro_rules! serialize_phdr {
         v.extend($item.vaddr.$func());
         // p_paddr is always zero
         v.extend(u64::$func(0));
-        // p_filesz (provided by `$item`)
+        // p_filesz
         v.extend(if $item.file_backed { $item.size } else { 0 }.$func());
         // p_memsz (provided by `$item`)
         v.extend($item.size.$func());
@@ -266,7 +274,7 @@ macro_rules! serialize_phdr {
     }};
 
     (<internal> $item:ident, $func:ident, 32) => {{
-        let mut v = Vec::with_capacity(56);
+        let mut v = Vec::with_capacity(32);
         // p_type is always `PT_LOAD`
         v.extend(u32::$func(1));
         // p_offset is 0 either because there's no backing data in file or it's the whole file
@@ -275,11 +283,11 @@ macro_rules! serialize_phdr {
         v.extend(u32::try_from($item.vaddr).expect("Validated vaddr").$func());
         // p_paddr is always zero
         v.extend(u32::$func(0));
-        // p_filesz (provided by `$item`)
         let size: u32 = $item.size.try_into().expect("validated size");
+        // p_filesz
         v.extend(if $item.file_backed { size } else { 0 }.$func());
         // p_memsz (provided by `$item`)
-        v.extend(u32::try_from($item.size).expect("Validated size").$func());
+        v.extend(size.$func());
         // p_flags (provided by `$item`)
         v.extend($item.flags.$func());
         // p_align (provided by `$item`)
@@ -307,11 +315,14 @@ impl From<BinInfo> for Vec<u8> {
 // eambfc-rs for this.
 impl From<SegmentInfo> for Vec<u8> {
     fn from(item: SegmentInfo) -> Self {
-        match item.arch.ei_data() {
-            #[cfg(any(feature = "arm64", feature = "riscv64", feature = "x86_64"))]
-            ByteOrdering::LittleEndian => serialize_phdr!(item, LE, 64),
-            #[cfg(feature = "s390x")]
-            ByteOrdering::BigEndian => serialize_phdr!(item, BE, 64),
+        match (item.arch.ei_class(), item.arch.ei_data()) {
+            (ElfClass::ELFClass64, ByteOrdering::LittleEndian) => serialize_phdr!(item, LE, 64),
+            #[cfg(all(have_32bit_targets, have_le_targets))]
+            (ElfClass::ELFClass32, ByteOrdering::LittleEndian) => serialize_phdr!(item, LE, 32),
+            #[cfg(all(have_64bit_targets, have_be_targets))]
+            (ElfClass::ELFClass64, ByteOrdering::BigEndian) => serialize_phdr!(item, BE, 64),
+            #[cfg(all(have_32bit_targets, have_be_targets))]
+            (ElfClass::ELFClass32, ByteOrdering::BigEndian) => serialize_phdr!(item, BE, 64),
         }
     }
 }
