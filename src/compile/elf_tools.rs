@@ -121,6 +121,8 @@ impl Default for Backend {
         match env!("EAMBFC_DEFAULT_ARCH") {
             #[cfg(feature = "arm64")]
             "arm64" => Backend::Arm64,
+            #[cfg(feature = "i386")]
+            "i386" => Backend::I386,
             #[cfg(feature = "riscv64")]
             "riscv64" => Backend::RiscV64,
             #[cfg(feature = "s390x")]
@@ -335,6 +337,8 @@ mod tests {
     fn display_elfarch() {
         #[cfg(feature = "arm64")]
         assert_eq!(format!("{}", Backend::Arm64), String::from("arm64"));
+        #[cfg(feature = "i386")]
+        assert_eq!(format!("{}", Backend::I386), String::from("i386"));
         #[cfg(feature = "riscv64")]
         assert_eq!(format!("{}", Backend::RiscV64), String::from("riscv64"));
         #[cfg(feature = "s390x")]

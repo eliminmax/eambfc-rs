@@ -11,6 +11,7 @@ pub(crate) use arm64::Arm64Inter;
 mod i386;
 #[cfg(feature = "i386")]
 pub(crate) use i386::I386Inter;
+
 #[cfg(feature = "riscv64")]
 mod riscv64;
 #[cfg(feature = "riscv64")]

@@ -8,8 +8,8 @@ SPDX-License-Identifier: 0BSD
 
 An optimizing compiler for brainfuck, written in Rust for Unix-like systems.
 
-Output 64-bit ELF executables that uses Linux system calls for I/O. Currently,
-it has x64_64, arm64, s390x, and riscv64 backends.
+Output ELF executables that uses Linux system calls for I/O. Currently, it has
+x64_64, arm64, i386, s390x, and riscv64 backends.
 
 I was trying to get a better understanding of C, so I wrote
 [an optimizing brainfuck compiler in C](https://github.com/eliminmax/eambfc).

@@ -6,6 +6,7 @@
 //!
 //! * The following backends exist currently:
 //! * `arm64`
+//! * `i386`
 //! * `riscv64`
 //! * `s390x`
 //! * `x86_64`
@@ -46,8 +47,6 @@ fn main() -> ExitCode {
     #[cfg(not(feature = "longopts"))]
     let rc = arg_parse::parse_args(args);
     #[cfg(feature = "longopts")]
-    // SAFETY: this function is safe as long as it's in a single-threaded environment, and no
-    // threads have been spawned thus far
     let rc = arg_parse::longopts::parse_args_long(args);
     match rc {
         Ok(RunConfig::ListArches) => {
