@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: 0BSD
 
-set -e
+set -ex
 cd "$(git rev-parse --show-toplevel)"
 
 arches='arm64 riscv64 s390x x86_64'
