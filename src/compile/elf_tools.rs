@@ -100,7 +100,7 @@ impl std::fmt::Display for Backend {
         write!(
             f,
             "{}",
-            match *self {
+            match self {
                 #[cfg(feature = "arm64")]
                 Backend::Arm64 => "arm64",
                 #[cfg(feature = "i386")]
