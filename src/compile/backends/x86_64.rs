@@ -181,6 +181,7 @@ fn sub_reg_imm64(code_buf: &mut Vec<u8>, reg: X86Register, imm64: u64) {
 mod tests {
     #[cfg(feature = "disasmtests")]
     use super::super::test_utils::Disassembler;
+    #[cfg(feature = "disasmtests")]
     use super::*;
     use test_macros::disasm_test;
 
