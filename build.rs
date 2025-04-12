@@ -68,6 +68,7 @@ fn set_default_arch() {
     }
 
     check_exec_support!("arm64");
+    check_exec_support!("i386");
     check_exec_support!("riscv64");
     check_exec_support!("s390x");
     check_exec_support!("x86_64");
