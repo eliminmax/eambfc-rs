@@ -3,9 +3,6 @@
 // SPDX-License-Identifier: 0BSD
 #![cfg(not(tarpaulin_include))]
 
-#[cfg(feature = "bintests")]
-use std::collections::HashSet;
-
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::Command;
@@ -52,28 +49,6 @@ fn set_cfg_metavalues() {
 }
 
 fn set_default_arch() {
-    #[cfg(feature = "bintests")]
-    let mut runnable_arches: HashSet<&'static str> = HashSet::new();
-    macro_rules! check_exec_support {
-        ($platform: literal) => {
-            println!("cargo::rustc-check-cfg=cfg(can_run_{})", $platform);
-            #[cfg(feature = "bintests")]
-            if Command::new(concat!("./test_assets/exec_support/", $platform))
-                .status()
-                .is_ok_and(|status| status.success())
-            {
-                runnable_arches.insert($platform);
-                println!(concat!("cargo::rustc-cfg=can_run_", $platform));
-            }
-        };
-    }
-
-    check_exec_support!("arm64");
-    check_exec_support!("i386");
-    check_exec_support!("riscv64");
-    check_exec_support!("s390x");
-    check_exec_support!("x86_64");
-
     macro_rules! arch_check {
         ($arch: literal) => {{
             assert!(
@@ -103,6 +78,7 @@ fn set_default_arch() {
     let arch = match std::env::var("EAMBFC_DEFAULT_ARCH").ok().as_deref() {
         Some("arm64") => arch_check!("arm64"),
         Some("riscv64") => arch_check!("riscv64"),
+        Some("i386") => arch_check!("i386"),
         Some("s390x") => arch_check!("s390x"),
         Some("x86_64") => arch_check!("x86_64"),
         Some(bad_arch) => panic!("Can't default to {bad_arch} as no backend exists"),
@@ -153,10 +129,26 @@ fn set_default_arch() {
     );
 
     println!("cargo::rustc-check-cfg=cfg(can_run_default)");
-    #[cfg(feature = "bintests")]
-    if runnable_arches.contains(&arch) {
-        println!("cargo::rustc-cfg=can_run_default");
+    macro_rules! check_exec_support {
+        ($platform: literal) => {
+            println!("cargo::rustc-check-cfg=cfg(can_run_{})", $platform);
+            #[cfg(feature = "bintests")]
+            if Command::new(concat!("./test_assets/exec_support/", $platform))
+                .status()
+                .is_ok_and(|status| status.success())
+            {
+                println!(concat!("cargo::rustc-cfg=can_run_", $platform));
+                if $platform == arch {
+                    println!(concat!("cargo:rustc-cfg=can_run_default"));
+                }
+            }
+        };
     }
+    check_exec_support!("arm64");
+    check_exec_support!("i386");
+    check_exec_support!("riscv64");
+    check_exec_support!("s390x");
+    check_exec_support!("x86_64");
 }
 
 fn main() {
