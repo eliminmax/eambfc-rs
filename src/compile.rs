@@ -9,11 +9,9 @@ mod arch_inter;
 use arch_inter::ArchInter;
 
 pub(crate) mod backends;
-pub(crate) mod elf_tools;
 
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
-use backends::Backend;
-use elf_tools::{BinInfo, SegmentInfo};
+use backends::{Backend, BinInfo, SegmentInfo};
 
 use std::ffi::OsStr;
 use std::io::{BufReader, Read, Write};
