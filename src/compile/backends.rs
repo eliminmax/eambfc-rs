@@ -16,6 +16,12 @@ macro_rules! use_backend {
     };
 }
 
+use_backend!(arm64, "arm64", Arm64Inter);
+use_backend!(i386, "i386", I386Inter);
+use_backend!(riscv64, "riscv64", RiscV64Inter);
+use_backend!(s390x, "s390x", S390xInter);
+use_backend!(x86_64, "x86_64", X86_64Inter);
+
 /// Enum of supported backends
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Backend {
@@ -82,12 +88,6 @@ impl Default for Backend {
             .expect("build.rs validates default arch")
     }
 }
-
-use_backend!(arm64, "arm64", Arm64Inter);
-use_backend!(i386, "i386", I386Inter);
-use_backend!(riscv64, "riscv64", RiscV64Inter);
-use_backend!(s390x, "s390x", S390xInter);
-use_backend!(x86_64, "x86_64", X86_64Inter);
 
 use super::arch_inter;
 
