@@ -58,7 +58,7 @@ fn main() -> ExitCode {
             #[cfg(feature = "x86_64")]
             println!("- x86_64 (aliases: x64, amd64, x86-64)");
             #[cfg(feature = "i386")]
-            println!("- i386 (aliases: x86, i686)");
+            println!("- i386 (aliases: x86, i486, i586, i686)");
             #[cfg(feature = "arm64")]
             println!("- arm64 (aliases: aarch64)");
             #[cfg(feature = "riscv64")]

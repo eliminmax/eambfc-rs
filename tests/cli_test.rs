@@ -223,7 +223,7 @@ fn arch_list() {
         writeln!(expected, "- x86_64 (aliases: x64, amd64, x86-64)").unwrap();
     }
     if cfg!(feature = "i386") {
-        writeln!(expected, "- i386 (aliases: x86, i686)").unwrap();
+        writeln!(expected, "- i386 (aliases: x86, i486, i586, i686)").unwrap();
     }
     if cfg!(feature = "arm64") {
         writeln!(expected, "- arm64 (aliases: aarch64)").unwrap();
