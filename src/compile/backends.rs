@@ -145,7 +145,7 @@ impl Backend {
             Self::X86_64 => 62,
         }
     }
-    /// Get the `ElfClass` for the architecture
+    /// Get the `e_ident[EI_CLASS]` value for the architecture, as an `ElfClass`
     const fn ei_class(self) -> ElfClass {
         match self {
             #[cfg(feature = "arm64")]
@@ -161,7 +161,7 @@ impl Backend {
         }
     }
 
-    /// Get the `ByteOrdering` for the architecture
+    /// Get the `e_ident[EI_DATA]` for the architecture, as a `ByteOrdering`
     pub(super) const fn ei_data(self) -> ByteOrdering {
         match self {
             #[cfg(feature = "s390x")]
