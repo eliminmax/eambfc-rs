@@ -182,6 +182,10 @@ trait BFCompileHelper: ArchInter {
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
         if let Some(ref mut pos) = loc {
+            // This comparison that a byte isn't a continuation byte within a UTF-8 multi-byte
+            // sequence, so if it's either a new UTF-8 codepoint or invalid UTF-8, this will
+            // increment the column counter, but it won't if it's a byte that's typically a
+            // continuatio of a UTF-8 sequence
             if instr & 0xc0 != 0x80 {
                 pos.col += 1;
             }
