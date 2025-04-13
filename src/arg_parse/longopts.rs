@@ -5,10 +5,6 @@ use super::RunConfig;
 use crate::OutMode;
 use crate::err::{BFCompileError, BFErrorID};
 use std::ffi::OsString;
-#[cfg(unix)]
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
-#[cfg(target_os = "wasi")]
-use std::os::wasi::ffi::{OsStrExt, OsStringExt};
 
 pub(crate) fn parse_args_long(
     args: impl Iterator<Item = OsString>,
@@ -17,18 +13,15 @@ pub(crate) fn parse_args_long(
     let mut pcfg = super::PartialRunConfig::default();
     let mut parser = lexopt::Parser::from_args(args);
     loop {
-        macro_rules! param_arg {
-            ($inner_func: ident, $convert_func: ident, $arg: literal) => {{
-                if let Ok(val) = parser.value() {
-                    pcfg.$inner_func(val.$convert_func())?;
-                } else {
-                    return Err(pcfg.gen_err(
+        macro_rules! opt_value {
+            ($arg: literal) => {{
+                parser.value().map_err(|_| {
+                    pcfg.gen_err(
                         BFErrorID::MissingOperand,
                         concat!($arg, " requires an additional argument"),
-                    ));
-                }
+                    )
+                })?
             }};
-            ($inner_func: ident, $arg: literal) => {{ param_arg!($inner_func, into_vec, $arg) }};
         }
         match parser.next() {
             Ok(None) => break,
@@ -40,14 +33,14 @@ pub(crate) fn parse_args_long(
             Ok(Some(Short('k') | Long("keep-failed"))) => pcfg.keep = true,
             Ok(Some(Short('c') | Long("continue"))) => pcfg.cont = true,
             Ok(Some(Short('A') | Long("list-targets"))) => return Ok(RunConfig::ListArches),
-            Ok(Some(Short('a'))) => param_arg!(set_arch, as_bytes, "-a"),
-            Ok(Some(Long("target-arch"))) => param_arg!(set_arch, as_bytes, "--target-arch"),
-            Ok(Some(Short('t'))) => param_arg!(set_tape_size, "-t"),
-            Ok(Some(Long("tape-size"))) => param_arg!(set_tape_size, "-t"),
-            Ok(Some(Short('e'))) => param_arg!(set_ext, "-e"),
-            Ok(Some(Long("source-extension"))) => param_arg!(set_ext, "--source-extension"),
-            Ok(Some(Short('s'))) => param_arg!(set_suffix, "-s"),
-            Ok(Some(Long("output-suffix"))) => param_arg!(set_suffix, "--output-suffix"),
+            Ok(Some(Short('a'))) => pcfg.set_arch(&opt_value!("-a"))?,
+            Ok(Some(Long("target-arch"))) => pcfg.set_arch(&opt_value!("--target-arch"))?,
+            Ok(Some(Short('t'))) => pcfg.set_tape_size(opt_value!("-t"))?,
+            Ok(Some(Long("tape-size"))) => pcfg.set_tape_size(opt_value!("--tape-size"))?,
+            Ok(Some(Short('e'))) => pcfg.set_ext(opt_value!("-e"))?,
+            Ok(Some(Long("source-extension"))) => pcfg.set_ext(opt_value!("--source-extension"))?,
+            Ok(Some(Short('s'))) => pcfg.set_suffix(opt_value!("-s"))?,
+            Ok(Some(Long("output-suffix"))) => pcfg.set_suffix(opt_value!("--output-suffix"))?,
             Ok(Some(Short(c))) => {
                 return Err(pcfg.gen_err(
                     BFErrorID::UnknownArg,

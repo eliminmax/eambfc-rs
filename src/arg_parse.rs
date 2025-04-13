@@ -10,7 +10,7 @@ use crate::OutMode;
 use crate::compile::backends::Backend;
 use crate::err::{BFCompileError, BFErrorID};
 use std::convert::{TryFrom, TryInto};
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 #[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 #[cfg(target_os = "wasi")]
@@ -121,67 +121,45 @@ impl PartialRunConfig {
         (BFCompileError::basic(kind, msg), self.out_mode)
     }
 
-    fn set_arch(&mut self, param: &[u8]) -> Result<(), (BFCompileError, OutMode)> {
+    fn set_arch(&mut self, param: &OsStr) -> Result<(), (BFCompileError, OutMode)> {
         if self.arch.is_some() {
             return Err(self.gen_err(BFErrorID::MultipleArchitectures, "passed -a multiple times"));
         }
         self.arch = Some(
             param
-                .escape_ascii()
-                .to_string()
+                .to_string_lossy()
                 .parse()
                 .map_err(|e| (e, self.out_mode))?,
         );
         Ok(())
     }
 
-    #[cfg(any(unix, target_os = "wasi"))]
-    fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
+    fn set_ext(&mut self, param: OsString) -> Result<(), (BFCompileError, OutMode)> {
+        #[cfg(not(any(unix, target_os = "wasi")))]
+        if !cfg!(any(unix, target_os = "wasi")) {
+            let start = param
+                .as_encoded_bytes()
+                .utf8_chunks()
+                .next()
+                .expect("Non-empty suffix");
+            if start.valid().is_empty() {
+                return Err(self.gen_err(
+                    BFErrorID::NonUTF8,
+                    "Can't handle extension with non-unicode start",
+                ));
+            }
+        }
         if self.extension.is_none() {
-            self.extension = Some(OsString::from_vec(param));
+            self.extension = Some(param);
             Ok(())
         } else {
             Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"))
         }
     }
 
-    #[cfg(not(tarpaulin_include))]
-    #[cfg(not(any(unix, target_os = "wasi")))]
-    fn set_ext(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
-        if self.extension.is_some() {
-            return Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"));
-        }
-        if let Ok(s) = String::from_utf8(param) {
-            self.extension = Some(OsString::from(s));
-            Ok(())
-        } else {
-            Err(self.gen_err(
-                BFErrorID::NonUTF8,
-                "Can't handle non-unicode file extensions on non-unix platforms",
-            ))
-        }
-    }
-
-    fn set_suffix(&mut self, suf: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
+    fn set_suffix(&mut self, suf: OsString) -> Result<(), (BFCompileError, OutMode)> {
         if self.out_suffix.is_none() {
-            #[cfg(any(unix, target_os = "wasi"))]
-            {
-                self.out_suffix = Some(OsString::from_vec(suf));
-            };
-            #[cfg(not(tarpaulin_include))]
-            #[cfg(not(any(unix, target_os = "wasi")))]
-            {
-                self.out_suffix = Some(
-                    String::from_utf8(suf)
-                        .map_err(|_| {
-                            self.gen_err(
-                                BFErrorID::NonUTF8,
-                                "Can't handle non-Unicode suffixes on non-unix platforms",
-                            )
-                        })?
-                        .into(),
-                );
-            };
+            self.out_suffix = Some(suf);
             Ok(())
         } else {
             Err(self.gen_err(
@@ -191,7 +169,7 @@ impl PartialRunConfig {
         }
     }
 
-    fn set_tape_size(&mut self, param: Vec<u8>) -> Result<(), (BFCompileError, OutMode)> {
+    fn set_tape_size(&mut self, param: OsString) -> Result<(), (BFCompileError, OutMode)> {
         use std::str::FromStr;
         if self.tape_blocks.is_some() {
             return Err(self.gen_err(
@@ -199,7 +177,7 @@ impl PartialRunConfig {
                 "passed -t multiple times",
             ));
         }
-        let Ok(Ok(tape_size)) = String::from_utf8(param).map(|s| u64::from_str(&s)) else {
+        let Ok(Ok(tape_size)) = param.into_string().map(|s| u64::from_str(&s)) else {
             return Err(self.gen_err(
                 BFErrorID::TapeSizeNotNumeric,
                 "tape size could not be parsed as a numeric value",
@@ -237,29 +215,22 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
     let mut pcfg = PartialRunConfig::default();
 
     while let Some(arg) = args.next() {
-        #[cfg(not(tarpaulin_include))]
-        #[cfg(not(any(unix, target_os = "wasi")))]
-        let arg = arg.into_string().map_err(|a| {
-            pcfg.gen_err(
-                BFErrorID::NonUTF8,
-                format!("Non-Unicode argument {:?} provided", a.to_string_lossy()),
-            )
-        })?;
         // handle non-flag values
         if arg == "--" {
             pcfg.source_files.extend(args);
             break;
         }
-        let arg_bytes = arg.as_bytes();
+        let arg_bytes: &[u8];
+        #[cfg(any(unix, target_os = "wasi"))]
+        {
+            arg_bytes = arg.as_bytes();
+        };
+        #[cfg(not(any(unix, target_os = "wasi")))]
+        {
+            arg_bytes = arg.as_encoded_bytes();
+        };
         if arg_bytes[0] != b'-' {
-            #[cfg_attr(
-                any(unix, target_os = "wasi"),
-                expect(
-                    clippy::useless_conversion,
-                    reason = "Not useless on platforms w/o unix-like OsStrings"
-                )
-            )]
-            pcfg.source_files.push(arg.into());
+            pcfg.source_files.push(arg);
             continue;
         }
 
@@ -270,36 +241,35 @@ pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
                 b'h' => return Ok(RunConfig::ShowHelp),
                 b'V' => return Ok(RunConfig::ShowVersion),
                 b'A' => return Ok(RunConfig::ListArches),
-                p if b"aest".contains(&p) => {
-                    let mut remainder: Vec<u8> = arg_byte_iter.collect();
+                b'a' | b'e' | b's' | b't' => {
+                    let mut remainder: OsString;
+                    #[cfg(any(unix, target_os = "wasi"))]
+                    {
+                        remainder = OsString::from_vec(arg_byte_iter.collect());
+                    };
+                    #[cfg(not(any(unix, target_os = "wasi")))]
+                    {
+                        // SAFETY: if this point is reached, then only ASCII characters will
+                        // have been encountered, as all recognized arguments are ASCII, and
+                        // non-ASCII characters would thus have triggered an UnknownArg error.
+                        //
+                        // Because of this, the fact that OsString encodings are a superset of
+                        // UTF-8 where the non-UTF-8 chunks are opaque but the UTF-8 chunks
+                        // aren't, and the fact that UTF-8 is a superset of ASCII, the
+                        // remaining bytes are definitely valid OsString encoding bytes.
+                        remainder = unsafe {
+                            OsString::from_encoded_bytes_unchecked(arg_byte_iter.collect())
+                        };
+                    };
                     if remainder.is_empty() {
-                        if let Some(next_arg) = args.next() {
-                            #[cfg(any(unix, target_os = "wasi"))]
-                            remainder.extend_from_slice(next_arg.as_bytes());
-                            #[cfg(not(tarpaulin_include))]
-                            #[cfg(not(any(unix, target_os = "wasi")))]
-                            remainder.extend(
-                                next_arg
-                                    .into_string()
-                                    .map_err(|a| {
-                                        pcfg.gen_err(
-                                            BFErrorID::NonUTF8,
-                                            format!(
-                                                "Non-Unicode argument {:?} provided",
-                                                a.to_string_lossy()
-                                            ),
-                                        )
-                                    })?
-                                    .into_bytes(),
-                            );
-                        } else {
-                            return Err(pcfg.gen_err(
+                        remainder = args.next().ok_or_else(|| {
+                            pcfg.gen_err(
                                 BFErrorID::MissingOperand,
-                                format!("-{} requires an additional argument", p.escape_ascii()),
-                            ));
-                        }
+                                format!("-{} requires an additional argument", char::from(b)),
+                            )
+                        })?;
                     }
-                    match p {
+                    match b {
                         b'a' => pcfg.set_arch(&remainder)?,
                         b'e' => pcfg.set_ext(remainder)?,
                         b's' => pcfg.set_suffix(remainder)?,
@@ -522,7 +492,7 @@ mod tests {
                     );
                 }
             }
-        }
+       }
     }
 
     #[test]
