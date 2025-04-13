@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 /// An extension trait that's used to provide a `fits_within_bits` method used within some backends
-#[allow(dead_code, reason = "Not used by all backends")]
 pub(super) trait MinimumBits {
     /// Returns `true` if the value of `self` can be stored within an integer of size `bits`
     ///

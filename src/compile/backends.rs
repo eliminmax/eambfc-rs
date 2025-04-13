@@ -91,8 +91,8 @@ impl Default for Backend {
 
 use super::arch_inter;
 
+#[cfg(any(feature = "arm64", feature = "riscv64"))]
 mod backend_utils;
-use backend_utils::MinimumBits;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ElfClass {

@@ -4,7 +4,7 @@
 
 use crate::err::{BFCompileError, BFErrorID};
 
-use super::MinimumBits;
+use super::backend_utils::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use crate::Backend;
 
