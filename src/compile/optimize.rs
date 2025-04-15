@@ -79,7 +79,7 @@ pub(super) fn filtered_read(file: impl BufRead) -> Result<Vec<FilteredInstr>, BF
     strip_dead_code(&mut code_buf);
     // because strip_dead_code was called, code_buf[0] can't be `b'['`, so skip it.
     let mut search_start: usize = 1;
-    while let Some((i, sz)) = set_zero_code(&code_buf, search_start) {
+    while let Some((i, sz)) = find_zero_code(&code_buf, search_start) {
         code_buf[i] = FI::SetZero;
         code_buf.drain(i + 1..=i + (sz - 1));
         // start the next search right after the replaced byte
@@ -239,7 +239,7 @@ fn find_dead_loop(code_bytes: &[FI], search_start: usize) -> Option<usize> {
 ///
 /// searching starts from `search_start`, so code known not to be part of such a sequence can be
 /// skipped over.
-fn set_zero_code(code_bytes: &[FI], search_start: usize) -> Option<(usize, usize)> {
+fn find_zero_code(code_bytes: &[FI], search_start: usize) -> Option<(usize, usize)> {
     if code_bytes.is_empty() {
         return None;
     }
