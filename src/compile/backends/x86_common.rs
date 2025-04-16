@@ -21,7 +21,10 @@ pub(in super::super) enum X86Register {
     #[expect(dead_code, reason = "included for completeness's sake")]
     Ebp = 0b101,
     Esi = 0b110,
-    #[cfg_attr(not(feature = "x86_64"), expect(dead_code, reason = "only used in x86_64"))]
+    #[cfg_attr(
+        not(feature = "x86_64"),
+        expect(dead_code, reason = "only used in x86_64")
+    )]
     Edi = 0b111,
 }
 
