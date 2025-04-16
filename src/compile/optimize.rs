@@ -2,309 +2,254 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+use super::FilteredInstr;
 use crate::err::{BFCompileError, BFErrorID};
 use std::io::BufRead;
+use std::num::NonZero;
 
-/// Either a brainfuck instruction or `FilteredInstr::SetZero` for sequences of instructions that
-/// set the current cell to zero with no side effects.
-#[derive(PartialEq, Clone, Copy)]
-#[cfg_attr(test, derive(Debug))]
-#[repr(u8)]
-pub(super) enum FilteredInstr {
-    /// The brainfuck `+` instruction
-    Add = b'+',
-    /// The brainfuck `-` instruction
-    Sub = b'-',
-    /// The brainfuck `<` instruction
-    MoveL = b'<',
-    /// The brainfuck `>` instruction
-    MoveR = b'>',
-    /// The brainfuck `,` instruction
-    Read = b',',
-    /// The brainfuck `.` instruction
-    Write = b'.',
-    /// The brainfuck `[` instruction
-    LoopOpen = b'[',
-    /// The brainfuck `]` instruction
-    LoopClose = b']',
-    /// A sequence of brainfuck instructions that can be easily determined to set the current cell
-    /// to zero no matter what.
-    SetZero = b'z',
+/// Represents one or more instructions, in an intemediate form that's easier to optimize.
+#[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug))]
+enum InstrSequence {
+    LoopOpen,
+    LoopClose,
+    Read,
+    Write,
+    ModifyCell(NonZero<i8>),
+    ModifyPtr(NonZero<i64>),
+    SetCell(u8),
 }
 
-impl FilteredInstr {
-    /// return `Some(FilteredInstr)` if `b` is a brainfuck instruction, and `None` otherwise
-    fn from_byte(b: u8) -> Option<Self> {
-        match b {
-            b'+' => Some(FI::Add),
-            b'-' => Some(FI::Sub),
-            b'<' => Some(FI::MoveL),
-            b'>' => Some(FI::MoveR),
-            b',' => Some(FI::Read),
-            b'.' => Some(FI::Write),
-            b'[' => Some(FI::LoopOpen),
-            b']' => Some(FI::LoopClose),
-            _ => None,
+/// the intermediate representation instructions produced by the optimization process
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum CombinedInstruction {
+    LoopOpen,
+    LoopClose,
+    Read,
+    Write,
+    Add(u8),
+    Sub(u8),
+    MoveLeft(u64),
+    MoveRight(u64),
+    SetCell(u8),
+}
+
+impl From<InstrSequence> for CombinedInstruction {
+    fn from(is: InstrSequence) -> Self {
+        match is {
+            InstrSequence::LoopOpen => Self::LoopOpen,
+            InstrSequence::LoopClose => Self::LoopClose,
+            InstrSequence::Read => Self::Read,
+            InstrSequence::Write => Self::Write,
+            InstrSequence::SetCell(imm) => Self::SetCell(imm),
+            InstrSequence::ModifyCell(imm) if imm.get() > 0 => Self::Add(imm.get().unsigned_abs()),
+            InstrSequence::ModifyCell(imm) => Self::Sub(imm.get().unsigned_abs()),
+            InstrSequence::ModifyPtr(imm) if imm.get() > 0 => {
+                Self::MoveLeft(imm.get().unsigned_abs())
+            }
+            InstrSequence::ModifyPtr(imm) => Self::MoveRight(imm.get().unsigned_abs()),
         }
     }
+}
 
-    /// return `true` if executing `other` right after `self` is equivalent to a no-op, or `false`
-    /// otherwise.
-    fn cancels(self, other: Self) -> bool {
-        match self {
-            FI::Add => other == FI::Sub,
-            FI::Sub => other == FI::Add,
-            FI::MoveL => other == FI::MoveR,
-            FI::MoveR => other == FI::MoveL,
-            _ => false,
+impl InstrSequence {
+    fn try_joining(self, other: Self) -> CombinationOutcome {
+        match (self, other) {
+            (IS::ModifyPtr(na), IS::ModifyPtr(nb)) => {
+                if let Some(n) = NonZero::new(na.get().wrapping_add(nb.get())) {
+                    CombinationOutcome::CombineInto(Self::ModifyPtr(n))
+                } else {
+                    CombinationOutcome::CancelOut
+                }
+            }
+            (IS::ModifyCell(na), IS::ModifyCell(nb)) => {
+                if let Some(n) = NonZero::new(na.get().wrapping_add(nb.get())) {
+                    CombinationOutcome::CombineInto(Self::ModifyCell(n))
+                } else {
+                    CombinationOutcome::CancelOut
+                }
+            }
+            _ => CombinationOutcome::DontCombine,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum CombinationOutcome {
+    CancelOut,
+    CombineInto(InstrSequence),
+    DontCombine,
+}
+
+impl From<FilteredInstr> for InstrSequence {
+    fn from(fi: FilteredInstr) -> Self {
+        match fi {
+            FilteredInstr::Sub => InstrSequence::ModifyCell(const { NonZero::new(-1).unwrap() }),
+            FilteredInstr::Add => InstrSequence::ModifyCell(const { NonZero::new(1).unwrap() }),
+            FilteredInstr::MoveL => InstrSequence::ModifyPtr(const { NonZero::new(-1).unwrap() }),
+            FilteredInstr::MoveR => InstrSequence::ModifyPtr(const { NonZero::new(1).unwrap() }),
+            FilteredInstr::LoopOpen => InstrSequence::LoopOpen,
+            FilteredInstr::LoopClose => InstrSequence::LoopClose,
+            FilteredInstr::Read => InstrSequence::Read,
+            FilteredInstr::Write => InstrSequence::Write,
         }
     }
 }
 
 use FilteredInstr as FI;
-/// Read `file`, filtering dead loops and redundant code like `+-` or `><`, into an
-/// `Ok(Vec<FilteredInstr>)`.
-pub(super) fn filtered_read(file: impl BufRead) -> Result<Vec<FilteredInstr>, BFCompileError> {
-    let mut code_buf: Vec<FI> = file
-        .bytes()
-        .filter_map(|res| res.map(FilteredInstr::from_byte).transpose())
-        .collect::<Result<_, _>>()
-        .map_err(|e| {
-            BFCompileError::basic(
-                BFErrorID::FailedRead,
-                format!("Failed to read filtered brainfuck from file: {e:?}"),
-            )
-        })?;
-    loops_match(code_buf.as_slice())?;
-    strip_dead_code(&mut code_buf);
-    // because strip_dead_code was called, code_buf[0] can't be `b'['`, so skip it.
-    let mut search_start: usize = 1;
-    while let Some((i, sz)) = find_zero_code(&code_buf, search_start) {
-        code_buf[i] = FI::SetZero;
-        code_buf.drain(i + 1..=i + (sz - 1));
-        // start the next search right after the replaced byte
-        search_start = i + 1;
-    }
+use InstrSequence as IS;
 
-    Ok(code_buf)
-}
-
-/// Return an `Err` if `code_bytes` has a `b']'` instruction outside of any loops, or if it has a
-/// `b'['` instruction that is never closed by a `b']'` instruction.
-fn loops_match(code_bytes: &[FI]) -> Result<(), BFCompileError> {
-    let mut nest_level: usize = 0;
-    for b in code_bytes {
-        match b {
-            FI::LoopOpen => nest_level += 1,
-            FI::LoopClose => {
-                if nest_level == 0 {
-                    return Err(BFCompileError::basic(
-                        BFErrorID::UnmatchedClose,
-                        "Found an unmatched ']' while preparing for optimization. \
-                            Compile without -O for more information.",
-                    ));
+/// Scan `ir` for dead loops - that is, loops that are immediately after other loops, or
+fn drop_dead_loops(ir: &mut Vec<IS>) -> Result<(), BFCompileError> {
+    // Start on LoopClose to eliminate opening loops from the very start of the code
+    let mut can_elim = true;
+    let mut i = 0;
+    'outer: while let Some(instr) = ir.get(i).copied() {
+        debug_assert!(
+            !matches!(instr, IS::SetCell(_)),
+            "`drop_dead_loops` should be called before set_sequences are handled"
+        );
+        if instr == IS::LoopOpen && can_elim {
+            let mut ii = i + 1;
+            let mut nest_level: usize = 1;
+            while let Some(inner_instr) = ir.get(ii).copied() {
+                match inner_instr {
+                    IS::LoopOpen => nest_level += 1,
+                    IS::LoopClose => {
+                        nest_level -= 1;
+                        if nest_level == 0 {
+                            ir.drain(i..i + ii);
+                            continue 'outer;
+                        }
+                    }
+                    _ => (),
                 }
-                nest_level -= 1;
+                ii += 1;
             }
-            _ => (),
+            return Err(BFCompileError::new(
+                BFErrorID::UnmatchedOpen,
+                "Could not optimize properly due to unmatched loop open",
+                Some(b'['),
+                None,
+            ));
         }
+        i += 1;
+        can_elim = instr == IS::LoopClose;
     }
-    if nest_level > 0 {
-        Err(BFCompileError::basic(
-            BFErrorID::UnmatchedOpen,
-            "Found an unmatched '[' while preparing for optimization. \
-                    Compile without -O for more information.",
-        ))
-    } else {
-        Ok(())
+    Ok(())
+}
+
+/// append one or more `InstrSequence`s to `dest` to represent `count` consecutive `instr`s
+fn append_counted_instrs(dest: &mut Vec<InstrSequence>, count: usize, instr: FilteredInstr) {
+    /// 4 nearly-identical pranches can be implemented with this macro - `$variant` is the
+    ///   identifier for the `CombinedInstruction` enum variant, and `$count_expr` is the
+    ///   expression to get the value from `count`.
+    macro_rules! condense_to {
+        ($variant: ident, $count_expr: expr) => {{
+            if let Some(ct) = NonZero::new($count_expr) {
+                dest.push(IS::$variant(ct));
+            }
+        }};
+    }
+    match instr {
+        FI::Add => condense_to!(ModifyCell, count as i8),
+        FI::Sub => condense_to!(ModifyCell, (count as i8).wrapping_neg()),
+        FI::MoveL => condense_to!(ModifyPtr, count as i64),
+        FI::MoveR => condense_to!(ModifyPtr, (count as i64).wrapping_neg()),
+        prev => dest.resize(dest.len() + count, prev.into()),
     }
 }
 
-/// This function does a few things repeatedly.
-///
-/// first, it strips out any occurrences of `b"+-"`, `b"-+"`, `b"<>"`, and `b"><"`, as those
-/// instructions directly cancel themselves out. Once it can't find any of them, it tries to strip
-/// out any sequences of exactly 256 consecutive `b'+'` or `b'-'` instructions, as those would
-/// overflow back to where they started.
-///
-/// Once none of those sequences were found, it searches for any conditional loop blocks that can be
-/// trivially determined never to execute, either because they are at the start of the program,
-/// when all cells are zero, or because they start right after another loop ends, meaning that the
-/// current cell must be zero.
-///
-/// If any code was removed during that process, it goes through it again. Otherwise, it returns.
-fn strip_dead_code(filtered_bytes: &mut Vec<FI>) {
-    // alternate between finding and removing code that cancels itself out, and finding and
-    // removing loops that can never run. Return the remaining code once both steps complete
-    // without changing any code
-    loop {
-        let mut unchanged = true;
-        // remove pairs of instructions cancel out.
-        let mut search_start = 0;
-        while let Some(index) = find_cancelling_pairs(filtered_bytes, search_start) {
-            unchanged = false;
-            search_start = index;
-            filtered_bytes.drain(index..index + 2);
-        }
-
-        // find and remove wrapping arithmetic
-        search_start = 0;
-        while let Some(index) = find_wrapping_arith(filtered_bytes, search_start) {
-            unchanged = false;
-            search_start = index;
-            filtered_bytes.drain(index..index + 256);
-        }
-
-        // find and remove dead loops later in the program
-        search_start = 0;
-        while let Some(index) = find_dead_loop(filtered_bytes, search_start) {
-            unchanged = false;
-            search_start = index;
-            let mut nest_level = 0;
-            for (i, b) in filtered_bytes[index..].iter().enumerate() {
-                if *b == FI::LoopOpen {
-                    nest_level += 1;
-                } else if *b == FI::LoopClose {
-                    nest_level -= 1;
-                }
-                if nest_level == 0 {
-                    filtered_bytes.drain(index..=index + i);
-                    break;
-                }
+/// Combine filtered instructions from `filtered_instrs` into a vec of `InstrSequence`s, returning
+/// an `Err(BFCompileError)` on read failure.
+fn combine_filtered(
+    filtered_instrs: impl IntoIterator<Item = Result<FI, BFCompileError>>,
+) -> Result<Vec<InstrSequence>, BFCompileError> {
+    let mut count: usize = 0;
+    let mut previous: Option<FI> = None;
+    let mut combined = Vec::<IS>::new();
+    let mut filtered_instrs = filtered_instrs.into_iter();
+    while let Some(instr) = filtered_instrs.next().transpose()? {
+        match previous {
+            None => {
+                debug_assert_eq!(
+                    0, count,
+                    "nonzero count makes no sense without previous instr."
+                );
+                previous = Some(instr);
+                count = 1;
+            }
+            Some(prev) if prev == instr => count += 1,
+            Some(prev) => {
+                append_counted_instrs(&mut combined, count, prev);
+                count = 1;
+                previous = Some(instr);
             }
         }
+    }
+    if let Some(final_instr) = previous {
+        append_counted_instrs(&mut combined, count, final_instr);
+    }
+    Ok(combined)
+}
 
-        // finally, check if any of the above changed anything. If not, break out of the loop.
-        if unchanged {
-            break;
+/// Join adjacent `ModifyCell` or `ModifyPtr` sequences, removing any that cancel out
+fn join_adjacent_arith(insns: &mut Vec<InstrSequence>) {
+    let mut i = 0;
+    while i < insns.len().saturating_sub(1) {
+        match insns[i].try_joining(insns[i + 1]) {
+            CombinationOutcome::CombineInto(combined) => {
+                insns.remove(i);
+                insns[i] = combined;
+            }
+            CombinationOutcome::CancelOut => drop(insns.drain(i..=i + 1)),
+            CombinationOutcome::DontCombine => i += 1,
         }
     }
 }
 
-/// Search for a cancelling pair in `code_bytes[search_start..]`, and return `Some(i)`, where `i` is
-/// its starting index within `code_bytes`, once found.
-///
-/// Returns `None` if it reaches the end of the slice without finding a match
-fn find_cancelling_pairs(code_bytes: &[FI], search_start: usize) -> Option<usize> {
-    for (i, window) in code_bytes[search_start..].windows(2).enumerate() {
-        if window[0].cancels(window[1]) {
-            return Some(search_start + i);
+use super::CodeReader;
+/// Collect `instructions` into a `Vec<CombinedInstruction>`, performing various optimizations in
+/// the process.
+pub(super) fn combine_instructions(
+    instructions: CodeReader<impl BufRead>,
+) -> Result<Vec<CombinedInstruction>, BFCompileError> {
+    let mut combined = combine_filtered(instructions)?;
+    join_adjacent_arith(&mut combined);
+
+    // Try to find sequences that set the current cell to a predetermined value, by zeroing it out
+    // then optionally adding or subtracting any number of times (including 0), and replace with
+    // `IS::SetCell`.
+    let mut search_start = 0;
+    drop_dead_loops(&mut combined)?;
+
+    'outer: loop {
+        for (i, window) in combined.windows(3).enumerate().skip(search_start) {
+            if window[0] == IS::LoopOpen
+                && matches!(window[1], IS::ModifyCell(ct) if ct.get() % 2 == 1)
+                && window[2] == IS::LoopClose
+            {
+                combined.drain(i + 1..=i + 2);
+                match combined.get(i + 1) {
+                    Some(IS::ModifyPtr(n)) => {
+                        combined[i] = IS::SetCell(n.get() as u8);
+                        combined.remove(i + 1);
+                    }
+                    _ => combined[i] = IS::SetCell(0),
+                }
+                continue 'outer;
+            }
+            search_start += 1;
         }
+        break 'outer;
     }
-    None
-}
-
-/// Search for 256 consecutive `b'-'` or `b'+'` instructions within `code_bytes[search_start..]`,
-/// and returns `Some(i)`, where `i` is its starting index within `code_bytes`, once found.
-///
-/// Returns `None` if it reaches the end of the slice without finding a match
-fn find_wrapping_arith(code_bytes: &[FI], search_start: usize) -> Option<usize> {
-    for (i, window) in code_bytes[search_start..].windows(256).enumerate() {
-        if window == [FI::Add; 256] || window == [FI::Sub; 256] {
-            return Some(search_start + i);
-        }
-    }
-    None
-}
-
-/// Search for a dead loop that can be trivially determined never to run within
-/// `code_bytes[search_start..]` and returns `Some(i)`, where `i` is its starting index within
-/// `code_bytes`.
-///
-/// Returns `None` if it reaches the end of the slice without finding a match
-fn find_dead_loop(code_bytes: &[FI], search_start: usize) -> Option<usize> {
-    if code_bytes.is_empty() {
-        return None;
-    }
-    if search_start == 0 && code_bytes[0] == FI::LoopOpen {
-        return Some(0);
-    }
-
-    for (index, window) in code_bytes[search_start.saturating_sub(1)..]
-        .windows(2)
-        .enumerate()
+    // drop trailing instructions other than `]`, `,`, or `.`, as other instructiosn will have no
+    // externally-visible effects if no I/O instructions will be run afterwards.
+    while combined
+        .last()
+        .is_some_and(|l| !matches!(l, IS::Read | IS::Write | IS::LoopClose))
     {
-        if window == [FI::LoopClose, FI::LoopOpen] {
-            return Some(search_start + index);
-        }
+        combined.remove(combined.len() - 1);
     }
-    None
-}
-
-/// Try to find a sequence that zeroes out the current byte without side effects. If one is found,
-/// returns `Some((i, sz))`, where `i` is the index of the `b'['` within the sequence, and `sz` is
-/// the length of the sequence.
-///
-/// Otherwise, it returns `None`.
-///
-/// searching starts from `search_start`, so code known not to be part of such a sequence can be
-/// skipped over.
-fn find_zero_code(code_bytes: &[FI], search_start: usize) -> Option<(usize, usize)> {
-    if code_bytes.is_empty() {
-        return None;
-    }
-
-    // TODO: Handle all sequences where the number of consecutive `-` or `+` instructions is
-    // coprime with 256.
-    for (i, window) in code_bytes[search_start..].windows(3).enumerate() {
-        if matches!(window, [FI::LoopOpen, FI::Add | FI::Sub, FI::LoopClose]) {
-            return Some((search_start + i, 3));
-        }
-    }
-    None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Read;
-
-    impl PartialEq<u8> for FI {
-        fn eq(&self, other: &u8) -> bool {
-            *self as u8 == *other
-        }
-    }
-
-    #[test]
-    fn strip_dead_code_test() {
-        let mut code = Vec::from(b"[+++++]><+---+++-[-][,[-][+>-<]]-+[-+]-+[]+-[]");
-        code.extend([b'+'; 256]);
-        code.extend(b"[+-]>");
-        code.extend([b'-'; 256]);
-        code.extend(b"[->+<][,.]");
-        let mut code = code
-            .into_iter()
-            .filter_map(FI::from_byte)
-            .collect::<Vec<_>>();
-        strip_dead_code(&mut code);
-        assert_eq!(code, b">[->+<]");
-    }
-
-    use std::io::ErrorKind;
-    struct Unreadable;
-    impl Read for Unreadable {
-        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::new(ErrorKind::Unsupported, "Unreadable"))
-        }
-    }
-
-    #[test]
-    fn read_failure_handled() {
-        use std::io::BufReader;
-        let unreadable = BufReader::new(Unreadable);
-
-        assert!(filtered_read(unreadable).is_err_and(|e| e.error_id() == BFErrorID::FailedRead));
-    }
-
-    #[test]
-    fn unmatched_loops_detected() {
-        assert_eq!(
-            loops_match(&[FI::LoopOpen]).unwrap_err().error_id(),
-            BFErrorID::UnmatchedOpen,
-        );
-        assert_eq!(
-            loops_match(&[FI::LoopClose]).unwrap_err().error_id(),
-            BFErrorID::UnmatchedClose,
-        );
-    }
+    Ok(combined.into_iter().map(From::from).collect())
 }

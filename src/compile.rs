@@ -4,7 +4,7 @@
 mod fsutil;
 use fsutil::set_extension;
 mod optimize;
-use optimize::filtered_read;
+use optimize::{CombinedInstruction, combine_instructions};
 mod arch_inter;
 use arch_inter::ArchInter;
 
@@ -19,6 +19,96 @@ use std::io::{BufReader, Read, Write};
 struct JumpLocation {
     loc: Option<CodePosition>,
     index: usize,
+}
+
+/// a brainfuck instruction
+#[derive(PartialEq, Clone, Copy)]
+#[cfg_attr(test, derive(Debug))]
+#[repr(u8)]
+enum FilteredInstr {
+    /// The brainfuck `+` instruction
+    Add = b'+',
+    /// The brainfuck `-` instruction
+    Sub = b'-',
+    /// The brainfuck `<` instruction
+    MoveL = b'<',
+    /// The brainfuck `>` instruction
+    MoveR = b'>',
+    /// The brainfuck `,` instruction
+    Read = b',',
+    /// The brainfuck `.` instruction
+    Write = b'.',
+    /// The brainfuck `[` instruction
+    LoopOpen = b'[',
+    /// The brainfuck `]` instruction
+    LoopClose = b']',
+}
+
+impl FilteredInstr {
+    /// return `Some(FilteredInstr)` if `b` is a brainfuck instruction, and `None` otherwise
+    fn from_byte(b: u8) -> Option<Self> {
+        match b {
+            b'+' => Some(Self::Add),
+            b'-' => Some(Self::Sub),
+            b'<' => Some(Self::MoveL),
+            b'>' => Some(Self::MoveR),
+            b',' => Some(Self::Read),
+            b'.' => Some(Self::Write),
+            b'[' => Some(Self::LoopOpen),
+            b']' => Some(Self::LoopClose),
+            _ => None,
+        }
+    }
+}
+
+/// An iterator that returns `FilteredInstr`uctions read from a reader that implements `BufRead`,
+/// tracking code position
+struct CodeReader<R> {
+    byte_reader: std::io::Bytes<R>,
+    pos: CodePosition,
+}
+
+impl<R: Read> CodeReader<BufReader<R>> {
+    fn new(inner_reader: R) -> Self {
+        Self {
+            byte_reader: BufReader::new(inner_reader).bytes(),
+            pos: CodePosition { line: 1, col: 0 },
+        }
+    }
+}
+
+impl<R: Read> Iterator for CodeReader<R> {
+    type Item = Result<FilteredInstr, BFCompileError>;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(b) = self.byte_reader.by_ref().next() {
+            let b = match b {
+                Ok(ok) => ok,
+                Err(err) => {
+                    return Some(Err(BFCompileError::new(
+                        BFErrorID::FailedRead,
+                        format!("An I/O error occured: {err:?}"),
+                        None,
+                        Some(self.pos),
+                    )));
+                }
+            };
+            // This comparison that a byte isn't a continuation byte within a UTF-8 multi-byte
+            // sequence, so if it's either a new UTF-8 codepoint or invalid UTF-8, this will
+            // increment the column counter, but it won't if it's a byte that's typically a
+            // continuatio of a UTF-8 sequence
+            if b & 0xc0 != 0x80 {
+                self.pos.col += 1;
+            }
+            if let Some(fi) = FilteredInstr::from_byte(b) {
+                return Some(Ok(fi));
+            }
+            if b == b'\n' {
+                self.pos.col = 0;
+                self.pos.line += 1;
+            }
+        }
+        None
+    }
 }
 
 // ELF addressing stuff
@@ -242,53 +332,31 @@ trait BFCompileHelper: ArchInter {
         Ok(())
     }
 
-    /// Compile a sequence of `count` copies of `instr` in a row
-    fn compile_condensed_instr(
-        instr: optimize::FilteredInstr,
-        count: usize,
+    /// Compile IR operations from `code`, writing machine code to `dst`
+    fn compile_combined(
         dst: &mut Vec<u8>,
-        jump_stack: &mut Vec<JumpLocation>,
+        code: Vec<CombinedInstruction>,
     ) -> Result<(), BFCompileError> {
-        use optimize::FilteredInstr as FI;
-        if instr != FI::SetZero && count == 1 {
-            return Self::compile_instr(instr as u8, dst, None, jump_stack);
+        let mut jump_stack = Vec::new();
+        macro_rules! compile_as_bf {
+            ($bf_instr: literal) => {{ Self::compile_instr($bf_instr, dst, None, &mut jump_stack) }};
         }
-        match instr {
-            FI::SetZero => Self::zero_byte(dst, Self::REGISTERS.bf_ptr),
-            FI::Add => Self::add_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
-            FI::Sub => Self::sub_byte(dst, Self::REGISTERS.bf_ptr, count as u8),
-            FI::MoveL => Self::sub_reg(dst, Self::REGISTERS.bf_ptr, count as u64)?,
-            FI::MoveR => Self::add_reg(dst, Self::REGISTERS.bf_ptr, count as u64)?,
-            _ => {
-                for _ in 0..count {
-                    Self::compile_instr(instr as u8, dst, None, jump_stack)?;
-                }
+        macro_rules! compile_combined {
+            ($inner_func: ident, $val: ident) => {{ <Self as ArchInter>::$inner_func(dst, <Self as ArchInter>::REGISTERS.bf_ptr, $val) }};
+        }
+        for ir_instr in code {
+            match ir_instr {
+                CombinedInstruction::LoopOpen => compile_as_bf!(b'[')?,
+                CombinedInstruction::LoopClose => compile_as_bf!(b']')?,
+                CombinedInstruction::Read => compile_as_bf!(b',')?,
+                CombinedInstruction::Write => compile_as_bf!(b'.')?,
+                CombinedInstruction::Add(i) => compile_combined!(add_byte, i),
+                CombinedInstruction::Sub(i) => compile_combined!(sub_byte, i),
+                CombinedInstruction::MoveLeft(i) => compile_combined!(sub_reg, i)?,
+                CombinedInstruction::MoveRight(i) => compile_combined!(add_reg, i)?,
+                CombinedInstruction::SetCell(i) => Self::set_byte(dst, Self::REGISTERS.bf_ptr, i),
             }
         }
-        Ok(())
-    }
-
-    fn compile_condensed(
-        dst: &mut Vec<u8>,
-        jump_stack: &mut Vec<JumpLocation>,
-        filtered_code: Vec<optimize::FilteredInstr>,
-    ) -> Result<(), Vec<BFCompileError>> {
-        let mut filtered_code = filtered_code.into_iter();
-        let Some(mut prev_instr) = filtered_code.next() else {
-            return Ok(());
-        };
-
-        let mut count: usize = 1;
-        for instr in filtered_code {
-            if instr == prev_instr {
-                count += 1;
-            } else {
-                Self::compile_condensed_instr(prev_instr, count, dst, jump_stack)?;
-                prev_instr = instr;
-                count = 1;
-            }
-        }
-        Self::compile_condensed_instr(prev_instr, count, dst, jump_stack)?;
         Ok(())
     }
 }
@@ -312,16 +380,10 @@ impl<B: BFCompileHelper> BFCompile for B {
         let reader = BufReader::new(in_f);
 
         if optimize {
-            match filtered_read(reader) {
-                Ok(filtered_code) => {
-                    if let Err(e) =
-                        Self::compile_condensed(&mut code_buf, &mut jump_stack, filtered_code)
-                    {
-                        errs.extend(e);
-                    }
-                }
-                Err(e) => errs.push(e),
-            }
+            Self::compile_combined(
+                &mut code_buf,
+                combine_instructions(CodeReader::new(reader))?,
+            )?;
         } else {
             reader.bytes().for_each(|maybe_byte| match maybe_byte {
                 Ok(byte) => {
