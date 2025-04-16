@@ -231,7 +231,7 @@ pub(super) fn combine_instructions(
     'outer: loop {
         for (i, window) in combined.windows(3).enumerate().skip(search_start) {
             if window[0] == IS::LoopOpen
-                && matches!(window[1], IS::ModifyCell(ct) if ct.get() % 2 == 1)
+                && matches!(window[1], IS::ModifyCell(ct) if ct.get().abs() % 2 == 1)
                 && window[2] == IS::LoopClose
             {
                 combined.drain(i + 1..=i + 2);
