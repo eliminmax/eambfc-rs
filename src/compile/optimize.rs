@@ -9,7 +9,7 @@ use std::num::NonZero;
 
 /// Represents one or more instructions, in an intemediate form that's easier to optimize.
 #[derive(Clone, Copy, PartialEq)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[cfg_attr(any(test, debug_assertions), derive(Debug))]
 enum InstrSequence {
     LoopOpen,
     LoopClose,
@@ -22,6 +22,7 @@ enum InstrSequence {
 
 /// the intermediate representation instructions produced by the optimization process
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 pub(super) enum CombinedInstruction {
     LoopOpen,
     LoopClose,
@@ -83,6 +84,7 @@ impl InstrSequence {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
 enum CombinationOutcome {
     CancelOut,
     CombineInto(InstrSequence),
@@ -257,4 +259,153 @@ pub(super) fn combine_instructions(
         combined.remove(combined.len() - 1);
     }
     Ok(combined.into_iter().map(From::from).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn translate_between_levels() {
+        let instrs: Vec<_> = Vec::from(b"+-<>[],.")
+            .into_iter()
+            .filter_map(|b| FilteredInstr::from_byte(b).map(InstrSequence::from))
+            .collect();
+        assert_eq!(
+            instrs,
+            [
+                InstrSequence::ModifyCell(NonZero::new(1).unwrap()),
+                InstrSequence::ModifyCell(NonZero::new(-1).unwrap()),
+                InstrSequence::ModifyPtr(NonZero::new(-1).unwrap()),
+                InstrSequence::ModifyPtr(NonZero::new(1).unwrap()),
+                InstrSequence::LoopOpen,
+                InstrSequence::LoopClose,
+                InstrSequence::Read,
+                InstrSequence::Write,
+            ]
+        );
+        let instrs: Vec<_> = instrs.into_iter().map(CombinedInstruction::from).collect();
+        assert_eq!(
+            instrs,
+            [
+                CombinedInstruction::Add(1),
+                CombinedInstruction::Sub(1),
+                CombinedInstruction::MoveLeft(1),
+                CombinedInstruction::MoveRight(1),
+                CombinedInstruction::LoopOpen,
+                CombinedInstruction::LoopClose,
+                CombinedInstruction::Read,
+                CombinedInstruction::Write,
+            ]
+        );
+        // Original implementation swapped left and right terminology, so make sure to catch that.
+        assert_eq!(
+            CombinedInstruction::from(InstrSequence::from(FilteredInstr::from_byte(b'>').unwrap())),
+            CombinedInstruction::MoveRight(1)
+        );
+        assert_eq!(
+            CombinedInstruction::from(InstrSequence::from(FilteredInstr::from_byte(b'<').unwrap())),
+            CombinedInstruction::MoveLeft(1)
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic = "`drop_dead_loops` should be called before set_sequences are handled"]
+    fn combined_called_out_of_order() {
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "checking for debug_assert_eq anyway"
+        )]
+        let _ = drop_dead_loops(&mut vec![InstrSequence::SetCell(0)]);
+    }
+
+    #[test]
+    fn combination_logic_works() {
+        assert_eq!(
+            IS::try_joining(
+                IS::ModifyPtr(NonZero::new(32).unwrap()),
+                IS::ModifyCell(NonZero::new(32).unwrap())
+            ),
+            CombinationOutcome::DontCombine
+        );
+        assert_eq!(
+            IS::try_joining(
+                IS::ModifyPtr(NonZero::new(-32).unwrap()),
+                IS::ModifyPtr(NonZero::new(-32).unwrap())
+            ),
+            CombinationOutcome::CombineInto(IS::ModifyPtr(NonZero::new(-64).unwrap()))
+        );
+        assert_eq!(
+            IS::try_joining(
+                IS::ModifyPtr(NonZero::new(32).unwrap()),
+                IS::ModifyPtr(NonZero::new(32).unwrap())
+            ),
+            CombinationOutcome::CombineInto(IS::ModifyPtr(NonZero::new(64).unwrap()))
+        );
+        assert_eq!(
+            IS::try_joining(
+                IS::ModifyPtr(NonZero::new(32).unwrap()),
+                IS::ModifyPtr(NonZero::new(-32).unwrap())
+            ),
+            CombinationOutcome::CancelOut
+        );
+    }
+    #[test]
+    fn combination_test() {
+        let mut code = Vec::from(b"[+++++]><+---+++-[-][,[-][+>-<]]-+[-+]-+[]+-[]");
+        code.extend([b'+'; 256]);
+        code.extend(b"[+-]>>");
+        code.extend([b'-'; 256]);
+        code.extend(b"[->+<][,.]");
+        code.extend(b"+++");
+        let combined = combine_instructions(CodeReader::new(code.as_slice())).unwrap();
+
+        // Should be reduced by dead code removal to the equivalent of ">>[->+<]"
+        assert_eq!(
+            combined,
+            [
+                CombinedInstruction::MoveRight(2),
+                CombinedInstruction::LoopOpen,
+                CombinedInstruction::Sub(1),
+                CombinedInstruction::MoveRight(1),
+                CombinedInstruction::Add(1),
+                CombinedInstruction::MoveLeft(1),
+                CombinedInstruction::LoopClose
+            ]
+        );
+    }
+    #[test]
+    fn zeroing_code_caught() {
+        // Using `,` before each loop prevents the optimizer from concluding the loops are dead,
+        // and the trailing `,` prevents it from removing the last SetCell as side-effect-free.
+        // Even numbers of adds or subs may loop forever or set zero, but odd numbers will always
+        // set zero.
+        let code = combine_instructions(CodeReader::new(
+            b",[-],[--],[---],[+++],[++],[+],".as_slice(),
+        ))
+        .unwrap();
+        assert_eq!(
+            code,
+            [
+                CombinedInstruction::Read,       // b","
+                CombinedInstruction::SetCell(0), // b"[-]"
+                CombinedInstruction::Read,       // b","
+                CombinedInstruction::LoopOpen,   // b"["
+                CombinedInstruction::Sub(2),     // b"--"
+                CombinedInstruction::LoopClose,  // b"]"
+                CombinedInstruction::Read,       // b","
+                CombinedInstruction::SetCell(0), // b"[---]"
+                CombinedInstruction::Read,       // b","
+                CombinedInstruction::SetCell(0), // b"[+++]"
+                CombinedInstruction::Read,       // b","
+                CombinedInstruction::LoopOpen,   // b"["
+                CombinedInstruction::Add(2),     // b"++"
+                CombinedInstruction::LoopClose,  // b"]"
+                CombinedInstruction::Read,       // b","
+                CombinedInstruction::SetCell(0), // b"[+]"
+                CombinedInstruction::Read,       // b","
+            ]
+        );
+    }
 }
