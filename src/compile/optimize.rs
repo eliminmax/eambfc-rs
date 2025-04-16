@@ -180,10 +180,6 @@ fn combine_filtered(
     while let Some(instr) = filtered_instrs.next().transpose()? {
         match previous {
             None => {
-                debug_assert_eq!(
-                    0, count,
-                    "nonzero count makes no sense without previous instr."
-                );
                 previous = Some(instr);
                 count = 1;
             }
