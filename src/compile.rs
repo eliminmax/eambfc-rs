@@ -86,7 +86,7 @@ impl<R: Read> Iterator for CodeReader<R> {
                 Err(err) => {
                     return Some(Err(BFCompileError::new(
                         BFErrorID::FailedRead,
-                        format!("An I/O error occured: {err:?}"),
+                        format!("An I/O error occurred reading from file: {err:?}"),
                         None,
                         Some(self.pos),
                     )));
