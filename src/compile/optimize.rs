@@ -221,11 +221,12 @@ pub(super) fn combine_instructions(
     let mut combined = combine_filtered(instructions)?;
     join_adjacent_arith(&mut combined);
 
+    drop_dead_loops(&mut combined)?;
+
+    let mut search_start = 0;
     // Try to find sequences that set the current cell to a predetermined value, by zeroing it out
     // then optionally adding or subtracting any number of times (including 0), and replace with
     // `IS::SetCell`.
-    let mut search_start = 0;
-    drop_dead_loops(&mut combined)?;
 
     'outer: loop {
         for (i, window) in combined.windows(3).enumerate().skip(search_start) {
