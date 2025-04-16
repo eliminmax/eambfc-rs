@@ -72,7 +72,7 @@ pub(super) trait ArchInter {
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8);
     /// append machine code to `code_buf` to set the byte pointed to by `reg` to `0`
     fn zero_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
-    /// append machine code to `code_buf` to se tthe byte pointed to by `reg` to `imm`
+    /// append machine code to `code_buf` to set the byte pointed to by `reg` to `imm`
     /// Default implementation should be replaced with something more efficient.
     fn set_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
         Self::zero_byte(code_buf, reg);
