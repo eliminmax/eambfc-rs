@@ -342,7 +342,9 @@ trait BFCompileHelper: ArchInter {
             ($bf_instr: literal) => {{ Self::compile_instr($bf_instr, dst, None, &mut jump_stack) }};
         }
         macro_rules! compile_combined {
-            ($inner_func: ident, $val: ident) => {{ <Self as ArchInter>::$inner_func(dst, <Self as ArchInter>::REGISTERS.bf_ptr, $val) }};
+            ($inner_func: ident, $val: ident) => {{
+                <Self as ArchInter>::$inner_func(dst, <Self as ArchInter>::REGISTERS.bf_ptr, $val)
+            }};
         }
         for ir_instr in code {
             match ir_instr {
