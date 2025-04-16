@@ -29,8 +29,8 @@ pub(super) enum CombinedInstruction {
     Write,
     Add(u8),
     Sub(u8),
-    MoveLeft(u64),
     MoveRight(u64),
+    MoveLeft(u64),
     SetCell(u8),
 }
 
@@ -42,12 +42,20 @@ impl From<InstrSequence> for CombinedInstruction {
             InstrSequence::Read => Self::Read,
             InstrSequence::Write => Self::Write,
             InstrSequence::SetCell(imm) => Self::SetCell(imm),
-            InstrSequence::ModifyCell(imm) if imm.get() > 0 => Self::Add(imm.get().unsigned_abs()),
-            InstrSequence::ModifyCell(imm) => Self::Sub(imm.get().unsigned_abs()),
-            InstrSequence::ModifyPtr(imm) if imm.get() > 0 => {
-                Self::MoveLeft(imm.get().unsigned_abs())
+            InstrSequence::ModifyCell(imm) => {
+                if imm.get() > 0 {
+                    Self::Add(imm.get().unsigned_abs())
+                } else {
+                    Self::Sub(imm.get().unsigned_abs())
+                }
             }
-            InstrSequence::ModifyPtr(imm) => Self::MoveRight(imm.get().unsigned_abs()),
+            InstrSequence::ModifyPtr(imm) => {
+                if imm.get() > 0 {
+                    Self::MoveRight(imm.get().unsigned_abs())
+                } else {
+                    Self::MoveLeft(imm.get().unsigned_abs())
+                }
+            }
         }
     }
 }
@@ -154,8 +162,8 @@ fn append_counted_instrs(dest: &mut Vec<InstrSequence>, count: usize, instr: Fil
     match instr {
         FI::Add => condense_to!(ModifyCell, count as i8),
         FI::Sub => condense_to!(ModifyCell, (count as i8).wrapping_neg()),
-        FI::MoveL => condense_to!(ModifyPtr, count as i64),
-        FI::MoveR => condense_to!(ModifyPtr, (count as i64).wrapping_neg()),
+        FI::MoveR => condense_to!(ModifyPtr, count as i64),
+        FI::MoveL => condense_to!(ModifyPtr, (count as i64).wrapping_neg()),
         prev => dest.resize(dest.len() + count, prev.into()),
     }
 }
