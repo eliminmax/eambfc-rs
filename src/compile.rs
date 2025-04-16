@@ -341,6 +341,7 @@ trait BFCompileHelper: ArchInter {
         macro_rules! compile_as_bf {
             ($bf_instr: literal) => {{ Self::compile_instr($bf_instr, dst, None, &mut jump_stack) }};
         }
+        #[rustfmt::skip]
         macro_rules! compile_combined {
             ($inner_func: ident, $val: ident) => {{
                 Self::$inner_func(dst, Self::REGISTERS.bf_ptr, $val)
