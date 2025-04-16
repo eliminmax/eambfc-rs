@@ -118,7 +118,7 @@ fn drop_dead_loops(ir: &mut Vec<IS>) -> Result<(), BFCompileError> {
                     IS::LoopClose => {
                         nest_level -= 1;
                         if nest_level == 0 {
-                            ir.drain(i..i + ii);
+                            ir.drain(i..=ii);
                             continue 'outer;
                         }
                     }
