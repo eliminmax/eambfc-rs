@@ -250,11 +250,10 @@ trait BFCompileHelper: ArchInter {
     ///
     /// Due to their similarity, `b','` and b`'.'` are both implemented with `bf_io`.
     fn bf_io(code_buf: &mut Vec<u8>, sc: i64, fd: i64) {
-        Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc).expect("sc nums fits in regs");
         Self::set_reg(code_buf, Self::REGISTERS.arg1, fd).expect("stdin/stdout fds fit in regs");
         Self::reg_copy(code_buf, Self::REGISTERS.arg2, Self::REGISTERS.bf_ptr);
         Self::set_reg(code_buf, Self::REGISTERS.arg3, 1).expect("1 fits in regs");
-        Self::syscall(code_buf);
+        Self::syscall(code_buf, sc);
     }
 
     /// Compile `instr`, appending the machine code to `code_buf`. `jump_stack` is used to track
@@ -418,10 +417,8 @@ impl<B: BFCompileHelper> BFCompile for B {
             ));
         }
         // finally, after that mess, end with an exit(0)
-        Self::set_reg(&mut code_buf, Self::REGISTERS.sc_num, Self::SC_NUMS.exit)
-            .expect("sc nums fit in regs");
         Self::set_reg(&mut code_buf, Self::REGISTERS.arg1, 0).expect("0 fits in regs");
-        Self::syscall(&mut code_buf);
+        Self::syscall(&mut code_buf, Self::SC_NUMS.exit);
 
         let code_sz = code_buf.len();
         if let Err(e) = write_headers(&mut out_f, code_sz, tape_blocks, Self::ARCH, Self::E_FLAGS) {

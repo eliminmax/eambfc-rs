@@ -150,6 +150,7 @@ impl ArchInter for Arm64Inter {
     type RegType = Arm64Register;
     const JUMP_SIZE: usize = 12;
     const E_FLAGS: u32 = 0;
+    const SYSCALL_INSTR: &[u8] = &u32::to_le_bytes(0xd400_0001);
 
     const REGISTERS: Registers<Arm64Register> = Registers {
         // Linux uses w8 for system call numbers, but w8 is just the lower 32 bits of x8.
@@ -178,11 +179,6 @@ impl ArchInter for Arm64Inter {
         code_buf.extend(u32::to_le_bytes(
             0xaa00_03e0 | (dst as u32) | ((src as u32) << 16),
         ));
-    }
-
-    fn syscall(code_buf: &mut Vec<u8>) {
-        // SVC 0
-        code_buf.extend(const { u32::to_le_bytes(0xd400_0001) });
     }
 
     fn pad_loop_open(code_buf: &mut Vec<u8>) {
@@ -548,9 +544,10 @@ mod tests {
 
     #[disasm_test]
     fn test_syscall() {
-        let mut v: Vec<u8> = Vec::with_capacity(4);
-        Arm64Inter::syscall(&mut v);
-        assert_eq!(disassembler().disassemble(v), ["svc #0"]);
+        assert_eq!(
+            disassembler().disassemble(Arm64Inter::SYSCALL_INSTR.into()),
+            ["svc #0"]
+        );
     }
 
     #[disasm_test]

@@ -313,6 +313,9 @@ impl ArchInter for S390xInter {
     const JUMP_SIZE: usize = 18;
     const E_FLAGS: u32 = 0;
 
+    // SVC 0 {I}
+    const SYSCALL_INSTR: &[u8] = &[0x0a, 0x00];
+
     const REGISTERS: Registers<S390xRegister> = Registers {
         sc_num: S390xRegister::R1,
         arg1: S390xRegister::R2,
@@ -377,9 +380,13 @@ impl ArchInter for S390xInter {
         code_buf.extend([0xb9, 0x04, 0x00, ((dst as u8) << 4) | (src as u8)]);
     }
 
-    fn syscall(code_buf: &mut Vec<u8>) {
-        // SVC 0 {I}
-        code_buf.extend([0x0a, 0x00]);
+    fn syscall(code_buf: &mut Vec<u8>, sc_num: i64) {
+        if let 1..=255 = sc_num {
+            code_buf.extend([0x0a, sc_num as u8]);
+        } else {
+            Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc_num).unwrap();
+            code_buf.extend_from_slice(Self::SYSCALL_INSTR);
+        }
     }
 
     fn jump_open(
@@ -673,9 +680,16 @@ mod tests {
 
     #[disasm_test]
     fn syscall_test() {
+        let mut ds = disassembler();
+        assert_eq!(ds.disassemble(S390xInter::SYSCALL_INSTR.into()), ["svc 0"]);
+
         let mut v: Vec<u8> = Vec::new();
-        S390xInter::syscall(&mut v);
-        assert_eq!(Disassembler::new(Backend::S390x).disassemble(v), ["svc 0"]);
+        S390xInter::syscall(&mut v, 1);
+        assert_eq!(ds.disassemble(v), ["svc 1"]);
+
+        let mut v: Vec<u8> = Vec::new();
+        S390xInter::syscall(&mut v, 0);
+        assert_eq!(ds.disassemble(v), ["lgr %r1, %r0", "svc 0"]);
     }
 
     #[disasm_test]

@@ -252,6 +252,9 @@ impl ArchInter for RiscV64Inter {
     const ARCH: Backend = Backend::RiscV64;
     const E_FLAGS: u32 = 5; // EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE (chosen to match Debian)
 
+    // ecall
+    const SYSCALL_INSTR: &[u8] = &u32::to_le_bytes(0x73);
+
     fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) -> FailableInstrEncoding {
         encode_li(code_buf, reg.into(), imm);
         Ok(())
@@ -262,11 +265,6 @@ impl ArchInter for RiscV64Inter {
         code_buf.extend(u16::to_le_bytes(
             0x8002 | ((dst as u16) << 7) | ((src as u16) << 2),
         ));
-    }
-
-    fn syscall(code_buf: &mut Vec<u8>) {
-        // ecall
-        code_buf.extend(u32::to_le_bytes(0x73));
     }
 
     fn pad_loop_open(code_buf: &mut Vec<u8>) {
@@ -592,9 +590,7 @@ mod test {
 
     #[disasm_test]
     fn test_syscall() {
-        let mut v = Vec::with_capacity(4);
-        RiscV64Inter::syscall(&mut v);
-        assert_eq!(disassembler().disassemble(v), ["ecall"]);
+        assert_eq!(disassembler().disassemble(RiscV64Inter::SYSCALL_INSTR.into()), ["ecall"]);
     }
 
     #[disasm_test]

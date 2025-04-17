@@ -61,6 +61,10 @@ impl ArchInter for X86_64Inter {
         exit: 60,
     };
     const ARCH: Backend = Backend::X86_64;
+
+    // SYSCALL
+    const SYSCALL_INSTR: &[u8] = &[0x0f, 0x05];
+
     x86_common_impl!();
 
     // Chooses the shortest instrution to set a register to an immediate value, from the following:
@@ -89,11 +93,6 @@ impl ArchInter for X86_64Inter {
     fn reg_copy(code_buf: &mut Vec<u8>, dst: X86Register, src: X86Register) {
         // MOV dst, src
         code_buf.extend([0x89, 0xc0 + ((src as u8) << 3) + dst as u8]);
-    }
-
-    fn syscall(code_buf: &mut Vec<u8>) {
-        // SYSCALL
-        code_buf.extend([0x0f, 0x05]);
     }
 
     fn inc_reg(code_buf: &mut Vec<u8>, reg: X86Register) {
