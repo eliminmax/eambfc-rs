@@ -107,7 +107,9 @@ impl ArchInter for X86_64Inter {
     }
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
-        if let Ok(imm8) = i8::try_from(imm) {
+        if imm == 1 {
+            Self::inc_reg(code_buf, reg);
+        } else if let Ok(imm8) = i8::try_from(imm) {
             add_reg_imm8(code_buf, reg, imm8);
         } else if let Ok(imm32) = i32::try_from(imm) {
             add_reg_imm32(code_buf, reg, imm32);
@@ -118,7 +120,9 @@ impl ArchInter for X86_64Inter {
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
-        if let Ok(imm8) = i8::try_from(imm) {
+        if imm == 1 {
+            Self::dec_reg(code_buf, reg);
+        } else if let Ok(imm8) = i8::try_from(imm) {
             sub_reg_imm8(code_buf, reg, imm8);
         } else if let Ok(imm32) = i32::try_from(imm) {
             sub_reg_imm32(code_buf, reg, imm32);

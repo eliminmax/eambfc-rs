@@ -121,13 +121,21 @@ macro_rules! x86_common_impl {
         }
 
         fn add_byte(code_buf: &mut Vec<u8>, reg: X86Register, imm: u8) {
-            // ADD byte [reg], imm8
-            code_buf.extend([0x80, reg as u8, imm]);
+            match imm {
+                1 => Self::inc_byte(code_buf, reg),
+                255 => Self::dec_byte(code_buf, reg),
+                // ADD byte [reg], imm8
+                _ => code_buf.extend([0x80, reg as u8, imm]),
+            }
         }
 
         fn sub_byte(code_buf: &mut Vec<u8>, reg: X86Register, imm: u8) {
-            // SUB byte [reg], imm8
-            code_buf.extend([0x80, 0x28 | (reg as u8), imm]);
+            match imm {
+                1 => Self::dec_byte(code_buf, reg),
+                255 => Self::inc_byte(code_buf, reg),
+                // SUB byte [reg], imm8
+                _ => code_buf.extend([0x80, 0x28 | (reg as u8), imm]),
+            }
         }
 
         fn zero_byte(code_buf: &mut Vec<u8>, reg: X86Register) {
