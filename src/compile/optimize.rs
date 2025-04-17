@@ -238,7 +238,7 @@ pub(super) fn combine_instructions(
             {
                 combined.drain(i + 1..=i + 2);
                 match combined.get(i + 1) {
-                    Some(IS::ModifyPtr(n)) => {
+                    Some(IS::ModifyCell(n)) => {
                         combined[i] = IS::SetCell(n.get() as u8);
                         combined.remove(i + 1);
                     }
