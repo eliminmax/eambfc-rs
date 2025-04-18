@@ -61,7 +61,6 @@ pub(super) trait ArchInter {
     /// append machine code to `code_buf` to test if the byte pointed to by `reg` is zero, and jump
     /// `offset` bytes away if not
     ///
-    ///
     /// Should return an error if `offset` is too large of a jump for this architecture
     fn jump_close(code_buf: &mut Vec<u8>, reg: Self::RegType, offset: i64)
     -> FailableInstrEncoding;
