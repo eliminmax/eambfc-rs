@@ -481,20 +481,20 @@ impl ArchInter for S390xInter {
 // real-world assemblers are different from the opcodes used in the documentation cited above.
 #[cfg(test)]
 #[cfg_attr(
-    feature = "disasmtests",
+    all(feature = "disasmtests", not(cross_compiled)),
     expect(
         overflowing_literals,
         reason = "needed to demonstrate bitwise equivalence"
     )
 )]
 mod tests {
-    #[cfg(feature = "disasmtests")]
+    #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     use super::super::test_utils::Disassembler;
     use super::*;
     use test_macros::disasm_test;
 
     #[cfg_attr(
-        not(feature = "disasmtests"),
+        not(all(feature = "disasmtests", not(cross_compiled))),
         expect(unused_macros, reason = "macro only used in disassembly tests")
     )]
     /// Given that even though it is set to use hex immediates, the LLVM disassembler for this
@@ -513,7 +513,7 @@ mod tests {
         };
     }
 
-    #[cfg(feature = "disasmtests")]
+    #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     fn disassembler() -> Disassembler {
         Disassembler::new(Backend::S390x)
     }

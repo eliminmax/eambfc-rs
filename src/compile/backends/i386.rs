@@ -155,13 +155,13 @@ fn sub_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "disasmtests")]
+    #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     use super::super::test_utils::Disassembler;
     use super::*;
     use crate::err::BFErrorID;
     use test_macros::disasm_test;
 
-    #[cfg(feature = "disasmtests")]
+    #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     fn disassembler() -> Disassembler {
         Disassembler::new(Backend::I386)
     }

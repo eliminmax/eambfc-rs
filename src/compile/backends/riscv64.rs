@@ -371,12 +371,12 @@ impl ArchInter for RiscV64Inter {
 
 #[cfg(test)]
 mod test {
-    #[cfg(feature = "disasmtests")]
+    #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     use super::super::test_utils::Disassembler;
     use super::*;
     use test_macros::{debug_assert_test, disasm_test};
 
-    #[cfg(feature = "disasmtests")]
+    #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     fn disassembler() -> Disassembler {
         Disassembler::new(Backend::RiscV64)
     }
