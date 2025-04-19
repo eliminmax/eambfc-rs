@@ -189,12 +189,16 @@ pub fn bin_test(arch: TokenStream, func: TokenStream) -> TokenStream {
 ///     ...
 /// }
 /// ```
+///
 /// expands to
+///
+/// ```no_run
 /// #[test]
 /// #[cfg(debug_assertions, should_panic = "msg")]
 /// fn foo () {
 ///     ...
 /// }
+/// ```
 #[proc_macro_attribute]
 pub fn debug_assert_test(attr_arg: TokenStream, func: TokenStream) -> TokenStream {
     let msg = parse_macro_input!(attr_arg as syn::LitStr)
