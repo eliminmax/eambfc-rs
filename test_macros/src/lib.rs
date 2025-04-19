@@ -73,9 +73,13 @@ pub fn unix_test(attr_arg: TokenStream, func: TokenStream) -> TokenStream {
 ///
 /// ```no_run
 /// #[cfg_attr(not(feature = "disasmtests"), ignore = "Disassembly tests are not enabled")]
+/// #[cfg_attr(
+///     all(feature = "disasmtests", cross_compiled),
+///     ignore = "test skipped when cross-compiling"
+/// )]
 /// #[test]
 /// fn foo() {
-///     #[cfg(feature = "disasmtests")]
+///     #[cfg(all(feature = "disasmtests", not(cross_compiled))]
 ///     {
 ///         ...
 ///     }
@@ -89,17 +93,25 @@ pub fn disasm_test(_: TokenStream, func: TokenStream) -> TokenStream {
         sig,
         block: body,
     } = parse_macro_input!(func);
-    attrs.push(parse_quote!(#[
-        cfg_attr(not(feature = "disasmtests"),
-        ignore = "Disassembly tests are not enabled")
-    ]));
-    attrs.push(parse_quote!(#[test]));
+
+    let extra_attrs: Vec<Attribute> = parse_quote!(
+        #[cfg_attr(
+            not(feature = "disasmtests"),
+            ignore = "Disassembly tests are not enabled"
+        )]
+        #[cfg_attr(
+            all(feature = "disasmtests", cross_compiled),
+            ignore = "test skipped when cross-compiling"
+        )]
+        #[test]
+    );
+    attrs.extend(extra_attrs);
 
     let inner = body.to_token_stream();
 
     let block: Box<Block> = Box::new(parse_quote! {
         {
-            #[cfg(feature = "disasmtests")]
+            #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
             #inner
         }
     });
@@ -121,6 +133,7 @@ pub fn disasm_test(_: TokenStream, func: TokenStream) -> TokenStream {
 /// 2. The architecture is disabled
 /// 3. The system is unable to run the output binaries for the architecture, and thus can't test
 ///    them
+/// 4. It's running in a cross-compiled environment
 ///
 /// The first of those reasons to be matched will be used.
 ///
@@ -141,15 +154,26 @@ pub fn disasm_test(_: TokenStream, func: TokenStream) -> TokenStream {
 ///     ignore = "foo_arch support disabled"
 /// )]
 /// #[cfg_attr(
+///     not(can_run_foo_arch)
 ///     all(
-///         feature = "bintests", feature = "foo_arch",
-///         any(target_os = "windows", not(can_run_foo_arch))
+///         feature = "bintests",
+///         feature = "foo_arch",
+///         not(can_run_foo_arch)
 ///     ),
 ///     ignore = "can't run foo_arch Linux ELF binaries"
 /// )]
+/// #[cfg_attr(
+///     all(
+///         feature = "bintests",
+///         feature = "foo_arch",
+///         can_run_foo_arch,
+///         cross_compiled
+///     )
+///     ignore = "test skipped when cross-compiling"
+/// )]
 /// #[test]
 /// fn test_foo_arch() {
-///     #[cfg(feature = "bintests")]
+///     #[cfg(all(feature = "bintests", not(cross_compiled))]
 ///     {
 ///         ...
 ///     }
@@ -172,9 +196,18 @@ pub fn bin_test(arch: TokenStream, func: TokenStream) -> TokenStream {
         #[cfg_attr(
             all(
                 feature = "bintests", feature = #feature,
-                any(target_os = "windows", not(#can_run_cfg))
+                not(#can_run_cfg)
             ),
             ignore = #msg_cant_run
+        )]
+        #[cfg_attr(
+            all(
+                feature = "bintests",
+                feature = #feature,
+                #can_run_cfg,
+                cross_compiled
+            ),
+            ignore = "test skipped when cross-compiling"
         )]
         #[test]
     );
