@@ -11,12 +11,21 @@ use std::num::NonZero;
 #[derive(Clone, Copy, PartialEq)]
 #[cfg_attr(any(test, debug_assertions), derive(Debug))]
 enum InstrSequence {
+    /// A brainfuck `[`
     LoopOpen,
+    /// A brainfuck `]`
     LoopClose,
+    /// A brainfuck `,`
     Read,
+    /// A brainfuck `.`
     Write,
+    /// One or more consecutive brainfuck `+` or `-` instructions
     ModifyCell(NonZero<i8>),
+    /// One or more consecutive brainfuck `<` or `>` instructions
     ModifyPtr(NonZero<i64>),
+    /// `SetCell(0)` replaces a loop that always sets the current cell to 0 with no side effects.
+    /// In addition, `SetCell(0)` followed by `ModifyCell(n)` can then be replaced with
+    /// `SetCell(n.get() as u8)`.
     SetCell(u8),
 }
 
@@ -109,7 +118,8 @@ impl From<FilteredInstr> for InstrSequence {
 use FilteredInstr as FI;
 use InstrSequence as IS;
 
-/// Scan `ir` for dead loops - that is, loops that are immediately after other loops, or
+/// Scan `ir` for dead loops - that is, loops that are immediately after other loops, or at the
+/// very start, and thus will never run.
 fn drop_dead_loops(ir: &mut Vec<IS>) -> Result<(), BFCompileError> {
     // Start on LoopClose to eliminate opening loops from the very start of the code
     let mut can_elim = true;
