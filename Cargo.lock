@@ -244,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "test_macros"
-version = "0.1.0"
+version = "0.1.0-current"
 dependencies = [
  "proc-macro2",
  "quote",
