@@ -224,6 +224,34 @@ fn join_adjacent_arith(insns: &mut Vec<InstrSequence>) {
     }
 }
 
+fn join_set_cells(ir: &mut Vec<InstrSequence>) {
+    // Try to find sequences that set the current cell to a predetermined value, by zeroing it out
+    // then optionally adding or subtracting any number of times (including 0), and replace with
+    // `IS::SetCell`.
+
+    let mut search_start = 0;
+    'outer: loop {
+        for (i, window) in ir.windows(3).enumerate().skip(search_start) {
+            if window[0] == IS::LoopOpen
+                && matches!(window[1], IS::ModifyCell(ct) if ct.get().abs() % 2 == 1)
+                && window[2] == IS::LoopClose
+            {
+                ir.drain(i + 1..=i + 2);
+                match ir.get(i + 1) {
+                    Some(IS::ModifyCell(n)) => {
+                        ir[i] = IS::SetCell(n.get() as u8);
+                        ir.remove(i + 1);
+                    }
+                    _ => ir[i] = IS::SetCell(0),
+                }
+                continue 'outer;
+            }
+            search_start += 1;
+        }
+        break 'outer;
+    }
+}
+
 use super::CodeReader;
 /// Collect `instructions` into a `Vec<CombinedInstruction>`, performing various optimizations in
 /// the process.
@@ -234,32 +262,8 @@ pub(super) fn combine_instructions(
     join_adjacent_arith(&mut combined);
 
     drop_dead_loops(&mut combined)?;
+    join_set_cells(&mut combined);
 
-    let mut search_start = 0;
-    // Try to find sequences that set the current cell to a predetermined value, by zeroing it out
-    // then optionally adding or subtracting any number of times (including 0), and replace with
-    // `IS::SetCell`.
-
-    'outer: loop {
-        for (i, window) in combined.windows(3).enumerate().skip(search_start) {
-            if window[0] == IS::LoopOpen
-                && matches!(window[1], IS::ModifyCell(ct) if ct.get().abs() % 2 == 1)
-                && window[2] == IS::LoopClose
-            {
-                combined.drain(i + 1..=i + 2);
-                match combined.get(i + 1) {
-                    Some(IS::ModifyCell(n)) => {
-                        combined[i] = IS::SetCell(n.get() as u8);
-                        combined.remove(i + 1);
-                    }
-                    _ => combined[i] = IS::SetCell(0),
-                }
-                continue 'outer;
-            }
-            search_start += 1;
-        }
-        break 'outer;
-    }
     // drop trailing instructions other than `]`, `,`, or `.`, as other instructiosn will have no
     // externally-visible effects if no I/O instructions will be run afterwards.
     while combined
