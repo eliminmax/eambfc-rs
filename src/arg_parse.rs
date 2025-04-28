@@ -18,6 +18,8 @@ use std::os::wasi::ffi::{OsStrExt, OsStringExt};
 #[cfg(feature = "longopts")]
 pub(crate) mod longopts;
 
+#[cfg(have_32bit_targets)]
+use crate::compile::ElfClass::ELFClass32;
 mod help_text;
 pub use help_text::help_fmt;
 
@@ -77,16 +79,30 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
                 out_mode,
             ));
         }
+        let arch = arch.unwrap_or_default();
+        let tape_blocks = tape_blocks.unwrap_or(8);
+
+        #[cfg(have_32bit_targets)]
+        if arch.ei_class() == ELFClass32 && tape_blocks > u64::from(u32::MAX / 0x1000) {
+            return Err((
+                BFCompileError::basic(
+                    BFErrorID::TapeTooLarge,
+                    "provided tape size would exceed 32-bit address space",
+                ),
+                out_mode,
+            ));
+        }
+
         Ok(StandardRunConfig {
             out_mode,
             optimize,
             keep,
             cont,
-            tape_blocks: tape_blocks.unwrap_or(8),
+            tape_blocks,
             extension: extension.unwrap_or(".bf".into()),
             source_files,
             out_suffix,
-            arch: arch.unwrap_or_default(),
+            arch,
         })
     }
 }

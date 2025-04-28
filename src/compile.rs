@@ -11,6 +11,8 @@ use arch_inter::ArchInter;
 pub(crate) mod backends;
 
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
+#[cfg(have_32bit_targets)]
+pub(crate) use backends::ElfClass;
 use backends::{Backend, BinInfo, SegmentInfo};
 
 use std::ffi::OsStr;
@@ -135,6 +137,14 @@ fn write_headers(
     let tape_size: u64 = tape_blocks * 0x1000;
     let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffff)) + 0x10000;
     let start_virt_addr = u64::try_from(START_ADDR).unwrap_or_else(|_| unreachable!()) + load_vaddr;
+
+    let Some(Ok(file_size)) = START_ADDR.checked_add(codesize).map(u64::try_from) else {
+        return Err(BFCompileError::basic(
+            BFErrorID::CodeTooLarge,
+            "code too large to fit in 64-bit address space",
+        ));
+    };
+
     let ehdr = BinInfo {
         arch: elf_arch,
         entry: start_virt_addr,
@@ -152,12 +162,7 @@ fn write_headers(
         arch: elf_arch,
         flags: 5,          // PF_R | PF_X (readable and executable)
         vaddr: load_vaddr, // load segment into this section of memory
-        size: (START_ADDR + codesize).try_into().map_err(|e| {
-            BFCompileError::basic(
-                BFErrorID::CodeTooLarge,
-                format!("code size of {e} is too large to fit in a u64"),
-            )
-        })?, // load this many bytes from file…
+        size: file_size,   // load this many bytes from file…
         file_backed: true,
         align: 1, // align with this power of 2
     };
@@ -372,6 +377,17 @@ impl<B: BFCompileHelper> BFCompile for B {
         optimize: bool,
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>> {
+
+        #[cfg(have_32bit_targets)]
+        if Self::ARCH.ei_class() == ElfClass::ELFClass32
+            && tape_blocks * 0x1000 > u64::from(u32::MAX)
+        {
+            return Err(vec![BFCompileError::basic(
+                BFErrorID::TapeTooLarge,
+                format!("{tape_blocks} tape blocks don't fit within 32-bit address space"),
+            )]);
+        }
+
         let mut jump_stack = Vec::<JumpLocation>::new();
         let mut loc = CodePosition { line: 1, col: 0 };
         let mut code_buf: Vec<u8> = Vec::new();

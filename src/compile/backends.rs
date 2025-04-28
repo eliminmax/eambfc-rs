@@ -95,7 +95,7 @@ use super::arch_inter;
 mod backend_utils;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum ElfClass {
+pub(crate) enum ElfClass {
     #[cfg(have_32bit_targets)]
     ELFClass32 = 1,
     #[cfg(have_64bit_targets)]
@@ -146,7 +146,7 @@ impl Backend {
         }
     }
     /// Get the `e_ident[EI_CLASS]` value for the architecture, as an `ElfClass`
-    const fn ei_class(self) -> ElfClass {
+    pub(crate) const fn ei_class(self) -> ElfClass {
         match self {
             #[cfg(feature = "arm64")]
             Self::Arm64 => ElfClass::ELFClass64,
