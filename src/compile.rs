@@ -342,8 +342,11 @@ trait BFCompileHelper: ArchInter {
         code: Vec<CombinedInstruction>,
     ) -> Result<(), BFCompileError> {
         let mut jump_stack = Vec::new();
+        #[rustfmt::skip]
         macro_rules! compile_as_bf {
-            ($bf_instr: literal) => {{ Self::compile_instr($bf_instr, dst, None, &mut jump_stack) }};
+            ($bf_instr: literal) => {{
+                Self::compile_instr($bf_instr, dst, None, &mut jump_stack)
+            }};
         }
         #[rustfmt::skip]
         macro_rules! compile_combined {
