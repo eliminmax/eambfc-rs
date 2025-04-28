@@ -380,17 +380,13 @@ impl<B: BFCompileHelper> BFCompile for B {
         optimize: bool,
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>> {
-
-        #[cfg(have_32bit_targets)]
-        if Self::ARCH.ei_class() == ElfClass::ELFClass32
-            && tape_blocks * 0x1000 > u64::from(u32::MAX)
-        {
-            return Err(vec![BFCompileError::basic(
-                BFErrorID::TapeTooLarge,
-                format!("{tape_blocks} tape blocks don't fit within 32-bit address space"),
-            )]);
+        #[cfg(all(have_32bit_targets, debug_assertions))]
+        if Self::ARCH.ei_class() == ElfClass::ELFClass32 {
+            debug_assert!(
+                u32::try_from(tape_blocks * 0x1000).is_ok(),
+                "tape size should've been validated during arg parsing"
+            );
         }
-
         let mut jump_stack = Vec::<JumpLocation>::new();
         let mut loc = CodePosition { line: 1, col: 0 };
         let mut code_buf: Vec<u8> = Vec::new();
