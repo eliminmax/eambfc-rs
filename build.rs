@@ -15,7 +15,6 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::Command;
 
-
 // 1. check that at least one architecture is enabled
 
 #[cfg(not(any(
@@ -167,7 +166,6 @@ fn set_cfg_metavalues() {
         println!("cargo::rustc-cfg=have_be_targets");
     }
 }
-
 
 fn main() {
     println!("cargo::rerun-if-changed=.git/index");
