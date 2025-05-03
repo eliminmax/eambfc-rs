@@ -105,6 +105,11 @@ macro_rules! x86_common_impl {
             Ok(())
         }
 
+        fn reg_copy(code_buf: &mut Vec<u8>, dst: X86Register, src: X86Register) {
+            // MOV dst, src
+            code_buf.extend([0x89, 0xc0 + ((src as u8) << 3) + dst as u8]);
+        }
+
         fn pad_loop_open(code_buf: &mut Vec<u8>) {
             // UD2; times 7 NOP
             code_buf.extend([0x0f, 0x0b]);

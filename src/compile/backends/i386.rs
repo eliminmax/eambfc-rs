@@ -87,11 +87,6 @@ impl ArchInter for I386Inter {
         Ok(())
     }
 
-    fn reg_copy(code_buf: &mut Vec<u8>, dst: X86Register, src: X86Register) {
-        // MOV dst, src
-        code_buf.extend([0x89, 0xc0 + ((src as u8) << 3) + dst as u8]);
-    }
-
     fn inc_reg(code_buf: &mut Vec<u8>, reg: X86Register) {
         // INC reg
         code_buf.extend([0xff, 0xc0 | (reg as u8)]);
