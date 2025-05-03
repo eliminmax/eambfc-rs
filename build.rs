@@ -6,8 +6,8 @@
 // This build script is used to do 3 things:
 // 1. check that at least one architecture is enabled
 // 2. set the default architecture
-// 3. set `cfg` values used for conditional compilation, primarly those used with the proc macros in
-//    the internal `test_macros` crate
+// 3. set `cfg` values used for conditional compilation, primarily those used with the proc macros
+//    in the internal `test_macros` crate
 //
 // The level of complexity of those tasks varies greatly.
 
@@ -31,7 +31,7 @@ compile_error!("Must have at least one architecture enabled");
 
 /// If `EAMBFC_DEFAULT_ARCH` is set at compile time, check that it's an enabled architecture, then
 /// use it as the default. Otherwise, try to match architecture that eambfc-rs is compiled for,
-/// falling back to the first enabled backend in a list ordered in descending likelyhood of being
+/// falling back to the first enabled backend in a list ordered in descending likelihood of being
 /// the desired choice
 fn set_default_arch() {
     macro_rules! choose_default {
