@@ -29,8 +29,8 @@
 // * EBX is 011b
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use crate::Backend;
 use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
+use crate::Backend;
 use crate::err::{BFCompileError, BFErrorID};
 
 // INC and DEC are encoded very similarly with very few differences between
@@ -70,20 +70,24 @@ impl ArchInter for I386Inter {
     // XOR reg, reg
     // MOV reg, imm32
     fn set_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: i64) -> FailableInstrEncoding {
-        let reg = reg as u8;
+        let raw_reg = reg as u8;
         if imm == 0 {
             // XOR reg, reg
-            code_buf.extend([0x31, 0xc0 | (reg << 3) | reg]);
+            code_buf.extend([0x31, 0xc0 | (raw_reg << 3) | raw_reg]);
             return Ok(());
         }
-        let i: i32 = imm.try_into().map_err(|_| {
-            BFCompileError::basic(
-                BFErrorID::CodeTooLarge,
-                format!("Cannot set 32-bit register to 64-bit value {imm}"),
-            )
-        })?;
-        code_buf.push(0xb8 + reg);
-        code_buf.extend(i.to_le_bytes());
+        let i: [u8; 4] = i32::try_from(imm)
+            .map(i32::to_le_bytes)
+            .or_else(|_| u32::try_from(imm).map(u32::to_le_bytes))
+            .map_err(|_| {
+                Self::set_reg(code_buf, reg, i64::from(imm as u32)).expect("truncated to fit");
+                BFCompileError::basic(
+                    BFErrorID::CodeTooLarge,
+                    format!("Cannot set 32-bit register to 64-bit value {imm}"),
+                )
+            })?;
+        code_buf.push(0xb8 + raw_reg);
+        code_buf.extend(i);
         Ok(())
     }
 
@@ -102,7 +106,9 @@ impl ArchInter for I386Inter {
             Self::inc_reg(code_buf, reg);
         } else if let Ok(imm8) = i8::try_from(imm) {
             add_reg_imm8(code_buf, reg, imm8);
-        } else if let Ok(imm32) = i32::try_from(imm) {
+        } else if let Ok(imm32) =
+            i32::try_from(imm).or_else(|_| u32::try_from(imm).map(|i| i as i32))
+        {
             add_reg_imm32(code_buf, reg, imm32);
         } else {
             return Err(BFCompileError::basic(
@@ -118,7 +124,9 @@ impl ArchInter for I386Inter {
             Self::dec_reg(code_buf, reg);
         } else if let Ok(imm8) = i8::try_from(imm) {
             sub_reg_imm8(code_buf, reg, imm8);
-        } else if let Ok(imm32) = i32::try_from(imm) {
+        } else if let Ok(imm32) =
+            i32::try_from(imm).or_else(|_| u32::try_from(imm).map(|i| i as i32))
+        {
             sub_reg_imm32(code_buf, reg, imm32);
         } else {
             return Err(BFCompileError::basic(
@@ -172,12 +180,24 @@ mod tests {
         v.clear();
         I386Inter::set_reg(&mut v, X86Register::Ebx, 128).unwrap();
         assert_eq!(ds.disassemble(v.clone()), ["mov ebx, 0x80"]);
+        v.clear();
+
+    }
+    #[disasm_test]
+    fn fits_i32_or_u32() {
+        let mut a: Vec<u8> = Vec::new();
+        let mut b: Vec<u8> = Vec::new();
+        I386Inter::set_reg(&mut a, X86Register::Eax, u32::MAX.into()).unwrap();
+        I386Inter::set_reg(&mut b, X86Register::Eax, -1).unwrap();
+        assert_eq!(a, b);
+        assert_eq!(disassembler().disassemble(a), ["mov eax, 0xffffffff"]);
+
     }
 
     #[test]
     fn set_reg_imm_too_large() {
         assert_eq!(
-            I386Inter::set_reg(&mut Vec::new(), X86Register::Ebx, i64::from(i32::MAX) + 1)
+            I386Inter::set_reg(&mut Vec::new(), X86Register::Ebx, i64::from(u32::MAX) + 1)
                 .unwrap_err()
                 .error_id(),
             BFErrorID::CodeTooLarge

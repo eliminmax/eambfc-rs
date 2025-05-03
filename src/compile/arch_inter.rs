@@ -36,6 +36,13 @@ pub(super) trait ArchInter {
     const E_FLAGS: u32;
 
     /// append code to `code_buf` that sets `reg` to `imm`
+    ///
+    /// For 64-bit backends, always returns `Ok(())`.
+    ///
+    /// For 32-bit backends, returns `Ok(())` if `imm` can be converted losslessly to **either** an
+    /// `i32` or a `u32`, as the binary representation of a value in a 32-bit register is not
+    /// inherently signed or unsigned. If it can't be losslessly truncated to either 32-bit int
+    /// type, returns `Err(e)` with `e.kind() == BFErrorID::CodeTooLarge`
     fn set_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: i64) -> FailableInstrEncoding;
     /// append code to `code_buf` that copies the value in `src` to `dst`
     fn reg_copy(code_buf: &mut Vec<u8>, dst: Self::RegType, src: Self::RegType);
