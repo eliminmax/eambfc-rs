@@ -130,7 +130,7 @@ ARM64_INSTRUCTIONS = (
 )
 
 """validate i386 bytes with radare2:
-rasm2 -ax86 -b32 -D ''
+rasm2 -ax86 -b32 -D '6a01 58 31d2 cd80'
 """
 I386_INSTRUCTIONS = (
     # push 1 (push exit syscall number to stack)
