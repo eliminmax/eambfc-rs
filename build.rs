@@ -68,7 +68,7 @@ fn set_default_arch() {
             "i386" | "i486" | "i586" | "i686" => choose_default!("i386", "x86_64", fallback),
             "s390x" => choose_default!("s390x", fallback),
             "riscv64" => choose_default!("riscv64", fallback),
-            "x86_64" => choose_default!("x86_64", "i386"),
+            "x86_64" => choose_default!("x86_64", "i386", fallback),
             _ => fallback,
         },
     };
