@@ -5,6 +5,7 @@
 # Non-portable extensions to Cargo.toml symlinked into .cargo/config.toml
 [env]
 LLVM_SYS_191_PREFIX = "/usr/lib/llvm-19"
+LLVM_SYS_201_PREFIX = "/usr/lib/llvm-20"
 
 [target.x86_64-pc-windows-gnu]
 runner = "wine"

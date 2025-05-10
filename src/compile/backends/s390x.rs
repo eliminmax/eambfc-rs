@@ -667,14 +667,35 @@ mod tests {
         given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
         assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
         assert_eq!(disasm_lines.next().unwrap(), "j 0x2");
+
+        // LLVM 19 adds pointless operands to the disassembly of NOP instructions, but LLVM 20 does
+        // not.
+        // As both are supported, at least until Debian stable packages LLVM 20 officially, it's
+        // necessary to know which is in use here when validating disassembly, so take a detour to
+        // check that.
+        let (nop, nopr) = {
+            use std::ptr::null_mut;
+            use llvm_sys::core::LLVMGetVersion;
+            let mut llvm_version = 0;
+            // SAFETY: Function takes 3 `unsigned *` C parameters, and sets the pointed-to values
+            // to the major, minor, and patch numbers of the LLVM release. both supported LLVM
+            // versions document that `NULL` can be passed for unneeded values.
+            unsafe { LLVMGetVersion(&mut llvm_version, null_mut(), null_mut()); };
+            if llvm_version == 10 {
+                ("nop 0", "nopr %r0")
+            } else {
+                ("nop", "nopr")
+            }
+        };
+
         for i in 0..3 {
             assert_eq!(
                 disasm_lines.next().unwrap(),
-                "nop 0",
+                nop,
                 "only {i}/3 nop instructions were matched"
             );
         }
-        assert_eq!(disasm_lines.next().unwrap(), "nopr %r0");
+        assert_eq!(disasm_lines.next().unwrap(), nopr);
         assert!(disasm_lines.next().is_none());
     }
 
