@@ -369,17 +369,19 @@ mod tests {
     fn combination_test() {
         let mut code = Vec::from(b"[+++++]><+---+++-[-][,[-][+>-<]]-+[-+]-+[]+-[]");
         code.extend([b'+'; 256]);
-        code.extend(b"[+-]>>");
+        code.extend(b"[+-]>>+<");
         code.extend([b'-'; 256]);
         code.extend(b"[->+<][,.]");
         code.extend(b"+++");
         let combined = combine_instructions(CodeReader::new(code.as_slice())).unwrap();
 
-        // Should be reduced by dead code removal to the equivalent of ">>[->+<]"
+        // Should be reduced by dead code removal to the equivalent of ">>+<[->+<]"
         assert_eq!(
             combined,
             [
                 CombinedInstruction::MoveRight(2),
+                CombinedInstruction::Add(1),
+                CombinedInstruction::MoveLeft(1),
                 CombinedInstruction::LoopOpen,
                 CombinedInstruction::Sub(1),
                 CombinedInstruction::MoveRight(1),
