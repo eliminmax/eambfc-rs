@@ -118,11 +118,34 @@ impl From<FilteredInstr> for InstrSequence {
 use FilteredInstr as FI;
 use InstrSequence as IS;
 
-/// Scan `ir` for dead loops - that is, loops that are immediately after other loops, or at the
-/// very start, and thus will never run.
+fn recheck_mergable(ir: &mut Vec<IS>, mut index: usize) {
+    while let (Some(instr), Some(next_instr)) = (ir.get(index).copied(), ir.get(index + 1).copied())
+    {
+        match instr.try_joining(next_instr) {
+            CombinationOutcome::CombineInto(new) => {
+                ir[index] = new;
+                ir.remove(index + 1);
+            }
+            CombinationOutcome::CancelOut => {
+                ir.drain(index..=index + 1);
+                if index == 0 {
+                    return;
+                }
+                index -= 1;
+            }
+            CombinationOutcome::DontCombine => return,
+        }
+    }
+}
+
+/// Scan `ir` for dead loops - that is, loops that are immediately after other loops, or are before
+/// any read, add, or sub instructions, and thus will never run.
 fn drop_dead_loops(ir: &mut Vec<IS>) -> Result<(), BFCompileError> {
     // Start on LoopClose to eliminate opening loops from the very start of the code
     let mut can_elim = true;
+    // Until `IS::ModifyCell` or `IS::Read` is found, all cell values can be known to be zero, as
+    // long as this function is called before `join_set_cells`.
+    let mut known_all_zeroes = true;
     let mut i = 0;
     'outer: while let Some(instr) = ir.get(i).copied() {
         debug_assert!(
@@ -139,6 +162,11 @@ fn drop_dead_loops(ir: &mut Vec<IS>) -> Result<(), BFCompileError> {
                         nest_level -= 1;
                         if nest_level == 0 {
                             ir.drain(i..=ii);
+                            // check if the removal of the dead loop results in a newly-exposed
+                            // mergable instruction pair
+                            if i > 0 {
+                                recheck_mergable(ir, i - 1);
+                            }
                             continue 'outer;
                         }
                     }
@@ -152,9 +180,11 @@ fn drop_dead_loops(ir: &mut Vec<IS>) -> Result<(), BFCompileError> {
                 Some(b'['),
                 None,
             ));
+        } else if matches!(instr, IS::Read | IS::ModifyCell(_)) {
+            known_all_zeroes = false;
         }
+        can_elim = known_all_zeroes || instr == IS::LoopClose;
         i += 1;
-        can_elim = instr == IS::LoopClose;
     }
     Ok(())
 }
