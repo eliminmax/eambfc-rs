@@ -472,8 +472,13 @@ impl ArchInter for S390xInter {
         code_buf.extend(store_to_byte(reg, TMP_REG));
     }
 
-    fn zero_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        code_buf.extend(store_to_byte(reg, S390xRegister::R0));
+    fn set_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
+        if imm == 0 {
+            code_buf.extend(store_to_byte(reg, S390xRegister::R0));
+        } else {
+            code_buf.extend(u32::to_be_bytes(0xa759_0000 | u32::from(imm)));
+            code_buf.extend(u32::to_be_bytes(0x4250_0000 | (reg as u32) << 16));
+        }
     }
 }
 
@@ -714,14 +719,21 @@ mod tests {
     }
 
     #[disasm_test]
-    fn zero_byte_test() {
-        let mut v: Vec<u8> = Vec::new();
-        S390xInter::zero_byte(&mut v, S390xInter::REGISTERS.bf_ptr);
+    fn test_set_byte() {
+        let mut dis = disassembler();
+
+        let mut v: Vec<u8> = Vec::with_capacity(4);
+        S390xInter::set_byte(&mut v, S390xInter::REGISTERS.bf_ptr, 0);
         assert_eq!(
             v,
             store_to_byte(S390xInter::REGISTERS.bf_ptr, S390xRegister::R0)
         );
-        assert_eq!(disassembler().disassemble(v), ["stc %r0, 0(%r8,0)"]);
+
+        assert_eq!(dis.disassemble(v), ["stc %r0, 0(%r8,0)"]);
+
+        let mut v = Vec::with_capacity(8);
+        S390xInter::set_byte(&mut v, S390xInter::REGISTERS.bf_ptr, 64);
+        assert_eq!(dis.disassemble(v), ["lghi %r5, 64", "stc %r5, 0(%r8,0)"]);
     }
 
     #[disasm_test]

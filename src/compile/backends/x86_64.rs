@@ -295,10 +295,15 @@ mod tests {
     }
 
     #[disasm_test]
-    fn test_zero_byte() {
+    fn test_set_byte() {
+        let mut dis = disassembler();
         let mut v: Vec<u8> = Vec::new();
-        X86_64Inter::zero_byte(&mut v, X86Register::Edx);
-        assert_eq!(disassembler().disassemble(v), ["mov byte ptr [rdx], 0x0"]);
+        X86_64Inter::set_byte(&mut v, X86Register::Edx, 0);
+        assert_eq!(dis.disassemble(v), ["mov byte ptr [rdx], 0x0"]);
+
+        let mut v = Vec::new();
+        X86_64Inter::set_byte(&mut v, X86Register::Edx, 0x40);
+        assert_eq!(dis.disassemble(v), ["mov byte ptr [rdx], 0x40"]);
     }
 
     #[disasm_test]

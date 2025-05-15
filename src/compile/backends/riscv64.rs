@@ -363,9 +363,13 @@ impl ArchInter for RiscV64Inter {
         code_buf.extend(store_to_byte(reg));
     }
 
-    fn zero_byte(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        // SB reg, zero
-        code_buf.extend(u32::to_le_bytes(((reg as u32) << 15) | 0b010_0011));
+    fn set_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
+        if imm == 0 {
+            code_buf.extend(u32::to_le_bytes(0x23 | ((reg as u32) << 15)));
+        } else {
+            encode_li(code_buf, TEMP_REG, imm.into());
+            code_buf.extend(store_to_byte(reg));
+        }
     }
 }
 
@@ -612,10 +616,16 @@ mod test {
     }
 
     #[disasm_test]
-    fn test_zero_byte() {
+    fn test_set_byte() {
+        let mut dis = disassembler();
+
         let mut v = Vec::with_capacity(4);
-        RiscV64Inter::zero_byte(&mut v, RiscVRegister::A2);
-        assert_eq!(disassembler().disassemble(v), ["sb zero, 0x0(a2)"]);
+        RiscV64Inter::set_byte(&mut v, RiscVRegister::A2, 0);
+        assert_eq!(dis.disassemble(v), ["sb zero, 0x0(a2)"]);
+
+        let mut v = Vec::with_capacity(6);
+        RiscV64Inter::set_byte(&mut v, RiscVRegister::A7, 7);
+        assert_eq!(dis.disassemble(v), ["li t1, 0x7", "sb t1, 0x0(a7)"]);
     }
 
     #[disasm_test]

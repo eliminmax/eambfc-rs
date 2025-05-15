@@ -87,9 +87,6 @@ pub(super) trait ArchInter {
     /// append machine code to `code_buf` to subtract `imm` from the byte pointed to by `reg`
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8);
 
-    /// append machine code to `code_buf` to set the byte pointed to by `reg` to `0`
-    fn zero_byte(code_buf: &mut Vec<u8>, reg: Self::RegType);
-
     /// append machine code to `code_buf` to increment the value in `reg` by 1
     fn inc_reg(code_buf: &mut Vec<u8>, reg: Self::RegType) {
         Self::add_reg(code_buf, reg, 1).expect("1 isn't too large for any backend");
@@ -112,10 +109,7 @@ pub(super) trait ArchInter {
 
     /// append machine code to `code_buf` to set the byte pointed to by `reg` to `imm`
     /// Default implementation should be replaced with something more efficient.
-    fn set_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
-        Self::zero_byte(code_buf, reg);
-        Self::add_byte(code_buf, reg, imm);
-    }
+    fn set_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8);
 }
 
 /// The registers needed when encoding the machine code

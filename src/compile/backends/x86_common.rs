@@ -144,11 +144,6 @@ macro_rules! x86_common_impl {
             }
         }
 
-        fn zero_byte(code_buf: &mut Vec<u8>, reg: X86Register) {
-            // MOV byte [reg], 0
-            code_buf.extend([0xc6, reg as u8, 0x00]);
-        }
-
         fn set_byte(code_buf: &mut Vec<u8>, reg: X86Register, imm: u8) {
             // MOV byte [reg], imm
             code_buf.extend([0xc6, reg as u8, imm])

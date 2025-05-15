@@ -215,10 +215,6 @@ impl ArchInter for Arm64Inter {
         Ok(())
     }
 
-    fn zero_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-        code_buf.extend(u32::to_le_bytes(0x3800_041f | ((reg as u32) << 5)));
-    }
-
     fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
         code_buf.extend(load_from_byte(reg));
         add_sub_imm(code_buf, TEMP_REG, u64::from(imm), ArithOp::Add, false);
@@ -266,6 +262,15 @@ impl ArchInter for Arm64Inter {
             ConditionCode::Eq,
         )?);
         Ok(())
+    }
+
+    fn set_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
+        if imm == 0 {
+            code_buf.extend(u32::to_le_bytes(0x3800_041f | (reg as u32) << 5));
+        } else {
+            code_buf.extend(mov(MoveType::Zero, imm.into(), ShiftLevel::NoShift, TEMP_REG));
+            code_buf.extend(store_to_byte(reg));
+        }
     }
 }
 
@@ -506,10 +511,15 @@ mod tests {
     }
 
     #[disasm_test]
-    fn test_zero_byte() {
+    fn test_set_byte() {
+        let mut dis = disassembler();
         let mut v: Vec<u8> = Vec::with_capacity(4);
-        Arm64Inter::zero_byte(&mut v, Arm64Register::X19);
-        assert_eq!(disassembler().disassemble(v), ["strb wzr, [x19], #0x0"]);
+        Arm64Inter::set_byte(&mut v, Arm64Register::X19, 0);
+        assert_eq!(dis.disassemble(v), ["strb wzr, [x19], #0x0"]);
+
+        let mut v = Vec::with_capacity(8);
+        Arm64Inter::set_byte(&mut v, Arm64Register::X19, 0x40);
+        assert_eq!(dis.disassemble(v), ["mov x17, #0x40", "strb w17, [x19], #0x0"]);
     }
 
     #[disasm_test]
