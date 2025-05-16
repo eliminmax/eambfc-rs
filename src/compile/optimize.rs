@@ -163,7 +163,7 @@ fn drop_dead_loops(ir: &mut Vec<IS>) -> Result<(), BFCompileError> {
                         if nest_level == 0 {
                             ir.drain(i..=ii);
                             // check if the removal of the dead loop results in a newly-exposed
-                            // mergable instruction pair
+                            // mergeable instruction pair
                             if i > 0 {
                                 recheck_mergable(ir, i - 1);
                             }
