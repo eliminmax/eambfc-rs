@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
+#[cfg(any(feature = "arm64", feature = "riscv64"))]
 /// An extension trait that's used to provide a `fits_within_bits` method used within some backends
 pub(super) trait MinimumBits {
     /// Returns `true` if the value of `self` can be stored within an integer of size `bits`
@@ -12,6 +13,7 @@ pub(super) trait MinimumBits {
     fn fits_within_bits(self, bits: u32) -> bool;
 }
 
+#[cfg(any(feature = "riscv64", feature = "s390x"))]
 /// Truncate `val` to `amnt` bits and sign extend the result
 pub(super) const fn sign_extend(val: i64, amnt: u32) -> i64 {
     val << (i64::BITS - amnt) >> (i64::BITS - amnt)
@@ -19,6 +21,7 @@ pub(super) const fn sign_extend(val: i64, amnt: u32) -> i64 {
 
 macro_rules! impl_min_bits {
     ([unsigned] $t: ty) => {
+        #[cfg(any(feature = "arm64", feature = "riscv64"))]
         impl MinimumBits for $t {
             fn fits_within_bits(self, bits: u32) -> bool {
                 self < <$t>::pow(2, bits)
@@ -26,6 +29,7 @@ macro_rules! impl_min_bits {
         }
     };
     ([signed] $t: ty) => {
+        #[cfg(any(feature = "arm64", feature = "riscv64"))]
         impl MinimumBits for $t {
             fn fits_within_bits(self, bits: u32) -> bool {
                 self >= -<$t>::pow(2, bits - 1) && self < <$t>::pow(2, bits - 1)
@@ -43,7 +47,7 @@ impl_min_bits!([unsigned] u16);
 impl_min_bits!([unsigned] u32);
 impl_min_bits!([unsigned] u64);
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "arm64", feature = "riscv64")))]
 mod test_min_bits {
     use super::MinimumBits;
 
