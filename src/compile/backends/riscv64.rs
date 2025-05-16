@@ -3,17 +3,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use super::backend_utils::MinimumBits;
+use super::backend_utils::{MinimumBits, sign_extend};
 use crate::Backend;
 use crate::err::{BFCompileError, BFErrorID};
-use crate::int_truncate::{TruncateI8, TruncateI16, TruncateI32, TruncateU8, TruncateU16};
 
 use std::num::NonZeroI8;
-
-/// Truncate `val` to `amnt` bits and sign extend the result
-const fn sign_extend(val: i64, amnt: u32) -> i64 {
-    val << (i64::BITS - amnt) >> (i64::BITS - amnt)
-}
 
 // SPDX-SnippetCopyrightText: 2025 Eli Array Minkoff
 //
@@ -38,25 +32,28 @@ const fn sign_extend(val: i64, amnt: u32) -> i64 {
 /// A modified port of LLVM's logic for resolving the `li` (load immediate) pseudo-instruction,
 /// as it existed in 2022.
 fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
-    let lo12 = sign_extend(val, 12).truncate_i16();
+    let lo12 = i16::try_from(sign_extend(val, 12)).unwrap_or_else(|_| unreachable!());
     if val.fits_within_bits(32) {
-        let hi20 = sign_extend(
+        let hi20 = i32::try_from(sign_extend(
             (val.cast_unsigned().wrapping_add(0x800) >> 12).cast_signed(),
             20,
-        );
+        ))
+        .unwrap_or_else(|_| unreachable!("Sign-extended from 20 bits, will always fit"));
         if hi20 != 0 {
             if hi20.fits_within_bits(6) {
                 // C.LUI reg, hi20
-                let imm = hi20.truncate_i16().cast_unsigned();
+                let imm = i16::try_from(hi20)
+                    .unwrap_or_else(|_| {
+                        unreachable!("fits within 6 bits, so must fit within 16 bits as well")
+                    })
+                    .cast_unsigned();
                 code_buf.extend(u16::to_le_bytes(
                     0x6001 | (((imm & 0x20) | u16::from(reg)) << 7) | ((imm & 0x1f) << 2),
                 ));
             } else {
                 // LUI reg, hi20
                 code_buf.extend(u32::to_le_bytes(
-                    (hi20.truncate_i32().cast_unsigned() << 12)
-                        | (u32::from(reg) << 7)
-                        | 0b011_0111,
+                    (hi20.cast_unsigned() << 12) | (u32::from(reg) << 7) | 0b011_0111,
                 ));
             }
         }
@@ -96,7 +93,8 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
     // constant is processed recursively and gets emitted as soon as it fits into 32 bits. The
     // emission of the shifts and additions is subsequently performed when the recursion returns.
     let mut hi52 = ((val.cast_unsigned() + 0x800) >> 12).cast_signed();
-    let mut shift_amount = (hi52.trailing_zeros() + 12).truncate_u16();
+    let mut shift_amount =
+        u16::try_from(hi52.trailing_zeros() + 12).expect("no more than u64::BITS + 12");
     hi52 = sign_extend(hi52 >> (shift_amount - 12), 64 - u32::from(shift_amount));
     // If the remaining bits don't fit in 12 bits, we might be able to reduce the shift amount in
     // order to use LUI which will zero the lower 12 bits.
@@ -118,7 +116,9 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
         if lo12.fits_within_bits(6) {
             code_buf.extend(c_addi(
                 RawReg(reg),
-                NonZeroI8::new(lo12.truncate_i8()).unwrap_or_else(|| unreachable!()),
+                i8::try_from(lo12)
+                    .and_then(NonZeroI8::try_from)
+                    .unwrap_or_else(|_| unreachable!("Already known nonzero and small enough")),
             ));
         } else {
             code_buf.extend(addi(RawReg(reg), lo12 as i16));
@@ -185,12 +185,13 @@ fn cond_jump(
         distance & 1 == 0,
         "<…>::riscv64::cond_jump distance offset must be even"
     );
-    if !distance.fits_within_bits(21) {
-        return Err(BFCompileError::basic(
+    let distance = match i32::try_from(distance) {
+        Ok(i) if i.fits_within_bits(21) => Ok(i),
+        _ => Err(BFCompileError::basic(
             BFErrorID::JumpTooLong,
             "Jump too long for riscv64 backend",
-        ));
-    }
+        )),
+    }?;
 
     // there are 2 types of instructions used here for control flow - branches, which can
     // conditionally move up to 4 KiB away, and jumps, which unconditionally move up to 1MiB away.
@@ -211,7 +212,7 @@ fn cond_jump(
 
     // J-type is a variant of U-type with the bits scrambled around to simplify hardware
     // implementation at the expense of compiler/assembler implementation.
-    let jump_dist = distance.truncate_i32().cast_unsigned() + 4;
+    let jump_dist = distance.cast_unsigned() + 4;
     let encoded_jump_dist = ((jump_dist & (1 << 20)) << 11)
         | ((jump_dist & 0x7fe) << 20)
         | ((jump_dist & (1 << 11)) << 9)
@@ -337,15 +338,21 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) -> FailableInstrEncoding {
-        match imm.cast_signed() {
+        let imm = imm.cast_signed();
+        match imm {
             0 => (),
             -32..0 | 1..32 => code_buf.extend(c_addi(
                 reg.into(),
-                NonZeroI8::new(imm.truncate_u8().cast_signed()).unwrap_or_else(|| unreachable!()),
+                i8::try_from(imm)
+                    .and_then(NonZeroI8::try_from)
+                    .unwrap_or_else(|_| unreachable!()),
             )),
-            -2048..-32 | 32..2048 => code_buf.extend(addi(reg.into(), imm.cast_signed().truncate_i16())),
+            -2048..-32 | 32..2048 => code_buf.extend(addi(
+                reg.into(),
+                imm.try_into().unwrap_or_else(|_| unreachable!()),
+            )),
             _ => {
-                encode_li(code_buf, TEMP_REG, imm.cast_signed());
+                encode_li(code_buf, TEMP_REG, imm);
                 // C.ADD reg, aux
                 code_buf.extend(u16::to_le_bytes(
                     0x9002 | ((reg as u16) << 7) | (u16::from(TEMP_REG.0) << 2),
@@ -711,7 +718,8 @@ mod test {
             a.clear();
             b.clear();
             RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 1_u64 << i).unwrap();
-            RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, (-1_i64 << i).cast_unsigned()).unwrap();
+            RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, (-1_i64 << i).cast_unsigned())
+                .unwrap();
             assert_eq!(a, b);
         }
     }

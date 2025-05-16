@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::err::{BFCompileError, BFErrorID};
-use crate::int_truncate::{TruncateU32, TruncateU16};
 
-use super::backend_utils::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
+use super::backend_utils::MinimumBits;
 use crate::Backend;
 
 // 64-bit ARM systems have 31 general-purpose registers which can be addressed in 32-bit or 64-bit
@@ -109,7 +108,9 @@ fn branch_cond(
             format!("{offset} is outside the range of possible 21-bit signed values"),
         ));
     }
-    let offset = (1 + (offset.cast_unsigned().truncate_u32() >> 2)) & 0x7ffff;
+    let offset = u32::try_from((1 + (offset.cast_unsigned() >> 2)) & 0x7ffff)
+        .unwrap_or_else(|_| unreachable!("Will always fit due to the mask"));
+
     let mut code_buf = [0; 12];
     code_buf[..4].clone_from_slice(&load_from_byte(reg));
 
@@ -123,15 +124,20 @@ fn branch_cond(
 }
 
 fn set_raw_reg(code_buf: &mut Vec<u8>, reg: RawReg, imm: i64) {
-    let imm = imm.cast_unsigned();
     // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
+    macro_rules! mask_u16 {
+        ($val: expr) => {{
+            u16::try_from(($val).cast_unsigned() & 0xffff)
+                .unwrap_or_else(|_| unreachable!("Masked into range"))
+        }};
+    }
     let parts: [(u16, ShiftLevel); 4] = [
-        (imm.truncate_u16(), ShiftLevel::NoShift),
-        ((imm >> 16).truncate_u16(), ShiftLevel::Shift16),
-        ((imm >> 32).truncate_u16(), ShiftLevel::Shift32),
-        ((imm >> 48).truncate_u16(), ShiftLevel::Shift48),
+        (mask_u16!(imm), ShiftLevel::NoShift),
+        (mask_u16!(imm >> 16), ShiftLevel::Shift16),
+        (mask_u16!(imm >> 32), ShiftLevel::Shift32),
+        (mask_u16!(imm >> 48), ShiftLevel::Shift48),
     ];
-    let (test_val, first_mov_type): (u16, MoveType) = if imm.cast_signed() < 0 {
+    let (test_val, first_mov_type): (u16, MoveType) = if imm < 0 {
         (0xffff, MoveType::Invert)
     } else {
         (0, MoveType::Zero)
@@ -219,13 +225,13 @@ impl ArchInter for Arm64Inter {
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
         code_buf.extend(load_from_byte(reg));
-        add_sub_imm(code_buf, TEMP_REG, u64::from(imm), ArithOp::Add, false);
+        add_sub_imm(code_buf, TEMP_REG, u32::from(imm), ArithOp::Add, false);
         code_buf.extend(store_to_byte(reg));
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
         code_buf.extend(load_from_byte(reg));
-        add_sub_imm(code_buf, TEMP_REG, u64::from(imm), ArithOp::Sub, false);
+        add_sub_imm(code_buf, TEMP_REG, u32::from(imm), ArithOp::Sub, false);
         code_buf.extend(store_to_byte(reg));
     }
 
@@ -270,7 +276,12 @@ impl ArchInter for Arm64Inter {
         if imm == 0 {
             code_buf.extend(u32::to_le_bytes(0x3800_041f | (reg as u32) << 5));
         } else {
-            code_buf.extend(mov(MoveType::Zero, imm.into(), ShiftLevel::NoShift, TEMP_REG));
+            code_buf.extend(mov(
+                MoveType::Zero,
+                imm.into(),
+                ShiftLevel::NoShift,
+                TEMP_REG,
+            ));
             code_buf.extend(store_to_byte(reg));
         }
     }
@@ -284,12 +295,12 @@ enum ArithOp {
     Sub = 0xd1,
 }
 
-fn add_sub_imm(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, imm: u64, op: ArithOp, shift: bool) {
+fn add_sub_imm(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, imm: u32, op: ArithOp, shift: bool) {
     assert!(
         (shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0),
         "{imm} is invalid for shift level"
     );
-    let aligned_imm = (if shift { imm >> 2 } else { imm << 10 }).truncate_u32();
+    let aligned_imm = if shift { imm >> 2 } else { imm << 10 };
     // either ADD reg, reg, imm or SUB reg, reg, imm, depending on op
     code_buf.extend(u32::to_le_bytes(
         ((op as u32) << 24)
@@ -301,16 +312,16 @@ fn add_sub_imm(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, imm: u64, op: ArithO
 }
 
 fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp) {
-    match imm {
-        i if i < 0x1_000 => add_sub_imm(code_buf, reg.into(), imm, op, false),
-        i if i < 0x1_000_000 => {
-            add_sub_imm(code_buf, reg.into(), imm & 0xfff_000, op, true);
+    match u32::try_from(imm) {
+        Ok(i) if i < 0x1_000 => add_sub_imm(code_buf, reg.into(), i, op, false),
+        Ok(i) if i < 0x1_000_000 => {
+            add_sub_imm(code_buf, reg.into(), i & 0xfff_000, op, true);
             if i & 0xfff != 0 {
-                add_sub_imm(code_buf, reg.into(), imm & 0xfff, op, false);
+                add_sub_imm(code_buf, reg.into(), i & 0xfff, op, false);
             }
         }
-        i => {
-            set_raw_reg(code_buf, TEMP_REG, i.cast_signed());
+        _ => {
+            set_raw_reg(code_buf, TEMP_REG, imm.cast_signed());
             // either ADD reg, reg, x17 or SUB reg, reg, x17
             code_buf.extend(u32::to_le_bytes(
                 0x8b11_0000
@@ -521,7 +532,10 @@ mod tests {
 
         let mut v = Vec::with_capacity(8);
         Arm64Inter::set_byte(&mut v, Arm64Register::X19, 0x40);
-        assert_eq!(dis.disassemble(v), ["mov x17, #0x40", "strb w17, [x19], #0x0"]);
+        assert_eq!(
+            dis.disassemble(v),
+            ["mov x17, #0x40", "strb w17, [x19], #0x0"]
+        );
     }
 
     #[disasm_test]

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::err::{BFCompileError, BFErrorID};
-use crate::int_truncate::{TruncateI32, TruncateU8};
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
+use super::backend_utils::sign_extend;
 use crate::Backend;
 
 // The z/Architecture Principles of Operation comprehensively documents the
@@ -298,7 +298,7 @@ fn add_reg_signed(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         code_buf.extend(u16::to_be_bytes(0xc208 | ((reg as u16) << 4)));
         code_buf.extend(imm32.to_be_bytes());
     } else {
-        let (imm_h, imm_l) = ((imm >> 32).truncate_i32(), imm.truncate_i32());
+        let (imm_h, imm_l) = ((imm >> 32) as i32, (imm & 0xffff_ffff) as i32);
         if imm_l != 0 {
             add_reg_signed(code_buf, reg, i64::from(imm_l));
         }
@@ -346,7 +346,7 @@ impl ArchInter for S390xInter {
             code_buf.extend(u16::to_be_bytes(0xc001 | ((reg as u16) << 4)));
             code_buf.extend(imm32.to_be_bytes());
         } else {
-            Self::set_reg(code_buf, reg, i64::from(imm.truncate_i32()))?;
+            Self::set_reg(code_buf, reg, sign_extend(imm, 32))?;
 
             let default_val: i16 = if imm.is_negative() { -1 } else { 0 };
 
@@ -382,11 +382,13 @@ impl ArchInter for S390xInter {
     }
 
     fn syscall(code_buf: &mut Vec<u8>, sc_num: i64) {
-        if let 1..=255 = sc_num {
-            code_buf.extend([0x0a, sc_num.cast_unsigned().truncate_u8()]);
+        use std::num::NonZero;
+        if let Ok(sc_byte) = u8::try_from(sc_num).and_then(NonZero::try_from) {
+            code_buf.extend([0x0a, sc_byte.get()]);
         } else {
-            Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc_num).unwrap();
-            code_buf.extend_from_slice(Self::SYSCALL_INSTR);
+            Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc_num)
+                .unwrap_or_else(|_| unreachable!("64-bit platforms can encode 64-bit values"));
+            code_buf.extend([0x0a, 0x00]);
         }
     }
 

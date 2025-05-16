@@ -32,7 +32,6 @@ use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums
 use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
 use crate::Backend;
 use crate::err::{BFCompileError, BFErrorID};
-use crate::int_truncate::TruncateI32;
 
 // INC and DEC are encoded very similarly with very few differences between
 // the encoding for operating on registers and operating on bytes pointed to by
@@ -81,7 +80,7 @@ impl ArchInter for I386Inter {
             .map(i32::to_le_bytes)
             .or_else(|_| u32::try_from(imm).map(u32::to_le_bytes))
             .map_err(|_| {
-                Self::set_reg(code_buf, reg, i64::from(imm.truncate_i32())).expect("truncated to fit");
+                Self::set_reg(code_buf, reg, imm & 0xffff_ffff).expect("truncated to fit");
                 BFCompileError::basic(
                     BFErrorID::CodeTooLarge,
                     format!("Cannot set 32-bit register to 64-bit value {imm}"),

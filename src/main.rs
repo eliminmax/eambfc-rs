@@ -17,7 +17,6 @@
 mod arg_parse;
 mod compile;
 mod err;
-mod int_truncate;
 
 use std::borrow::Cow;
 use std::env::args_os;

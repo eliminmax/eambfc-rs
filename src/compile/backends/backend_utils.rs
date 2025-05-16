@@ -12,6 +12,11 @@ pub(super) trait MinimumBits {
     fn fits_within_bits(self, bits: u32) -> bool;
 }
 
+/// Truncate `val` to `amnt` bits and sign extend the result
+pub(super) const fn sign_extend(val: i64, amnt: u32) -> i64 {
+    val << (i64::BITS - amnt) >> (i64::BITS - amnt)
+}
+
 macro_rules! impl_min_bits {
     ([unsigned] $t: ty) => {
         impl MinimumBits for $t {

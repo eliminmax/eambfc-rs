@@ -30,7 +30,6 @@
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use crate::Backend;
-use crate::int_truncate::TruncateI32;
 use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
 
 // INC and DEC are encoded very similarly with very few differences between
@@ -74,19 +73,15 @@ impl ArchInter for X86_64Inter {
     // MOV reg, imm64
     fn set_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: i64) -> FailableInstrEncoding {
         let reg = reg as u8;
-        match imm {
-            // XOR reg, reg
-            0 => code_buf.extend([0x31, 0xc0 | (reg << 3) | reg]),
-            // MOV reg, imm32
-            i if i < i32::MAX.into() => {
-                code_buf.push(0xb8 + reg);
-                code_buf.extend(i.truncate_i32().to_le_bytes());
-            }
+        if imm == 0 {
+            code_buf.extend([0x31, 0xc0 | (reg << 3) | reg]);
+        } else if let Ok(imm32) = i32::try_from(imm) {
+            code_buf.push(0xb8 + reg);
+            code_buf.extend(imm32.to_le_bytes());
+        } else {
             // MOV reg, imm64
-            i => {
-                code_buf.extend(&[0x48, 0xb8 + reg]);
-                code_buf.extend(&i.to_le_bytes());
-            }
+            code_buf.extend([0x48, 0xb8 + reg]);
+            code_buf.extend(imm.to_le_bytes());
         }
         Ok(())
     }
