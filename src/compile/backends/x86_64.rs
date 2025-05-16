@@ -30,6 +30,7 @@
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use crate::Backend;
+use crate::int_truncate::TruncateI32;
 use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
 
 // INC and DEC are encoded very similarly with very few differences between
@@ -79,7 +80,7 @@ impl ArchInter for X86_64Inter {
             // MOV reg, imm32
             i if i < i32::MAX.into() => {
                 code_buf.push(0xb8 + reg);
-                code_buf.extend((i as i32).to_le_bytes());
+                code_buf.extend(i.truncate_i32().to_le_bytes());
             }
             // MOV reg, imm64
             i => {
@@ -128,11 +129,11 @@ impl ArchInter for X86_64Inter {
 }
 
 fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
-    code_buf.extend([0x48, 0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
+    code_buf.extend([0x48, 0x83, ArithOp::Add as u8 | reg as u8, imm8.cast_unsigned()]);
 }
 
 fn sub_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
-    code_buf.extend([0x48, 0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
+    code_buf.extend([0x48, 0x83, ArithOp::Sub as u8 | reg as u8, imm8.cast_unsigned()]);
 }
 
 fn add_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {

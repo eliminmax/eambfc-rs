@@ -32,6 +32,7 @@ use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums
 use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
 use crate::Backend;
 use crate::err::{BFCompileError, BFErrorID};
+use crate::int_truncate::TruncateI32;
 
 // INC and DEC are encoded very similarly with very few differences between
 // the encoding for operating on registers and operating on bytes pointed to by
@@ -80,7 +81,7 @@ impl ArchInter for I386Inter {
             .map(i32::to_le_bytes)
             .or_else(|_| u32::try_from(imm).map(u32::to_le_bytes))
             .map_err(|_| {
-                Self::set_reg(code_buf, reg, i64::from(imm as u32)).expect("truncated to fit");
+                Self::set_reg(code_buf, reg, i64::from(imm.truncate_i32())).expect("truncated to fit");
                 BFCompileError::basic(
                     BFErrorID::CodeTooLarge,
                     format!("Cannot set 32-bit register to 64-bit value {imm}"),
@@ -107,7 +108,7 @@ impl ArchInter for I386Inter {
         } else if let Ok(imm8) = i8::try_from(imm) {
             add_reg_imm8(code_buf, reg, imm8);
         } else if let Ok(imm32) =
-            i32::try_from(imm).or_else(|_| u32::try_from(imm).map(|i| i as i32))
+            i32::try_from(imm).or_else(|_| u32::try_from(imm).map(u32::cast_signed))
         {
             add_reg_imm32(code_buf, reg, imm32);
         } else {
@@ -125,7 +126,7 @@ impl ArchInter for I386Inter {
         } else if let Ok(imm8) = i8::try_from(imm) {
             sub_reg_imm8(code_buf, reg, imm8);
         } else if let Ok(imm32) =
-            i32::try_from(imm).or_else(|_| u32::try_from(imm).map(|i| i as i32))
+            i32::try_from(imm).or_else(|_| u32::try_from(imm).map(u32::cast_signed))
         {
             sub_reg_imm32(code_buf, reg, imm32);
         } else {
@@ -139,11 +140,11 @@ impl ArchInter for I386Inter {
 }
 
 fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
-    code_buf.extend([0x83, ArithOp::Add as u8 | reg as u8, imm8 as u8]);
+    code_buf.extend([0x83, ArithOp::Add as u8 | reg as u8, imm8.cast_unsigned()]);
 }
 
 fn sub_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
-    code_buf.extend([0x83, ArithOp::Sub as u8 | reg as u8, imm8 as u8]);
+    code_buf.extend([0x83, ArithOp::Sub as u8 | reg as u8, imm8.cast_unsigned()]);
 }
 
 fn add_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {

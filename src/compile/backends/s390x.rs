@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::err::{BFCompileError, BFErrorID};
+use crate::int_truncate::{TruncateI32, TruncateU8};
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
 use crate::Backend;
@@ -297,13 +298,13 @@ fn add_reg_signed(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         code_buf.extend(u16::to_be_bytes(0xc208 | ((reg as u16) << 4)));
         code_buf.extend(imm32.to_be_bytes());
     } else {
-        let (imm_h, imm_l) = (imm >> 32, imm as i32);
+        let (imm_h, imm_l) = ((imm >> 32).truncate_i32(), imm.truncate_i32());
         if imm_l != 0 {
             add_reg_signed(code_buf, reg, i64::from(imm_l));
         }
         // AIH reg, imm {RIL-a}
         code_buf.extend(u16::to_be_bytes(0xcc08 | ((reg as u16) << 4)));
-        code_buf.extend((imm_h as i32).to_be_bytes());
+        code_buf.extend(imm_h.to_be_bytes());
     }
 }
 
@@ -345,7 +346,7 @@ impl ArchInter for S390xInter {
             code_buf.extend(u16::to_be_bytes(0xc001 | ((reg as u16) << 4)));
             code_buf.extend(imm32.to_be_bytes());
         } else {
-            Self::set_reg(code_buf, reg, i64::from(imm as i32))?;
+            Self::set_reg(code_buf, reg, i64::from(imm.truncate_i32()))?;
 
             let default_val: i16 = if imm.is_negative() { -1 } else { 0 };
 
@@ -382,7 +383,7 @@ impl ArchInter for S390xInter {
 
     fn syscall(code_buf: &mut Vec<u8>, sc_num: i64) {
         if let 1..=255 = sc_num {
-            code_buf.extend([0x0a, sc_num as u8]);
+            code_buf.extend([0x0a, sc_num.cast_unsigned().truncate_u8()]);
         } else {
             Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc_num).unwrap();
             code_buf.extend_from_slice(Self::SYSCALL_INSTR);
@@ -445,7 +446,7 @@ impl ArchInter for S390xInter {
     }
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u64) -> FailableInstrEncoding {
-        add_reg_signed(code_buf, reg, imm as i64);
+        add_reg_signed(code_buf, reg, imm.cast_signed());
         Ok(())
     }
 
@@ -462,13 +463,13 @@ impl ArchInter for S390xInter {
         // program), simply make sure that if imm is i64::MIN, pass it directly, otherwise, pass
         // `-imm`
         // check that "-imm" won't cause problems, then call add_reg with negative imm.
-        add_reg_signed(code_buf, reg, (imm as i64).wrapping_neg());
+        add_reg_signed(code_buf, reg, imm.cast_signed().wrapping_neg());
         Ok(())
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u8) {
         code_buf.extend(load_from_byte(reg));
-        add_reg_signed(code_buf, TMP_REG, -i64::from(imm as i8));
+        add_reg_signed(code_buf, TMP_REG, -i64::from(imm.cast_signed()));
         code_buf.extend(store_to_byte(reg, TMP_REG));
     }
 
@@ -511,6 +512,12 @@ mod tests {
             #[allow(
                 clippy::unreadable_literal,
                 reason = "disasm doesn't have _ in literals"
+            )]
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                clippy::cast_possible_wrap,
+                reason = "The point is to demonstrate that the cast is proper"
             )]
             const {
                 assert!($expr);
@@ -764,8 +771,8 @@ mod tests {
         S390xInter::add_reg(&mut a, S390xRegister::R8, 12345).unwrap();
         S390xInter::sub_reg(&mut a, S390xRegister::R8, 12345).unwrap();
 
-        S390xInter::sub_reg(&mut b, S390xRegister::R8, -12345_i64 as u64).unwrap();
-        S390xInter::add_reg(&mut b, S390xRegister::R8, -12345_i64 as u64).unwrap();
+        S390xInter::sub_reg(&mut b, S390xRegister::R8, i64::cast_unsigned(-12345)).unwrap();
+        S390xInter::add_reg(&mut b, S390xRegister::R8, i64::cast_unsigned(-12345)).unwrap();
         assert_eq!(a, b);
         assert_eq!(ds.disassemble(a), ["aghi %r8, 12345", "aghi %r8, -12345"]);
     }
@@ -817,8 +824,8 @@ mod tests {
     fn sub_reg_int_min() {
         let mut a: Vec<u8> = Vec::new();
         let mut b: Vec<u8> = Vec::new();
-        S390xInter::add_reg(&mut a, S390xRegister::R4, i64::MIN as u64).unwrap();
-        S390xInter::sub_reg(&mut b, S390xRegister::R4, i64::MIN as u64).unwrap();
+        S390xInter::add_reg(&mut a, S390xRegister::R4, i64::MIN.cast_unsigned()).unwrap();
+        S390xInter::sub_reg(&mut b, S390xRegister::R4, i64::MIN.cast_unsigned()).unwrap();
         assert_eq!(a, b);
     }
 

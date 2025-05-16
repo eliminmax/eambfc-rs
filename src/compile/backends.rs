@@ -547,7 +547,7 @@ mod test_utils {
                         output
                             .into_iter()
                             .filter(|&c| c != 0)
-                            .map(|c| c as u8)
+                            .map(i8::cast_unsigned)
                             .collect(),
                     )
                     .unwrap()

@@ -202,10 +202,10 @@ fn append_counted_instrs(dest: &mut Vec<InstrSequence>, count: usize, instr: Fil
         }};
     }
     match instr {
-        FI::Add => condense_to!(ModifyCell, count as i8),
-        FI::Sub => condense_to!(ModifyCell, (count as i8).wrapping_neg()),
-        FI::MoveR => condense_to!(ModifyPtr, count as i64),
-        FI::MoveL => condense_to!(ModifyPtr, (count as i64).wrapping_neg()),
+        FI::Add => condense_to!(ModifyCell, count.to_le_bytes()[0].cast_signed()),
+        FI::Sub => condense_to!(ModifyCell, count.to_le_bytes()[0].cast_signed().wrapping_neg()),
+        FI::MoveR => condense_to!(ModifyPtr, count.cast_signed() as i64),
+        FI::MoveL => condense_to!(ModifyPtr, (count.cast_signed() as i64).wrapping_neg()),
         prev => dest.resize(dest.len() + count, prev.into()),
     }
 }
@@ -269,7 +269,7 @@ fn join_set_cells(ir: &mut Vec<InstrSequence>) {
                 ir.drain(i + 1..=i + 2);
                 match ir.get(i + 1) {
                     Some(IS::ModifyCell(n)) => {
-                        ir[i] = IS::SetCell(n.get() as u8);
+                        ir[i] = IS::SetCell(n.get().cast_unsigned());
                         ir.remove(i + 1);
                     }
                     _ => ir[i] = IS::SetCell(0),

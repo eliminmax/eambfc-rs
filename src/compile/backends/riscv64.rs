@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-use super::backend_utils::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
+use super::backend_utils::MinimumBits;
 use crate::Backend;
 use crate::err::{BFCompileError, BFErrorID};
+use crate::int_truncate::{TruncateI8, TruncateI16, TruncateI32, TruncateU8, TruncateU16};
 
 use std::num::NonZeroI8;
 
@@ -37,20 +38,25 @@ const fn sign_extend(val: i64, amnt: u32) -> i64 {
 /// A modified port of LLVM's logic for resolving the `li` (load immediate) pseudo-instruction,
 /// as it existed in 2022.
 fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
-    let lo12 = sign_extend(val, 12);
+    let lo12 = sign_extend(val, 12).truncate_i16();
     if val.fits_within_bits(32) {
-        let hi20 = sign_extend(((val as u64).wrapping_add(0x800) >> 12) as i64, 20);
+        let hi20 = sign_extend(
+            (val.cast_unsigned().wrapping_add(0x800) >> 12).cast_signed(),
+            20,
+        );
         if hi20 != 0 {
             if hi20.fits_within_bits(6) {
                 // C.LUI reg, hi20
-                let imm = hi20 as u16;
+                let imm = hi20.truncate_i16().cast_unsigned();
                 code_buf.extend(u16::to_le_bytes(
                     0x6001 | (((imm & 0x20) | u16::from(reg)) << 7) | ((imm & 0x1f) << 2),
                 ));
             } else {
                 // LUI reg, hi20
                 code_buf.extend(u32::to_le_bytes(
-                    ((hi20 as u32) << 12) | (u32::from(reg) << 7) | 0b011_0111,
+                    (hi20.truncate_i32().cast_unsigned() << 12)
+                        | (u32::from(reg) << 7)
+                        | 0b011_0111,
                 ));
             }
         }
@@ -60,7 +66,7 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
                 // if n == 0: `C.LI reg, lo6`
                 // else: `ADDIW reg, reg, lo6`
                 let template = if n == 0 { 0x4001 } else { 0x2001 };
-                let imm = lo12 as u16;
+                let imm = lo12.cast_unsigned();
                 code_buf.extend(u16::to_le_bytes(
                     template | (((imm & 0x20) | u16::from(reg)) << 7) | ((imm & 0x1f) << 2),
                 ));
@@ -74,7 +80,7 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
                     (0b001_1011, u32::from(reg) << 15)
                 };
                 code_buf.extend(u32::to_le_bytes(
-                    ((lo12 as u32) << 20) | rs1 | (u32::from(reg) << 7) | opcode,
+                    (u32::from(lo12.cast_unsigned()) << 20) | rs1 | (u32::from(reg) << 7) | opcode,
                 ));
             }
         }
@@ -89,19 +95,18 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
     // greater than 12 bits if the constant is sparse, is determined. Then, the shifted remaining
     // constant is processed recursively and gets emitted as soon as it fits into 32 bits. The
     // emission of the shifts and additions is subsequently performed when the recursion returns.
-    let mut hi52 = ((val as u64 + 0x800) >> 12) as i64;
-    let mut shift_amount = hi52.trailing_zeros() + 12;
-    hi52 = sign_extend(hi52 >> (shift_amount - 12), 64 - shift_amount);
+    let mut hi52 = ((val.cast_unsigned() + 0x800) >> 12).cast_signed();
+    let mut shift_amount = (hi52.trailing_zeros() + 12).truncate_u16();
+    hi52 = sign_extend(hi52 >> (shift_amount - 12), 64 - u32::from(shift_amount));
     // If the remaining bits don't fit in 12 bits, we might be able to reduce the shift amount in
     // order to use LUI which will zero the lower 12 bits.
     if shift_amount > 12 && !hi52.fits_within_bits(12) && (hi52 << 12).fits_within_bits(32) {
         // Reduce the shift amount and add zeros to the LSBs so it will match LUI.
         shift_amount -= 12;
-        hi52 = ((hi52 as u64) << 12) as i64;
+        hi52 = ((hi52.cast_unsigned()) << 12).cast_signed();
     }
     // Recursive call
     encode_li(code_buf, RawReg(reg), hi52);
-    let shift_amount = shift_amount as u16;
     // Generation of the instruction
     if shift_amount != 0 {
         // C.SLLI reg, shift_amount
@@ -113,7 +118,7 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
         if lo12.fits_within_bits(6) {
             code_buf.extend(c_addi(
                 RawReg(reg),
-                NonZeroI8::new(lo12 as i8).unwrap_or_else(|| unreachable!()),
+                NonZeroI8::new(lo12.truncate_i8()).unwrap_or_else(|| unreachable!()),
             ));
         } else {
             code_buf.extend(addi(RawReg(reg), lo12 as i16));
@@ -157,7 +162,10 @@ fn addi(RawReg(reg): RawReg, i: i16) -> [u8; 4] {
         "addi immediate must fit within 12 bits"
     );
     u32::to_le_bytes(
-        ((i as u32) << 20) | (u32::from(reg) << 15) | (u32::from(reg) << 7) | 0b001_0011,
+        (u32::from(i.cast_unsigned()) << 20)
+            | (u32::from(reg) << 15)
+            | (u32::from(reg) << 7)
+            | 0b001_0011,
     )
 }
 
@@ -203,7 +211,7 @@ fn cond_jump(
 
     // J-type is a variant of U-type with the bits scrambled around to simplify hardware
     // implementation at the expense of compiler/assembler implementation.
-    let jump_dist = distance as u32 + 4;
+    let jump_dist = distance.truncate_i32().cast_unsigned() + 4;
     let encoded_jump_dist = ((jump_dist & (1 << 20)) << 11)
         | ((jump_dist & 0x7fe) << 20)
         | ((jump_dist & (1 << 11)) << 9)
@@ -220,7 +228,7 @@ fn c_addi(RawReg(reg): RawReg, i: NonZeroI8) -> [u8; 2] {
         i.get().fits_within_bits(6),
         "c_addi must only be called with 6-bit signed immediates"
     );
-    let imm = i16::from(i.get()) as u16;
+    let imm = i16::from(i.get()).cast_unsigned();
     u16::to_le_bytes(0x0001 | (((imm & 0x20) | u16::from(reg)) << 7) | ((imm & 0x1f) << 2))
 }
 
@@ -297,7 +305,7 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
-        if let Some(nzimm) = NonZeroI8::new(imm as i8) {
+        if let Some(nzimm) = NonZeroI8::new(imm.cast_signed()) {
             code_buf.extend(load_from_byte(reg));
             if nzimm.wrapping_neg().get().fits_within_bits(6) {
                 code_buf.extend(c_addi(TEMP_REG, -nzimm));
@@ -309,11 +317,15 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) -> FailableInstrEncoding {
-        Self::add_reg(code_buf, reg, (imm as i64).wrapping_neg() as u64)
+        Self::add_reg(
+            code_buf,
+            reg,
+            imm.cast_signed().wrapping_neg().cast_unsigned(),
+        )
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
-        if let Some(nzimm) = NonZeroI8::new(imm as i8) {
+        if let Some(nzimm) = NonZeroI8::new(imm.cast_signed()) {
             code_buf.extend(load_from_byte(reg));
             if nzimm.get().fits_within_bits(6) {
                 code_buf.extend(c_addi(TEMP_REG, nzimm));
@@ -325,15 +337,15 @@ impl ArchInter for RiscV64Inter {
     }
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u64) -> FailableInstrEncoding {
-        match imm as i64 {
+        match imm.cast_signed() {
             0 => (),
             -32..0 | 1..32 => code_buf.extend(c_addi(
                 reg.into(),
-                NonZeroI8::new(imm as i8).unwrap_or_else(|| unreachable!()),
+                NonZeroI8::new(imm.truncate_u8().cast_signed()).unwrap_or_else(|| unreachable!()),
             )),
-            -2048..-32 | 32..2048 => code_buf.extend(addi(reg.into(), imm as i16)),
+            -2048..-32 | 32..2048 => code_buf.extend(addi(reg.into(), imm.cast_signed().truncate_i16())),
             _ => {
-                encode_li(code_buf, TEMP_REG, imm as i64);
+                encode_li(code_buf, TEMP_REG, imm.cast_signed());
                 // C.ADD reg, aux
                 code_buf.extend(u16::to_le_bytes(
                     0x9002 | ((reg as u16) << 7) | (u16::from(TEMP_REG.0) << 2),
@@ -594,7 +606,10 @@ mod test {
 
     #[disasm_test]
     fn test_syscall() {
-        assert_eq!(disassembler().disassemble(RiscV64Inter::SYSCALL_INSTR.into()), ["ecall"]);
+        assert_eq!(
+            disassembler().disassemble(RiscV64Inter::SYSCALL_INSTR.into()),
+            ["ecall"]
+        );
     }
 
     #[disasm_test]
@@ -696,7 +711,7 @@ mod test {
             a.clear();
             b.clear();
             RiscV64Inter::sub_reg(&mut a, RiscV64Inter::REGISTERS.bf_ptr, 1_u64 << i).unwrap();
-            RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, (-1_i64 << i) as u64).unwrap();
+            RiscV64Inter::add_reg(&mut b, RiscVRegister::S0, (-1_i64 << i).cast_unsigned()).unwrap();
             assert_eq!(a, b);
         }
     }
@@ -770,7 +785,13 @@ mod test {
         let mut v = Vec::with_capacity(24);
         RiscV64Inter::add_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x80);
         RiscV64Inter::sub_byte(&mut v, RiscV64Inter::REGISTERS.arg3, 0x80);
-        const { assert!((1_i16 + 0x80) as u8 == (1_i16 - 0x80) as u8) };
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Trait can't be used in const context"
+        )]
+        const {
+            assert!((1_i16 + 0x80).cast_unsigned() as u8 == (1_i16 - 0x80).cast_unsigned() as u8);
+        };
         assert_eq!(
             ds.disassemble(v),
             [

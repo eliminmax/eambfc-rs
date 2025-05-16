@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::err::{BFCompileError, BFErrorID};
+use crate::int_truncate::{TruncateU32, TruncateU16};
 
 use super::backend_utils::MinimumBits;
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
@@ -108,7 +109,7 @@ fn branch_cond(
             format!("{offset} is outside the range of possible 21-bit signed values"),
         ));
     }
-    let offset = (1 + ((offset as u32) >> 2)) & 0x7ffff;
+    let offset = (1 + (offset.cast_unsigned().truncate_u32() >> 2)) & 0x7ffff;
     let mut code_buf = [0; 12];
     code_buf[..4].clone_from_slice(&load_from_byte(reg));
 
@@ -122,14 +123,15 @@ fn branch_cond(
 }
 
 fn set_raw_reg(code_buf: &mut Vec<u8>, reg: RawReg, imm: i64) {
+    let imm = imm.cast_unsigned();
     // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
     let parts: [(u16, ShiftLevel); 4] = [
-        (imm as u16, ShiftLevel::NoShift),
-        ((imm >> 16) as u16, ShiftLevel::Shift16),
-        ((imm >> 32) as u16, ShiftLevel::Shift32),
-        ((imm >> 48) as u16, ShiftLevel::Shift48),
+        (imm.truncate_u16(), ShiftLevel::NoShift),
+        ((imm >> 16).truncate_u16(), ShiftLevel::Shift16),
+        ((imm >> 32).truncate_u16(), ShiftLevel::Shift32),
+        ((imm >> 48).truncate_u16(), ShiftLevel::Shift48),
     ];
-    let (test_val, first_mov_type): (u16, MoveType) = if imm < 0 {
+    let (test_val, first_mov_type): (u16, MoveType) = if imm.cast_signed() < 0 {
         (0xffff, MoveType::Invert)
     } else {
         (0, MoveType::Zero)
@@ -287,7 +289,7 @@ fn add_sub_imm(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, imm: u64, op: ArithO
         (shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0),
         "{imm} is invalid for shift level"
     );
-    let aligned_imm = if shift { imm >> 2 } else { imm << 10 } as u32;
+    let aligned_imm = (if shift { imm >> 2 } else { imm << 10 }).truncate_u32();
     // either ADD reg, reg, imm or SUB reg, reg, imm, depending on op
     code_buf.extend(u32::to_le_bytes(
         ((op as u32) << 24)
@@ -308,7 +310,7 @@ fn add_sub(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64, op: ArithOp) {
             }
         }
         i => {
-            set_raw_reg(code_buf, TEMP_REG, i as i64);
+            set_raw_reg(code_buf, TEMP_REG, i.cast_signed());
             // either ADD reg, reg, x17 or SUB reg, reg, x17
             code_buf.extend(u32::to_le_bytes(
                 0x8b11_0000

@@ -316,14 +316,14 @@ trait BFCompileHelper: ArchInter {
                         loc.copied(),
                     ));
                 };
-                let distance = code_buf.len() - open_location.index;
+                let distance: i64 = (code_buf.len() - open_location.index).try_into().map_err(|_| BFCompileError::basic(BFErrorID::CodeTooLarge, "Jump distance exceeds 64-bit integer limit"))?;
                 Self::jump_open(
                     code_buf,
                     open_location.index,
                     Self::REGISTERS.bf_ptr,
-                    distance as i64,
+                    distance
                 )?;
-                Self::jump_close(code_buf, Self::REGISTERS.bf_ptr, -(distance as i64))?;
+                Self::jump_close(code_buf, Self::REGISTERS.bf_ptr, -distance)?;
             }
             b'\n' => {
                 if let Some(ref mut pos) = loc {
@@ -390,7 +390,7 @@ impl<B: BFCompileHelper> BFCompile for B {
         let mut jump_stack = Vec::<JumpLocation>::new();
         let mut loc = CodePosition { line: 1, col: 0 };
         let mut code_buf: Vec<u8> = Vec::new();
-        Self::set_reg(&mut code_buf, Self::REGISTERS.bf_ptr, TAPE_ADDR as i64)
+        Self::set_reg(&mut code_buf, Self::REGISTERS.bf_ptr, TAPE_ADDR.cast_signed())
             .expect("tape address fits in regs");
         let mut errs = Vec::<BFCompileError>::new();
 
