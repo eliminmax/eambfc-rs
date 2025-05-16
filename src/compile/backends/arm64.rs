@@ -108,8 +108,7 @@ fn branch_cond(
             format!("{offset} is outside the range of possible 21-bit signed values"),
         ));
     }
-    let offset = u32::try_from((1 + (offset.cast_unsigned() >> 2)) & 0x7ffff)
-        .unwrap_or_else(|_| unreachable!("Will always fit due to the mask"));
+    let offset = ((1 + (offset.cast_unsigned() >> 2)) & 0x7ffff) as u32;
 
     let mut code_buf = [0; 12];
     code_buf[..4].clone_from_slice(&load_from_byte(reg));
@@ -127,8 +126,7 @@ fn set_raw_reg(code_buf: &mut Vec<u8>, reg: RawReg, imm: i64) {
     // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
     macro_rules! mask_u16 {
         ($val: expr) => {{
-            u16::try_from(($val).cast_unsigned() & 0xffff)
-                .unwrap_or_else(|_| unreachable!("Masked into range"))
+            (($val).cast_unsigned() & 0xffff) as u16
         }};
     }
     let parts: [(u16, ShiftLevel); 4] = [
