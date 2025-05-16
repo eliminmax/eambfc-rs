@@ -69,6 +69,14 @@ pub(crate) struct BFCompileError {
     file: Option<Box<OsStr>>,
 }
 
+impl std::fmt::Display for BFCompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.report_basic())
+    }
+}
+
+impl std::error::Error for BFCompileError {}
+
 fn json_escape(s: &str) -> String {
     let mut construct = String::new();
     s.chars().for_each(|c| {
