@@ -267,7 +267,7 @@ fn branch_cond(
     comp_mask: ComparisonMask,
 ) -> Result<[u8; 18], BFCompileError> {
     debug_assert!(
-        offset % 2 == 0,
+        offset & 1 == 0,
         "<…>::s390x::branch_cond distance offset must be even"
     );
     let offset: i32 = i16::try_from(offset >> 1)
@@ -654,7 +654,7 @@ mod tests {
     #[disasm_test]
     fn jump_tests() {
         assert_eq!(
-            S390xInter::jump_open(&mut [0; 18], 0, S390xRegister::R3, 0x1_2345_6789_abcd)
+            S390xInter::jump_open(&mut [0; 18], 0, S390xRegister::R3, 0x12_3456_789a_bcde)
                 .unwrap_err()
                 .error_id(),
             BFErrorID::JumpTooLong
