@@ -316,12 +316,20 @@ trait BFCompileHelper: ArchInter {
                         loc.copied(),
                     ));
                 };
-                let distance: i64 = (code_buf.len() - open_location.index).try_into().map_err(|_| BFCompileError::basic(BFErrorID::CodeTooLarge, "Jump distance exceeds 64-bit integer limit"))?;
+                let distance: i64 =
+                    (code_buf.len() - open_location.index)
+                        .try_into()
+                        .map_err(|_| {
+                            BFCompileError::basic(
+                                BFErrorID::CodeTooLarge,
+                                "Jump distance exceeds 64-bit integer limit",
+                            )
+                        })?;
                 Self::jump_open(
                     code_buf,
                     open_location.index,
                     Self::REGISTERS.bf_ptr,
-                    distance
+                    distance,
                 )?;
                 Self::jump_close(code_buf, Self::REGISTERS.bf_ptr, -distance)?;
             }
@@ -390,8 +398,12 @@ impl<B: BFCompileHelper> BFCompile for B {
         let mut jump_stack = Vec::<JumpLocation>::new();
         let mut loc = CodePosition { line: 1, col: 0 };
         let mut code_buf: Vec<u8> = Vec::new();
-        Self::set_reg(&mut code_buf, Self::REGISTERS.bf_ptr, TAPE_ADDR.cast_signed())
-            .expect("tape address fits in regs");
+        Self::set_reg(
+            &mut code_buf,
+            Self::REGISTERS.bf_ptr,
+            TAPE_ADDR.cast_signed(),
+        )
+        .expect("tape address fits in regs");
         let mut errs = Vec::<BFCompileError>::new();
 
         let reader = BufReader::new(in_f);
@@ -501,9 +513,7 @@ mod tests {
     impl Write for FailingWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             if self.fail_after == 0 {
-                Err(io::Error::other(
-                    "testing write failure handling",
-                ))
+                Err(io::Error::other("testing write failure handling"))
             } else if buf.len() < self.fail_after {
                 self.fail_after -= buf.len();
                 Ok(buf.len())

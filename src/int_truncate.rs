@@ -91,7 +91,10 @@ impl<T: TruncateI16> TruncateI8 for T {
     }
 }
 
-#[allow(clippy::unreadable_literal, reason = "0xdeadbeef and 0xbadf00d are readable")]
+#[allow(
+    clippy::unreadable_literal,
+    reason = "0xdeadbeef and 0xbadf00d are readable"
+)]
 #[cfg(test)]
 mod tests {
     const STARTING_U64: u64 = 0xbadf00d_deadbeef;
@@ -106,7 +109,6 @@ mod tests {
 
     #[test]
     fn test_truncate() {
-
         assert_eq!(STARTING_U64.truncate_u32(), 0xdeadbeef);
         assert_eq!(STARTING_U64.truncate_u16(), 0xbeef);
         assert_eq!(STARTING_U64.truncate_u8(), 0xef);

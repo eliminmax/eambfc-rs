@@ -203,7 +203,10 @@ fn append_counted_instrs(dest: &mut Vec<InstrSequence>, count: usize, instr: Fil
     }
     match instr {
         FI::Add => condense_to!(ModifyCell, count.to_le_bytes()[0].cast_signed()),
-        FI::Sub => condense_to!(ModifyCell, count.to_le_bytes()[0].cast_signed().wrapping_neg()),
+        FI::Sub => condense_to!(
+            ModifyCell,
+            count.to_le_bytes()[0].cast_signed().wrapping_neg()
+        ),
         FI::MoveR => condense_to!(ModifyPtr, count.cast_signed() as i64),
         FI::MoveL => condense_to!(ModifyPtr, (count.cast_signed() as i64).wrapping_neg()),
         prev => dest.resize(dest.len() + count, prev.into()),
