@@ -501,8 +501,7 @@ mod tests {
     impl Write for FailingWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             if self.fail_after == 0 {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
+                Err(io::Error::other(
                     "testing write failure handling",
                 ))
             } else if buf.len() < self.fail_after {
