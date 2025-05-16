@@ -266,6 +266,10 @@ fn branch_cond(
     offset: i64,
     comp_mask: ComparisonMask,
 ) -> Result<[u8; 18], BFCompileError> {
+    debug_assert!(
+        offset % 2 == 0,
+        "<…>::s390x::branch_cond distance offset must be even"
+    );
     let offset: i32 = i16::try_from(offset >> 1)
         .map_err(|_| {
             BFCompileError::basic(
@@ -499,7 +503,7 @@ mod tests {
     #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     use super::super::test_utils::Disassembler;
     use super::*;
-    use test_macros::disasm_test;
+    use test_macros::{disasm_test, debug_assert_test};
 
     #[cfg_attr(
         not(all(feature = "disasmtests", not(cross_compiled))),
@@ -881,5 +885,10 @@ mod tests {
                 "stc %r5, 0(%r8,0)"
             ]
         );
+    }
+
+    #[debug_assert_test("<…>::s390x::branch_cond distance offset must be even")]
+    fn fail_on_odd_jumps() {
+        branch_cond(S390xRegister::R4, 3, ComparisonMask::MaskEQ).unwrap();
     }
 }
