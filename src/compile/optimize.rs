@@ -44,6 +44,34 @@ pub(super) enum CombinedInstruction {
     SetCell(u8),
 }
 
+impl std::fmt::Display for CombinedInstruction {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::LoopOpen => write!(fmt, "{{[}}"),
+            Self::LoopClose => write!(fmt, "{{]}}"),
+            Self::Read => write!(fmt, "{{,}}"),
+            Self::Write => write!(fmt, "{{.}}"),
+            Self::Add(n) => write!(fmt, "{{{}}}", "+".repeat(usize::from(*n))),
+            Self::Sub(n) => write!(fmt, "{{{}}}", "-".repeat(usize::from(*n))),
+            Self::SetCell(n) => write!(fmt, "{{[-]{}}}", "+".repeat(usize::from(*n))),
+            Self::MoveRight(n) => {
+                write!(
+                    fmt,
+                    "{{{}}}",
+                    ">".repeat(usize::try_from(*n).expect("Address space fits code"))
+                )
+            }
+            Self::MoveLeft(n) => {
+                write!(
+                    fmt,
+                    "{{{}}}",
+                    "<".repeat(usize::try_from(*n).expect("Address space fits code"))
+                )
+            }
+        }
+    }
+}
+
 impl From<InstrSequence> for CombinedInstruction {
     fn from(is: InstrSequence) -> Self {
         match is {
@@ -455,6 +483,41 @@ mod tests {
                 CombinedInstruction::SetCell(0), // b"[+]"
                 CombinedInstruction::Read,       // b","
             ]
+        );
+    }
+
+    #[test]
+    fn test_display_ci() {
+        assert_eq!(format!("{}", CombinedInstruction::LoopOpen), "{[}");
+        assert_eq!(format!("{}", CombinedInstruction::LoopClose), "{]}");
+        assert_eq!(format!("{}", CombinedInstruction::Read), "{,}");
+        assert_eq!(format!("{}", CombinedInstruction::Write), "{.}");
+
+        assert_eq!(format!("{}", CombinedInstruction::Add(0)), "{}");
+        assert_eq!(format!("{}", CombinedInstruction::Sub(0)), "{}");
+        assert_eq!(format!("{}", CombinedInstruction::SetCell(0)), "{[-]}");
+        assert_eq!(format!("{}", CombinedInstruction::MoveRight(0)), "{}");
+        assert_eq!(format!("{}", CombinedInstruction::MoveLeft(0)), "{}");
+
+        assert_eq!(format!("{}", CombinedInstruction::Add(1)), "{+}");
+        assert_eq!(format!("{}", CombinedInstruction::Sub(1)), "{-}");
+        assert_eq!(format!("{}", CombinedInstruction::SetCell(1)), "{[-]+}");
+        assert_eq!(format!("{}", CombinedInstruction::MoveRight(1)), "{>}");
+        assert_eq!(format!("{}", CombinedInstruction::MoveLeft(1)), "{<}");
+
+        assert_eq!(format!("{}", CombinedInstruction::Add(8)), "{++++++++}");
+        assert_eq!(format!("{}", CombinedInstruction::Sub(8)), "{--------}");
+        assert_eq!(
+            format!("{}", CombinedInstruction::SetCell(8)),
+            "{[-]++++++++}"
+        );
+        assert_eq!(
+            format!("{}", CombinedInstruction::MoveRight(8)),
+            "{>>>>>>>>}"
+        );
+        assert_eq!(
+            format!("{}", CombinedInstruction::MoveLeft(8)),
+            "{<<<<<<<<}"
         );
     }
 }
