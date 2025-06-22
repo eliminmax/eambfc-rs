@@ -215,7 +215,7 @@ pub fn bin_test(arch: TokenStream, func: TokenStream) -> TokenStream {
     test_func.into_token_stream().into()
 }
 
-/// An attribute that combines `#[test]` with `#[cfg_attr(debug_assertions), should_panic = "msg"]
+/// An attribute that combines `#[test]` with `#[cfg_attr(debug_assertions, should_panic = "msg")]
 /// ```no_run
 /// #[debug_assert_test("msg")]
 /// fn foo () {
