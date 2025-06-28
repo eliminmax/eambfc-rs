@@ -6,13 +6,18 @@ use fsutil::set_extension;
 mod optimize;
 use optimize::{CombinedInstruction, combine_instructions};
 mod arch_inter;
+
+mod code_reader;
+use code_reader::CodeReader;
 use arch_inter::ArchInter;
 
 pub(crate) mod backends;
 
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
+
 #[cfg(have_32bit_targets)]
 pub(crate) use backends::ElfClass;
+
 use backends::{Backend, BinInfo, SegmentInfo};
 
 use std::ffi::OsStr;
@@ -60,56 +65,6 @@ impl FilteredInstr {
             b']' => Some(Self::LoopClose),
             _ => None,
         }
-    }
-}
-
-/// An iterator that returns `FilteredInstr`uctions read from a reader that implements `BufRead`,
-/// tracking code position
-struct CodeReader<R> {
-    byte_reader: std::io::Bytes<R>,
-    pos: CodePosition,
-}
-
-impl<R: Read> CodeReader<BufReader<R>> {
-    fn new(inner_reader: R) -> Self {
-        Self {
-            byte_reader: BufReader::new(inner_reader).bytes(),
-            pos: CodePosition { line: 1, col: 0 },
-        }
-    }
-}
-
-impl<R: Read> Iterator for CodeReader<R> {
-    type Item = Result<FilteredInstr, BFCompileError>;
-    fn next(&mut self) -> Option<Self::Item> {
-        while let Some(b) = self.byte_reader.by_ref().next() {
-            let b = match b {
-                Ok(ok) => ok,
-                Err(err) => {
-                    return Some(Err(BFCompileError::new(
-                        BFErrorID::FailedRead,
-                        format!("An I/O error occurred reading from file: {err:?}"),
-                        None,
-                        Some(self.pos),
-                    )));
-                }
-            };
-            // This comparison that a byte isn't a continuation byte within a UTF-8 multi-byte
-            // sequence, so if it's either a new UTF-8 codepoint or invalid UTF-8, this will
-            // increment the column counter, but it won't if it's a byte that's typically a
-            // continuation of a UTF-8 sequence
-            if b & 0xc0 != 0x80 {
-                self.pos.col += 1;
-            }
-            if let Some(fi) = FilteredInstr::from_byte(b) {
-                return Some(Ok(fi));
-            }
-            if b == b'\n' {
-                self.pos.col = 0;
-                self.pos.line += 1;
-            }
-        }
-        None
     }
 }
 
@@ -210,24 +165,24 @@ pub(crate) trait BFCompile {
 
         let outfile_name = set_extension(file_name, extension, out_suffix)?;
 
-        let infile = File::open(file_name).map_err(|_| {
-            vec![BFCompileError::basic(
+        let infile = File::open(file_name).map_err(|e| {
+            BFCompileError::basic(
                 BFErrorID::OpenReadFailed,
                 format!(
-                    "Failed to open {} for reading.",
+                    "Failed to open {} for reading: {e:?}",
                     file_name.to_string_lossy()
                 ),
-            )]
+            )
         })?;
 
-        let outfile = open_options.open(&outfile_name).map_err(|_| {
-            vec![BFCompileError::basic(
+        let outfile = open_options.open(&outfile_name).map_err(|e| {
+            BFCompileError::basic(
                 BFErrorID::OpenWriteFailed,
                 format!(
-                    "Failed to open {} for writing.",
+                    "Failed to open {} for writing: {e:?}",
                     outfile_name.to_string_lossy()
                 ),
-            )]
+            )
         })?;
         let mut ret = Self::compile(infile, outfile, optimize, tape_blocks);
         if let Err(ref mut errs) = ret {
@@ -506,31 +461,32 @@ mod tests {
         );
     }
 
-    struct FailingWriter {
-        fail_after: usize,
-    }
+    #[test]
+    fn write_failures_handled() {
 
-    impl Write for FailingWriter {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            if self.fail_after == 0 {
-                Err(io::Error::other("testing write failure handling"))
-            } else if buf.len() < self.fail_after {
-                self.fail_after -= buf.len();
-                Ok(buf.len())
-            } else {
-                let ret = self.fail_after;
-                self.fail_after = 0;
-                Ok(ret)
+        struct FailingWriter {
+            fail_after: usize,
+        }
+
+        impl Write for FailingWriter {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                if self.fail_after == 0 {
+                    Err(io::Error::other("testing write failure handling"))
+                } else if buf.len() < self.fail_after {
+                    self.fail_after -= buf.len();
+                    Ok(buf.len())
+                } else {
+                    let ret = self.fail_after;
+                    self.fail_after = 0;
+                    Ok(ret)
+                }
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
             }
         }
 
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn write_failures_handled() {
         // partial write failure while writing headers
         assert!(
             TestInter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 60 }, true, 8)
