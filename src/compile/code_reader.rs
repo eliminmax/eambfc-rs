@@ -1,5 +1,5 @@
-use crate::err::{BFCompileError, BFErrorID, CodePosition};
 use super::FilteredInstr;
+use crate::err::{BFCompileError, BFErrorID, CodePosition};
 
 use std::io::{BufRead, Read};
 
@@ -83,6 +83,10 @@ mod tests {
             }
         }
         let mut cr = CodeReader::new(std::io::BufReader::new(FailingReader));
-        assert!(cr.next().unwrap().is_err_and(|e| e.error_id() == BFErrorID::FailedRead));
+        assert!(
+            cr.next()
+                .unwrap()
+                .is_err_and(|e| e.error_id() == BFErrorID::FailedRead)
+        );
     }
 }

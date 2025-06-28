@@ -8,8 +8,8 @@ use optimize::{CombinedInstruction, combine_instructions};
 mod arch_inter;
 
 mod code_reader;
-use code_reader::CodeReader;
 use arch_inter::ArchInter;
+use code_reader::CodeReader;
 
 pub(crate) mod backends;
 
@@ -463,7 +463,6 @@ mod tests {
 
     #[test]
     fn write_failures_handled() {
-
         struct FailingWriter {
             fail_after: usize,
         }
