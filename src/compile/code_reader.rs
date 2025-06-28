@@ -22,9 +22,25 @@ impl<B: BufRead> CodeReader<B> {
 impl<R: Read + BufRead> Iterator for CodeReader<R> {
     type Item = Result<FilteredInstr, BFCompileError>;
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(b) = self.byte_reader.by_ref().next() {
-            let b = match b {
-                Ok(ok) => ok,
+        while let Some(byte) = self.byte_reader.by_ref().next() {
+            match byte {
+                Ok(b'\n') => {
+                    self.pos.col = 0;
+                    self.pos.line += 1;
+                }
+                // This comparison that a byte isn't a continuation byte within a UTF-8 multi-byte
+                // sequence, so if it's either a new UTF-8 codepoint or invalid UTF-8, this will
+                // increment the column counter, but it won't if it's a byte that's a valid
+                // continuation of a UTF-8 sequence
+                Ok(b) if b & 0xc0 != 0x80 => {
+                    self.pos.col += 1;
+                    if let Some(fi) = FilteredInstr::from_byte(b) {
+                        return Some(Ok(fi));
+                    }
+                }
+                // Either a non-UTF-8 byte or a UTF-8 continuation byte. Either way, don't
+                // increment the counter, and don't bother checking if it's valid bf - it's not
+                Ok(_) => (),
                 Err(err) => {
                     return Some(Err(BFCompileError::new(
                         BFErrorID::FailedRead,
@@ -33,20 +49,6 @@ impl<R: Read + BufRead> Iterator for CodeReader<R> {
                         Some(self.pos),
                     )));
                 }
-            };
-            // This comparison that a byte isn't a continuation byte within a UTF-8 multi-byte
-            // sequence, so if it's either a new UTF-8 codepoint or invalid UTF-8, this will
-            // increment the column counter, but it won't if it's a byte that's typically a
-            // continuatio of a UTF-8 sequence
-            if b & 0xc0 != 0x80 {
-                self.pos.col += 1;
-            }
-            if let Some(fi) = FilteredInstr::from_byte(b) {
-                return Some(Ok(fi));
-            }
-            if b == b'\n' {
-                self.pos.col = 0;
-                self.pos.line += 1;
             }
         }
         None
