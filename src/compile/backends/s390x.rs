@@ -698,7 +698,7 @@ mod tests {
             // SAFETY: Function takes 3 `unsigned *` C parameters, and sets the pointed-to values
             // to the major, minor, and patch numbers of the LLVM release. both supported LLVM
             // versions document that `NULL` can be passed for unneeded values.
-            unsafe { LLVMGetVersion(&mut llvm_version, null_mut(), null_mut()); };
+            unsafe { LLVMGetVersion(&raw mut llvm_version, null_mut(), null_mut()); };
             if llvm_version == 10 {
                 ("nop 0", "nopr %r0")
             } else {
