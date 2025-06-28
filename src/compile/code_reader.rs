@@ -74,4 +74,15 @@ mod tests {
         assert_eq!(cr.next(), None);
     }
 
+    #[test]
+    fn read_fail() {
+        struct FailingReader;
+        impl Read for FailingReader {
+            fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("can't read from FailingReader"))
+            }
+        }
+        let mut cr = CodeReader::new(std::io::BufReader::new(FailingReader));
+        assert!(cr.next().unwrap().is_err_and(|e| e.error_id() == BFErrorID::FailedRead));
+    }
 }
