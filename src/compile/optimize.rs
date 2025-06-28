@@ -10,15 +10,16 @@ use std::num::NonZero;
 /// Represents one or more instructions, in an intemediate form that's easier to optimize.
 #[derive(Clone, Copy, PartialEq)]
 #[cfg_attr(any(test, debug_assertions), derive(Debug))]
+#[repr(u8)]
 enum InstrSequence {
     /// A brainfuck `[`
-    LoopOpen,
+    LoopOpen = b'[',
     /// A brainfuck `]`
-    LoopClose,
+    LoopClose = b']',
     /// A brainfuck `,`
-    Read,
+    Read = b',',
     /// A brainfuck `.`
-    Write,
+    Write = b'.',
     /// One or more consecutive brainfuck `+` or `-` instructions
     ModifyCell(NonZero<i8>),
     /// One or more consecutive brainfuck `<` or `>` instructions
@@ -29,14 +30,22 @@ enum InstrSequence {
     SetCell(u8),
 }
 
+#[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+/// An instruction that can't be combined
+#[repr(u8)]
+pub(super) enum UncombinableInstr {
+    LoopOpen = b'[',
+    LoopClose = b']',
+    Read = b',',
+    Write = b'.',
+}
+
 /// the intermediate representation instructions produced by the optimization process
 #[derive(Clone, Copy, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 pub(super) enum CombinedInstruction {
-    LoopOpen,
-    LoopClose,
-    Read,
-    Write,
+    Uncombinable(UncombinableInstr),
     Add(u8),
     Sub(u8),
     MoveRight(u64),
@@ -47,10 +56,7 @@ pub(super) enum CombinedInstruction {
 impl std::fmt::Display for CombinedInstruction {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::LoopOpen => write!(fmt, "{{[}}"),
-            Self::LoopClose => write!(fmt, "{{]}}"),
-            Self::Read => write!(fmt, "{{,}}"),
-            Self::Write => write!(fmt, "{{.}}"),
+            Self::Uncombinable(i) => write!(fmt, "{{{}}}", *i as u8 as char),
             Self::Add(n) => write!(fmt, "{{{}}}", "+".repeat(usize::from(*n))),
             Self::Sub(n) => write!(fmt, "{{{}}}", "-".repeat(usize::from(*n))),
             Self::SetCell(n) => write!(fmt, "{{[-]{}}}", "+".repeat(usize::from(*n))),
@@ -75,10 +81,10 @@ impl std::fmt::Display for CombinedInstruction {
 impl From<InstrSequence> for CombinedInstruction {
     fn from(is: InstrSequence) -> Self {
         match is {
-            InstrSequence::LoopOpen => Self::LoopOpen,
-            InstrSequence::LoopClose => Self::LoopClose,
-            InstrSequence::Read => Self::Read,
-            InstrSequence::Write => Self::Write,
+            InstrSequence::LoopOpen => Self::Uncombinable(UncombinableInstr::LoopOpen),
+            InstrSequence::LoopClose => Self::Uncombinable(UncombinableInstr::LoopClose),
+            InstrSequence::Read => Self::Uncombinable(UncombinableInstr::Read),
+            InstrSequence::Write => Self::Uncombinable(UncombinableInstr::Write),
             InstrSequence::SetCell(imm) => Self::SetCell(imm),
             InstrSequence::ModifyCell(imm) => {
                 if imm.get() > 0 {
@@ -338,6 +344,7 @@ pub(super) fn combine_instructions(
 
 #[cfg(test)]
 mod tests {
+    use super::UncombinableInstr as UI;
     use super::*;
 
     #[test]
@@ -367,10 +374,10 @@ mod tests {
                 CombinedInstruction::Sub(1),
                 CombinedInstruction::MoveLeft(1),
                 CombinedInstruction::MoveRight(1),
-                CombinedInstruction::LoopOpen,
-                CombinedInstruction::LoopClose,
-                CombinedInstruction::Read,
-                CombinedInstruction::Write,
+                CombinedInstruction::Uncombinable(UI::LoopOpen),
+                CombinedInstruction::Uncombinable(UI::LoopClose),
+                CombinedInstruction::Uncombinable(UI::Read),
+                CombinedInstruction::Uncombinable(UI::Write),
             ]
         );
         // Original implementation swapped left and right terminology, so make sure to catch that.
@@ -443,12 +450,12 @@ mod tests {
                 CombinedInstruction::MoveRight(2),
                 CombinedInstruction::Add(1),
                 CombinedInstruction::MoveLeft(1),
-                CombinedInstruction::LoopOpen,
+                CombinedInstruction::Uncombinable(UI::LoopOpen),
                 CombinedInstruction::Sub(1),
                 CombinedInstruction::MoveRight(1),
                 CombinedInstruction::Add(1),
                 CombinedInstruction::MoveLeft(1),
-                CombinedInstruction::LoopClose
+                CombinedInstruction::Uncombinable(UI::LoopClose),
             ]
         );
     }
@@ -465,33 +472,45 @@ mod tests {
         assert_eq!(
             code,
             [
-                CombinedInstruction::Read,       // b","
-                CombinedInstruction::SetCell(0), // b"[-]"
-                CombinedInstruction::Read,       // b","
-                CombinedInstruction::LoopOpen,   // b"["
-                CombinedInstruction::Sub(2),     // b"--"
-                CombinedInstruction::LoopClose,  // b"]"
-                CombinedInstruction::Read,       // b","
-                CombinedInstruction::SetCell(0), // b"[---]"
-                CombinedInstruction::Read,       // b","
-                CombinedInstruction::SetCell(0), // b"[+++]"
-                CombinedInstruction::Read,       // b","
-                CombinedInstruction::LoopOpen,   // b"["
-                CombinedInstruction::Add(2),     // b"++"
-                CombinedInstruction::LoopClose,  // b"]"
-                CombinedInstruction::Read,       // b","
-                CombinedInstruction::SetCell(0), // b"[+]"
-                CombinedInstruction::Read,       // b","
+                CombinedInstruction::Uncombinable(UI::Read),      // b","
+                CombinedInstruction::SetCell(0),                  // b"[-]"
+                CombinedInstruction::Uncombinable(UI::Read),      // b","
+                CombinedInstruction::Uncombinable(UI::LoopOpen),  // b"["
+                CombinedInstruction::Sub(2),                      // b"--"
+                CombinedInstruction::Uncombinable(UI::LoopClose), // b"]"
+                CombinedInstruction::Uncombinable(UI::Read),      // b","
+                CombinedInstruction::SetCell(0),                  // b"[---]"
+                CombinedInstruction::Uncombinable(UI::Read),      // b","
+                CombinedInstruction::SetCell(0),                  // b"[+++]"
+                CombinedInstruction::Uncombinable(UI::Read),      // b","
+                CombinedInstruction::Uncombinable(UI::LoopOpen),  // b"["
+                CombinedInstruction::Add(2),                      // b"++"
+                CombinedInstruction::Uncombinable(UI::LoopClose), // b"]"
+                CombinedInstruction::Uncombinable(UI::Read),      // b","
+                CombinedInstruction::SetCell(0),                  // b"[+]"
+                CombinedInstruction::Uncombinable(UI::Read),      // b","
             ]
         );
     }
 
     #[test]
     fn test_display_ci() {
-        assert_eq!(format!("{}", CombinedInstruction::LoopOpen), "{[}");
-        assert_eq!(format!("{}", CombinedInstruction::LoopClose), "{]}");
-        assert_eq!(format!("{}", CombinedInstruction::Read), "{,}");
-        assert_eq!(format!("{}", CombinedInstruction::Write), "{.}");
+        assert_eq!(
+            format!("{}", CombinedInstruction::Uncombinable(UI::LoopOpen)),
+            "{[}"
+        );
+        assert_eq!(
+            format!("{}", CombinedInstruction::Uncombinable(UI::LoopClose)),
+            "{]}"
+        );
+        assert_eq!(
+            format!("{}", CombinedInstruction::Uncombinable(UI::Read)),
+            "{,}"
+        );
+        assert_eq!(
+            format!("{}", CombinedInstruction::Uncombinable(UI::Write)),
+            "{.}"
+        );
 
         assert_eq!(format!("{}", CombinedInstruction::Add(0)), "{}");
         assert_eq!(format!("{}", CombinedInstruction::Sub(0)), "{}");

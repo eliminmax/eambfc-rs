@@ -303,30 +303,21 @@ trait BFCompileHelper: ArchInter {
         dst: &mut Vec<u8>,
         code: Vec<CombinedInstruction>,
     ) -> Result<(), BFCompileError> {
+        use CombinedInstruction as CI;
         let mut jump_stack = Vec::new();
-        #[rustfmt::skip]
-        macro_rules! compile_as_bf {
-            ($bf_instr: literal) => {{
-                Self::compile_instr($bf_instr, dst, None, &mut jump_stack)
-            }};
-        }
-        #[rustfmt::skip]
+
         macro_rules! compile_combined {
-            ($inner_func: ident, $val: ident) => {{
-                Self::$inner_func(dst, Self::REGISTERS.bf_ptr, $val)
-            }};
+            ($inner_func: ident, $val: ident) => {{ Self::$inner_func(dst, Self::REGISTERS.bf_ptr, $val) }};
         }
+
         for ir_instr in code {
             match ir_instr {
-                CombinedInstruction::LoopOpen => compile_as_bf!(b'[')?,
-                CombinedInstruction::LoopClose => compile_as_bf!(b']')?,
-                CombinedInstruction::Read => compile_as_bf!(b',')?,
-                CombinedInstruction::Write => compile_as_bf!(b'.')?,
-                CombinedInstruction::Add(i) => compile_combined!(add_byte, i),
-                CombinedInstruction::Sub(i) => compile_combined!(sub_byte, i),
-                CombinedInstruction::MoveLeft(i) => compile_combined!(sub_reg, i)?,
-                CombinedInstruction::MoveRight(i) => compile_combined!(add_reg, i)?,
-                CombinedInstruction::SetCell(i) => Self::set_byte(dst, Self::REGISTERS.bf_ptr, i),
+                CI::Uncombinable(i) => Self::compile_instr(i as u8, dst, None, &mut jump_stack)?,
+                CI::Add(i) => compile_combined!(add_byte, i),
+                CI::Sub(i) => compile_combined!(sub_byte, i),
+                CI::MoveLeft(i) => compile_combined!(sub_reg, i)?,
+                CI::MoveRight(i) => compile_combined!(add_reg, i)?,
+                CI::SetCell(i) => Self::set_byte(dst, Self::REGISTERS.bf_ptr, i),
             }
         }
         Ok(())
