@@ -420,6 +420,7 @@ mod tests {
     #[cfg(eambfc_default_arch = "x86_64")]
     use backends::X86_64Inter as TestInter;
     use std::io;
+    use test_macros::debug_assert_test;
 
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
@@ -441,6 +442,13 @@ mod tests {
             TestInter::compile(b"[".as_slice(), Vec::<u8>::new(), false, 8,)
                 .is_err_and(|e| e[0].error_id() == BFErrorID::UnmatchedOpen)
         );
+    }
+
+    #[cfg(feature = "i386")]
+    #[debug_assert_test("tape size should've been validated during arg parsing")]
+    fn tape_size_32_validation() {
+        backends::I386Inter::compile(b"".as_slice(), Vec::<u8>::new(), false, u32::MAX.into())
+            .unwrap();
     }
 
     #[test]
