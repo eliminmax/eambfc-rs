@@ -94,6 +94,8 @@ fn write_headers(
     let start_virt_addr = u64::try_from(START_ADDR).unwrap_or_else(|_| unreachable!()) + load_vaddr;
 
     let Some(Ok(file_size)) = START_ADDR.checked_add(codesize).map(u64::try_from) else {
+        // Can't create a file larger than 64 bits to test this on non-64-bit platforms
+        #[cfg(not(tarpaulin_include))]
         return Err(BFCompileError::basic(
             BFErrorID::CodeTooLarge,
             "code too large to fit in 64-bit address space",
@@ -263,23 +265,20 @@ trait BFCompileHelper: ArchInter {
             }
             b']' => {
                 // First, compile the skipped '[' instruction
-                let Some(open_location) = jump_stack.pop() else {
-                    return Err(BFCompileError::new(
-                        BFErrorID::UnmatchedClose,
-                        "Found ']' without matching '['.",
-                        Some(b']'),
-                        loc.copied(),
+                let open_location = jump_stack.pop().ok_or(BFCompileError::new(
+                    BFErrorID::UnmatchedClose,
+                    "Found ']' without matching '['.",
+                    Some(b']'),
+                    loc.copied(),
+                ))?;
+                let Ok(distance) = i64::try_from(code_buf.len() - open_location.index) else {
+                    // Can't create a file larger than 64 bits to test this on non-64-bit platforms
+                    #[cfg(not(tarpaulin_include))]
+                    return Err(BFCompileError::basic(
+                        BFErrorID::CodeTooLarge,
+                        "Jump distance exceeds 64-bit integer limit",
                     ));
                 };
-                let distance: i64 =
-                    (code_buf.len() - open_location.index)
-                        .try_into()
-                        .map_err(|_| {
-                            BFCompileError::basic(
-                                BFErrorID::CodeTooLarge,
-                                "Jump distance exceeds 64-bit integer limit",
-                            )
-                        })?;
                 Self::jump_open(
                     code_buf,
                     open_location.index,
