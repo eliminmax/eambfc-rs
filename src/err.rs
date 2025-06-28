@@ -178,7 +178,10 @@ impl BFCompileError {
             write!(report_string, ",\"line\":{line},\"column\":{col}")
                 .unwrap_or_else(|_| unreachable!("Won't fail to write! to String"));
         }
-        format!("{report_string},\"message\":\"{}\"}}", self.msg)
+        format!(
+            "{report_string},\"message\":\"{}\"}}",
+            json_escape(self.msg.as_ref())
+        )
     }
 
     /// Report error to user in manner determined by `out_mode`.
