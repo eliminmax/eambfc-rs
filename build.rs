@@ -90,7 +90,7 @@ fn set_default_arch() {
             {
                 println!(concat!("cargo::rustc-cfg=can_run_", $platform));
                 if $platform == arch {
-                    println!(concat!("cargo:rustc-cfg=can_run_default"));
+                    println!("cargo:rustc-cfg=can_run_default");
                 }
             }
         };
