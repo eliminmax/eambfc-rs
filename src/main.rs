@@ -66,7 +66,9 @@ fn standard_run(rc: arg_parse::StandardRunConfig) -> ExitCode {
             Backend::X86_64 => compile_with!(X86_64Inter),
         };
         if let Err(errs) = comp_result {
-            errs.into_iter().for_each(|e| e.report(rc.out_mode));
+            for e in errs {
+                e.report(rc.out_mode);
+            }
             if !rc.cont {
                 return ExitCode::FAILURE;
             }
