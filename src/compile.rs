@@ -232,68 +232,72 @@ trait BFCompileHelper: ArchInter {
         mut loc: Option<&mut CodePosition>,
         jump_stack: &mut Vec<JumpLocation>,
     ) -> Result<(), BFCompileError> {
-        if let Some(ref mut pos) = loc {
-            // This comparison that a byte isn't a continuation byte within a UTF-8 multi-byte
-            // sequence, so if it's either a new UTF-8 codepoint or invalid UTF-8, this will
-            // increment the column counter, but it won't if it's a byte that's typically a
-            // continuatio of a UTF-8 sequence
-            if instr & 0xc0 != 0x80 {
-                pos.col += 1;
-            }
-        }
         match instr {
-            // decrement the tape pointer register
-            b'<' => Self::dec_reg(code_buf, Self::REGISTERS.bf_ptr),
-            // increment the tape pointer register
-            b'>' => Self::inc_reg(code_buf, Self::REGISTERS.bf_ptr),
-            // decrement the current cell value
-            b'-' => Self::dec_byte(code_buf, Self::REGISTERS.bf_ptr),
-            // increment the current cell value
-            b'+' => Self::inc_byte(code_buf, Self::REGISTERS.bf_ptr),
-            // Write 1 byte at [bf_ptr] to STDOUT
-            b'.' => Self::bf_io(code_buf, Self::SC_NUMS.write, 1),
-            // Read 1 byte to [bf_ptr] from STDIN
-            b',' => Self::bf_io(code_buf, Self::SC_NUMS.read, 0),
-            // pad `Self::JUMP_SIZE` bytes with a trap instruction followed by no-ops.
-            // will replace when reaching the corresponding ']' instruction
-            b'[' => {
-                jump_stack.push(JumpLocation {
-                    loc: loc.copied(),
-                    index: code_buf.len(),
-                });
-                Self::pad_loop_open(code_buf);
-            }
-            b']' => {
-                // First, compile the skipped '[' instruction
-                let open_location = jump_stack.pop().ok_or(BFCompileError::new(
-                    BFErrorID::UnmatchedClose,
-                    "Found ']' without matching '['.",
-                    Some(b']'),
-                    loc.copied(),
-                ))?;
-                let Ok(distance) = i64::try_from(code_buf.len() - open_location.index) else {
-                    // Can't create a file larger than 64 bits to test this on non-64-bit platforms
-                    #[cfg(not(tarpaulin_include))]
-                    return Err(BFCompileError::basic(
-                        BFErrorID::CodeTooLarge,
-                        "Jump distance exceeds 64-bit integer limit",
-                    ));
-                };
-                Self::jump_open(
-                    code_buf,
-                    open_location.index,
-                    Self::REGISTERS.bf_ptr,
-                    distance,
-                )?;
-                Self::jump_close(code_buf, Self::REGISTERS.bf_ptr, -distance)?;
-            }
             b'\n' => {
                 if let Some(ref mut pos) = loc {
                     pos.col = 0;
                     pos.line += 1;
                 }
             }
+            // This comparison that a byte isn't a continuation byte within a UTF-8 multi-byte
+            // sequence, so if it's either a new UTF-8 codepoint or invalid UTF-8, this will
+            // increment the column counter, but it won't if it's a byte that's typically a
+            // continuatio of a UTF-8 sequence
+            b if b & 0xc0 != 0x80 => {
+                if let Some(ref mut pos) = loc {
+                    pos.col += 1;
+                }
+            }
             _ => (),
+        }
+        if let Some(fi) = FilteredInstr::from_byte(instr) {
+            match fi {
+                // decrement the tape pointer register
+                FilteredInstr::MoveL => Self::dec_reg(code_buf, Self::REGISTERS.bf_ptr),
+                // increment the tape pointer register
+                FilteredInstr::MoveR => Self::inc_reg(code_buf, Self::REGISTERS.bf_ptr),
+                // decrement the current cell value
+                FilteredInstr::Sub => Self::dec_byte(code_buf, Self::REGISTERS.bf_ptr),
+                // increment the current cell value
+                FilteredInstr::Add => Self::inc_byte(code_buf, Self::REGISTERS.bf_ptr),
+                // Write 1 byte at [bf_ptr] to STDOUT
+                FilteredInstr::Write => Self::bf_io(code_buf, Self::SC_NUMS.write, 1),
+                // Read 1 byte to [bf_ptr] from STDIN
+                FilteredInstr::Read => Self::bf_io(code_buf, Self::SC_NUMS.read, 0),
+                // pad `Self::JUMP_SIZE` bytes with a trap instruction followed by no-ops.
+                // will replace when reaching the corresponding ']' instruction
+                FilteredInstr::LoopOpen => {
+                    jump_stack.push(JumpLocation {
+                        loc: loc.copied(),
+                        index: code_buf.len(),
+                    });
+                    Self::pad_loop_open(code_buf);
+                }
+                FilteredInstr::LoopClose => {
+                    // First, compile the skipped '[' instruction
+                    let open_location = jump_stack.pop().ok_or(BFCompileError::new(
+                        BFErrorID::UnmatchedClose,
+                        "Found ']' without matching '['.",
+                        Some(b']'),
+                        loc.copied(),
+                    ))?;
+                    let Ok(distance) = i64::try_from(code_buf.len() - open_location.index) else {
+                        // Can't create a file larger than 64 bits to test this on >64-bit platforms
+                        #[cfg(not(tarpaulin_include))]
+                        return Err(BFCompileError::basic(
+                            BFErrorID::CodeTooLarge,
+                            "Jump distance exceeds 64-bit integer limit",
+                        ));
+                    };
+                    Self::jump_open(
+                        code_buf,
+                        open_location.index,
+                        Self::REGISTERS.bf_ptr,
+                        distance,
+                    )?;
+                    Self::jump_close(code_buf, Self::REGISTERS.bf_ptr, -distance)?;
+                }
+            }
         }
         Ok(())
     }
