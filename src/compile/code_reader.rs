@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 use super::FilteredInstr;
 use crate::err::{BFCompileError, BFErrorID, CodePosition};
 
