@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+SPDX-FileCopyrightText: 2024 - 2026 Eli Array Minkoff
 
 SPDX-License-Identifier: 0BSD
 -->
@@ -49,40 +49,20 @@ Compiled files have a tape size of 8 4-KiB blocks, for a total of 32 KiB, so any
 program that works with Urban Müller's original implementation's 30 KB tape
 should work fine.
 
-| option     | effect                                                   |
-|------------|----------------------------------------------------------|
-| `-h`       | Display basic usage information, then exit               |
-| `-V`       | Display version and copyright information, then exit     |
-| `-j`       | Write JSON-formatted error messages to `stdout`          |
-| `-q`       | Don't write error messages to `stderr`                   |
-| `-O`       | Perform basic optimizations                              |
-| `-c`       | Continue to the next file instead of aborting on failure |
-| `-A`       | Display info about supported targets, and exit           |
-| `-k`       | Don't delete files after failed compilation              |
-| `-t count` | Use `count` 4-KiB blocks instead of the default 8        |
-| `-e ext`   | Use `ext` instead of `.bf` as the source extension       |
-| `-a arch`  | Use the `arch` backend instead of the default            |
-| `-s suf`   | Append `suf` to the ends of output filenames             |
-
-
-If compiled with the `longopts` feature, the following options are the long
-equivalents to the short options:
-
-| short      | long                     |
-|------------|--------------------------|
-| `-h`       | `--help`                 |
-| `-V`       | `--version`              |
-| `-j`       | `--json`                 |
-| `-q`       | `--quiet`                |
-| `-O`       | `--optimize`             |
-| `-c`       | `--continue`             |
-| `-A`       | `--list-targets`         |
-| `-k`       | `--keep-failed`          |
-| `-t count` | `--tape-size=count`      |
-| `-e ext`   | `--source-extension=ext` |
-| `-a arch`  | `--target-arch=arch`     |
-| `-s suf`   | `--output-suffix=suf`    |
-
+| short      | long                     | effect                                                   |
+|------------|--------------------------|----------------------------------------------------------|
+| `-h`       | `--help`                 | Display basic usage information, then exit               |
+| `-V`       | `--version`              | Display version and copyright information, then exit     |
+| `-j`       | `--json`                 | Write JSON-formatted error messages to `stdout`          |
+| `-q`       | `--quiet`                | Don't write error messages to `stderr`                   |
+| `-O`       | `--optimize`             | Perform basic optimizations                              |
+| `-c`       | `--continue`             | Continue to the next file instead of aborting on failure |
+| `-A`       | `--list-targets`         | Display info about supported targets, and exit           |
+| `-k`       | `--keep-failed`          | Don't delete files after failed compilation              |
+| `-t count` | `--tape-size=count`      | Use `count` 4-KiB blocks instead of the default 8        |
+| `-e ext`   | `--source-extension=ext` | Use `ext` instead of `.bf` as the source extension       |
+| `-a arch`  | `--target-arch=arch`     | Use the `arch` backend instead of the default            |
+| `-s suf`   | `--output-suffix=suf`    | Append `suf` to the ends of output filenames             |
 
 ## Supported platforms
 
