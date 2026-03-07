@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 - 2025 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024 - 2026 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
@@ -14,46 +14,18 @@ pub(crate) enum OutMode {
     Quiet,
 }
 
-impl OutMode {
-    /// Set `self` to `OutMode::Json`
-    pub fn json(&mut self) {
-        *self = OutMode::Json;
-    }
-    /// If `self` is not `OutMode::Json`, sets `self` to `OutMode::Quiet`
-    /// for consistency with original C version, quiet doesn't override JSON mode
-    pub fn quiet(&mut self) {
-        if *self == OutMode::Basic {
-            *self = OutMode::Quiet;
-        }
-    }
-}
-
 #[non_exhaustive]
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub(crate) enum BFErrorID {
     BadSourceExtension,
     FailedRead,
     FailedWrite,
-    InputIsOutput,
     JumpTooLong,
-    MissingOperand,
-    MultipleArchitectures,
-    MultipleExtensions,
-    MultipleOutputExtensions,
-    MultipleTapeBlockCounts,
-    NoSourceFiles,
-    TapeSizeZero,
-    TapeSizeNotNumeric,
     OpenReadFailed,
     OpenWriteFailed,
-    TapeTooLarge,
-    UnknownArch,
-    UnknownArg,
     UnmatchedClose,
     UnmatchedOpen,
     CodeTooLarge,
-    #[cfg(feature = "longopts")]
-    UnexpectedArgValue,
     #[cfg(not(any(unix, target_os = "wasi")))]
     NonUTF8,
 }

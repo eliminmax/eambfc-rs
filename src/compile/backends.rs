@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2025 - 2026 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
@@ -37,6 +37,44 @@ pub(crate) enum Backend {
     X86_64,
 }
 
+#[cfg(not(have_all_targets))]
+/// Enum of disabled backends
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum DisabledBackend {
+    #[cfg(not(feature = "arm64"))]
+    Arm64,
+    #[cfg(not(feature = "i386"))]
+    I386,
+    #[cfg(not(feature = "riscv64"))]
+    RiscV64,
+    #[cfg(not(feature = "s390x"))]
+    S390x,
+    #[cfg(not(feature = "x86_64"))]
+    X86_64,
+}
+
+#[cfg(not(have_all_targets))]
+impl std::fmt::Display for DisabledBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match self {
+                #[cfg(not(feature = "arm64"))]
+                DisabledBackend::Arm64 => "arm64",
+                #[cfg(not(feature = "i386"))]
+                DisabledBackend::I386 => "i386",
+                #[cfg(not(feature = "riscv64"))]
+                DisabledBackend::RiscV64 => "riscv64",
+                #[cfg(not(feature = "s390x"))]
+                DisabledBackend::S390x => "s390x",
+                #[cfg(not(feature = "x86_64"))]
+                DisabledBackend::X86_64 => "x86_64",
+            }
+        )
+    }
+}
+
 impl std::fmt::Display for Backend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
@@ -58,25 +96,35 @@ impl std::fmt::Display for Backend {
     }
 }
 
-use crate::err::{BFCompileError, BFErrorID};
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum BackendParseErr {
+    #[cfg(not(have_all_targets))]
+    DisabledBackend(DisabledBackend),
+    UnknownBackend,
+}
+
 impl std::str::FromStr for Backend {
-    type Err = BFCompileError;
+    type Err = BackendParseErr;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        macro_rules! select_if_enabled {
+            ($feature: literal, $backend: ident) => {{
+                #[cfg(feature = $feature)]
+                {
+                    Ok(Backend::$backend)
+                }
+                #[cfg(not(feature = $feature))]
+                {
+                    Err(BackendParseErr(DisabledBackend::$backend))
+                }
+            }};
+        }
         match s {
-            #[cfg(feature = "arm64")]
-            "arm64" | "aarch64" => Ok(Backend::Arm64),
-            #[cfg(feature = "i386")]
-            "i386" | "i486" | "i586" | "i686" | "x86" => Ok(Backend::I386),
-            #[cfg(feature = "riscv64")]
-            "riscv64" | "riscv" => Ok(Backend::RiscV64),
-            #[cfg(feature = "s390x")]
-            "s390x" | "s390" | "z/architecture" => Ok(Backend::S390x),
-            #[cfg(feature = "x86_64")]
-            "x86_64" | "x64" | "amd64" | "x86-64" => Ok(Backend::X86_64),
-            s => Err(BFCompileError::basic(
-                BFErrorID::UnknownArch,
-                format!("{s} is not a recognized architecture"),
-            )),
+            "arm64" | "aarch64" => select_if_enabled!("arm64", Arm64),
+            "i386" | "i486" | "i586" | "i686" | "x86" => select_if_enabled!("i386", I386),
+            "riscv64" | "riscv" => select_if_enabled!("riscv64", RiscV64),
+            "s390x" | "s390" | "z/architecture" => select_if_enabled!("s390x", S390x),
+            "x86_64" | "x64" | "amd64" | "x86-64" => select_if_enabled!("x86_64", X86_64),
+            _ => Err(BackendParseErr::UnknownBackend),
         }
     }
 }
@@ -116,6 +164,14 @@ impl ElfClass {
             ElfClass::ELFClass32 => 32,
             #[cfg(have_64bit_targets)]
             ElfClass::ELFClass64 => 56,
+        }
+    }
+    pub(crate) const fn bits(self) -> u8 {
+        match self {
+            #[cfg(have_32bit_targets)]
+            ElfClass::ELFClass32 => 32,
+            #[cfg(have_64bit_targets)]
+            ElfClass::ELFClass64 => 64,
         }
     }
 }

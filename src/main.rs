@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 - 2025 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024 - 2026 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
@@ -84,10 +84,7 @@ fn main() -> ExitCode {
     let progname: Cow<'static, str> = args.next().map_or(env!("CARGO_BIN_NAME").into(), |c| {
         c.to_string_lossy().to_string().into()
     });
-    #[cfg(not(feature = "longopts"))]
     let rc = arg_parse::parse_args(args);
-    #[cfg(feature = "longopts")]
-    let rc = arg_parse::longopts::parse_args_long(args);
     match rc {
         Ok(RunConfig::ListArches) => {
             println!(concat!(
@@ -127,11 +124,8 @@ fn main() -> ExitCode {
             );
             ExitCode::SUCCESS
         }
-        Err((err, out_mode)) => {
-            err.report(out_mode);
-            if out_mode == OutMode::Basic {
-                eprintln!("{}", help_fmt(&progname));
-            }
+        Err(err) => {
+            eprintln!("{err}\n{}", help_fmt(&progname));
             ExitCode::FAILURE
         }
     }

@@ -1,25 +1,19 @@
-// SPDX-FileCopyrightText: 2024 - 2025 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024 - 2026 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 
-#![cfg_attr(
-    all(not(test), feature = "longopts"),
-    expect(unused_imports, reason = "Used without longopts")
-)]
 use crate::OutMode;
-use crate::compile::backends::Backend;
-use crate::err::{BFCompileError, BFErrorID};
+use crate::compile::backends::{Backend, BackendParseErr};
+use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 use std::ffi::{OsStr, OsString};
-#[cfg(unix)]
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
-#[cfg(target_os = "wasi")]
-use std::os::wasi::ffi::{OsStrExt, OsStringExt};
-#[cfg(feature = "longopts")]
-pub(crate) mod longopts;
+use std::num::NonZeroU64;
+use std::path::PathBuf;
 
-#[cfg(have_32bit_targets)]
-use crate::compile::ElfClass::ELFClass32;
+pub(crate) mod err;
+use err::ArgParseError;
+
+use crate::compile::ElfClass;
 mod help_text;
 pub use help_text::help_fmt;
 
@@ -30,30 +24,36 @@ pub(crate) struct StandardRunConfig {
     pub keep: bool,
     pub cont: bool,
     pub tape_blocks: u64,
-    pub extension: OsString,
-    pub source_files: Vec<OsString>,
+    pub extension: Cow<'static, OsStr>,
+    pub source_files: Vec<PathBuf>,
     pub out_suffix: Option<OsString>,
     pub arch: Backend,
 }
 
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "bools best represent toggleable switches"
+)]
 #[derive(Default)]
 struct PartialRunConfig {
-    out_mode: OutMode,
+    json: bool,
+    quiet: bool,
     optimize: bool,
     keep: bool,
     cont: bool,
-    tape_blocks: Option<u64>,
+    tape_blocks: Option<NonZeroU64>,
     extension: Option<OsString>,
-    source_files: Vec<OsString>,
+    source_files: Vec<PathBuf>,
     out_suffix: Option<OsString>,
     arch: Option<Backend>,
 }
 
 impl TryFrom<PartialRunConfig> for StandardRunConfig {
-    type Error = (BFCompileError, OutMode);
+    type Error = ArgParseError;
     fn try_from(pcfg: PartialRunConfig) -> Result<Self, Self::Error> {
         let PartialRunConfig {
-            out_mode,
+            json,
+            quiet,
             optimize,
             keep,
             cont,
@@ -63,34 +63,43 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
             out_suffix,
             arch,
         } = pcfg;
+        let out_mode = match (json, quiet) {
+            (true, true) => return Err(ArgParseError::SetBothOutModes),
+            (true, false) => OutMode::Json,
+            (false, true) => OutMode::Quiet,
+            (false, false) => OutMode::Basic,
+        };
 
-        if extension.as_deref().or(Some(".bf".as_ref())) == out_suffix.as_deref() {
-            return Err((
-                BFCompileError::basic(
-                    BFErrorID::InputIsOutput,
-                    "Extension can't be the same as output suffix",
-                ),
-                out_mode,
-            ));
-        }
+        let extension = extension.map_or(Cow::Borrowed(".bf".as_ref()), Cow::Owned);
+        let out_suffix = {
+            if let Some(out_suffix) = out_suffix {
+                if out_suffix == extension {
+                    return Err(ArgParseError::InputIsOutput(out_suffix));
+                }
+                Some(out_suffix)
+            } else {
+                None
+            }
+        };
+
         if source_files.is_empty() {
-            return Err((
-                BFCompileError::basic(BFErrorID::NoSourceFiles, "No source files provided"),
-                out_mode,
-            ));
+            return Err(ArgParseError::NoSourceFiles);
         }
         let arch = arch.unwrap_or_default();
-        let tape_blocks = tape_blocks.unwrap_or(8);
+        let tape_blocks = tape_blocks.map_or(8, NonZeroU64::get);
 
-        #[cfg(have_32bit_targets)]
-        if arch.ei_class() == ELFClass32 && tape_blocks > u64::from(u32::MAX / 0x1000) {
-            return Err((
-                BFCompileError::basic(
-                    BFErrorID::TapeTooLarge,
-                    "provided tape size would exceed 32-bit address space",
-                ),
-                out_mode,
-            ));
+        let max_tape_blocks = match arch.ei_class() {
+            #[cfg(have_32bit_targets)]
+            ElfClass::ELFClass32 => const { (u32::MAX / 0x1000) as u64 },
+            #[cfg(have_64bit_targets)]
+            ElfClass::ELFClass64 => const { u64::MAX / 0x1000 },
+        };
+
+        if tape_blocks > max_tape_blocks {
+            return Err(ArgParseError::TapeTooLarge {
+                class: arch.ei_class(),
+                tape_blocks,
+            });
         }
 
         Ok(StandardRunConfig {
@@ -99,7 +108,7 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
             keep,
             cont,
             tape_blocks,
-            extension: extension.unwrap_or(".bf".into()),
+            extension,
             source_files,
             out_suffix,
             arch,
@@ -108,111 +117,58 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
 }
 
 impl PartialRunConfig {
-    #[cfg(any(not(feature = "longopts"), test))]
-    fn parse_standalone_flag(&mut self, flag: u8) -> Result<(), (BFCompileError, OutMode)> {
-        match flag {
-            b'j' => self.out_mode.json(),
-            b'q' => self.out_mode.quiet(),
-            b'O' => self.optimize = true,
-            b'k' => self.keep = true,
-            b'c' => self.cont = true,
-            bad_arg => {
-                return Err((
-                    BFCompileError::basic(
-                        BFErrorID::UnknownArg,
-                        format!("'-{}' is not a recognized argument", bad_arg.escape_ascii()),
-                    ),
-                    self.out_mode,
-                ));
-            }
+    fn set_arch(&mut self, param: OsString) -> Result<(), ArgParseError> {
+        let backend = if let Some(s) = param.to_str() {
+            s.parse().map_err(|e| match e {
+                #[cfg(not(have_all_targets))]
+                BackendParseErr::DisabledBackend(db) => ArgParseError::DisabledBackend(db),
+                BackendParseErr::UnknownBackend => ArgParseError::UnknownBackend(param),
+            })
+        } else {
+            Err(ArgParseError::UnknownBackend(param))
+        }?;
+        if let Some(old) = self.arch {
+            return Err(ArgParseError::MultipleArchitectures(old, backend));
         }
+        self.arch = Some(backend);
         Ok(())
     }
 
-    fn gen_err(
-        &self,
-        kind: BFErrorID,
-        msg: impl Into<std::borrow::Cow<'static, str>>,
-    ) -> (BFCompileError, OutMode) {
-        (BFCompileError::basic(kind, msg), self.out_mode)
-    }
-
-    fn set_arch(&mut self, param: &OsStr) -> Result<(), (BFCompileError, OutMode)> {
-        if self.arch.is_some() {
-            return Err(self.gen_err(BFErrorID::MultipleArchitectures, "passed -a multiple times"));
+    fn set_ext(&mut self, ext: OsString) -> Result<(), ArgParseError> {
+        if let Some(old_ext) = self.extension.take() {
+            return Err(ArgParseError::MultipleExtensions(old_ext, ext));
         }
-        self.arch = Some(
-            param
-                .to_string_lossy()
-                .parse()
-                .map_err(|e| (e, self.out_mode))?,
-        );
+        self.extension = Some(ext);
         Ok(())
     }
 
-    fn set_ext(&mut self, param: OsString) -> Result<(), (BFCompileError, OutMode)> {
-        #[cfg(not(any(unix, target_os = "wasi")))]
-        if !cfg!(any(unix, target_os = "wasi")) {
-            let start = param
-                .as_encoded_bytes()
-                .utf8_chunks()
-                .next()
-                .expect("Non-empty suffix");
-            if start.valid().is_empty() {
-                return Err(self.gen_err(
-                    BFErrorID::NonUTF8,
-                    "Can't handle extension with non-unicode start",
-                ));
-            }
+    fn set_suffix(&mut self, suf: OsString) -> Result<(), ArgParseError> {
+        if let Some(old_suf) = self.out_suffix.take() {
+            return Err(ArgParseError::MultipleOutputExtensions(old_suf, suf));
         }
-        if self.extension.is_none() {
-            self.extension = Some(param);
-            Ok(())
-        } else {
-            Err(self.gen_err(BFErrorID::MultipleExtensions, "passed -e multiple times"))
-        }
+        self.out_suffix = Some(suf);
+        Ok(())
     }
 
-    fn set_suffix(&mut self, suf: OsString) -> Result<(), (BFCompileError, OutMode)> {
-        if self.out_suffix.is_none() {
-            self.out_suffix = Some(suf);
-            Ok(())
-        } else {
-            Err(self.gen_err(
-                BFErrorID::MultipleOutputExtensions,
-                "passed -s multiple times",
-            ))
-        }
-    }
-
-    fn set_tape_size(&mut self, param: OsString) -> Result<(), (BFCompileError, OutMode)> {
-        use std::str::FromStr;
-        if self.tape_blocks.is_some() {
-            return Err(self.gen_err(
-                BFErrorID::MultipleTapeBlockCounts,
-                "passed -t multiple times",
-            ));
-        }
-        let Ok(Ok(tape_size)) = param.into_string().map(|s| u64::from_str(&s)) else {
-            return Err(self.gen_err(
-                BFErrorID::TapeSizeNotNumeric,
-                "tape size could not be parsed as a numeric value",
-            ));
+    fn set_tape_size(&mut self, param: OsString) -> Result<(), ArgParseError> {
+        let Some(p) = param.to_str() else {
+            return Err(ArgParseError::TapeSizeNotNumeric(param));
         };
-        match tape_size {
-            0 => Err(self.gen_err(
-                BFErrorID::TapeSizeZero,
-                "Tape value for -t must be at least 1",
-            )),
-            i if i >= u64::MAX >> 12 => Err(self.gen_err(
-                BFErrorID::TapeTooLarge,
-                "tape size exceeds 64-bit integer limit",
-            )),
-            i => {
-                self.tape_blocks = Some(i);
-                Ok(())
-            }
+        let tape_size = match p.parse() {
+            Ok(ts) => ts,
+            Err(err) => return Err(ArgParseError::from_bad_tape_size(&err, param)),
+        };
+
+        if let Some(old_size) = self.tape_blocks
+            && old_size != tape_size
+        {
+            return Err(ArgParseError::MultipleTapeSizes(
+                old_size.get(),
+                tape_size.get(),
+            ));
         }
+        self.tape_blocks = Some(tape_size);
+        Ok(())
     }
 }
 
@@ -224,85 +180,134 @@ pub(crate) enum RunConfig {
     ListArches,
 }
 
-#[cfg(any(test, not(feature = "longopts")))]
-pub(crate) fn parse_args<T: Iterator<Item = OsString>>(
-    mut args: T,
-) -> Result<RunConfig, (BFCompileError, OutMode)> {
-    let mut pcfg = PartialRunConfig::default();
+pub(crate) fn parse_args(args: impl Iterator<Item = OsString>) -> Result<RunConfig, ArgParseError> {
+    let mut args = args;
+    let mut cfg = PartialRunConfig::default();
 
     while let Some(arg) = args.next() {
-        // handle non-flag values
-        if arg == "--" {
-            pcfg.source_files.extend(args);
-            break;
-        }
-        let arg_bytes: &[u8];
-        #[cfg(any(unix, target_os = "wasi"))]
-        {
-            arg_bytes = arg.as_bytes();
-        };
-        #[cfg(not(any(unix, target_os = "wasi")))]
-        {
-            arg_bytes = arg.as_encoded_bytes();
-        };
-        if arg_bytes[0] != b'-' {
-            pcfg.source_files.push(arg);
-            continue;
-        }
-
-        let mut arg_byte_iter = arg_bytes[1..].iter().copied();
-
-        while let Some(b) = arg_byte_iter.next() {
-            match b {
-                b'h' => return Ok(RunConfig::ShowHelp),
-                b'V' => return Ok(RunConfig::ShowVersion),
-                b'A' => return Ok(RunConfig::ListArches),
-                b'a' | b'e' | b's' | b't' => {
-                    let mut remainder: OsString;
-                    #[cfg(any(unix, target_os = "wasi"))]
-                    {
-                        remainder = OsString::from_vec(arg_byte_iter.collect());
-                    };
-                    #[cfg(not(any(unix, target_os = "wasi")))]
-                    {
-                        // SAFETY: if this point is reached, then only ASCII characters will
-                        // have been encountered, as all recognized arguments are ASCII, and
-                        // non-ASCII characters would thus have triggered an UnknownArg error.
-                        //
-                        // Because of this, the fact that OsString encodings are a superset of
-                        // UTF-8 where the non-UTF-8 chunks are opaque but the UTF-8 chunks
-                        // aren't, and the fact that UTF-8 is a superset of ASCII, the
-                        // remaining bytes are definitely valid OsString encoding bytes.
-                        remainder = unsafe {
-                            OsString::from_encoded_bytes_unchecked(arg_byte_iter.collect())
-                        };
-                    };
-                    if remainder.is_empty() {
-                        remainder = args.next().ok_or_else(|| {
-                            pcfg.gen_err(
-                                BFErrorID::MissingOperand,
-                                format!("-{} requires an additional argument", char::from(b)),
-                            )
-                        })?;
-                    }
-                    match b {
-                        b'a' => pcfg.set_arch(&remainder)?,
-                        b'e' => pcfg.set_ext(remainder)?,
-                        b's' => pcfg.set_suffix(remainder)?,
-                        b't' => pcfg.set_tape_size(remainder)?,
-                        _ => unreachable!(),
-                    }
-                    break;
-                }
-                flag => pcfg.parse_standalone_flag(flag)?,
+        match arg.as_encoded_bytes() {
+            b"--" => {
+                cfg.source_files.extend(args.map(PathBuf::from));
+                break;
             }
+            longopt @ [b'-', b'-', ..] => {
+                let (opt, operand) = if let Some(i) = longopt.iter().position(|i| *i == b'=') {
+                    // SAFETY: This function's safety documentation states that the encoded bytes
+                    // can be split right before or right after a non-empty UTF-8 byte sequence,
+                    // and &longopt[i..i + 1] is &[b'='], which is one such sequence.
+                    let operand = unsafe { OsStr::from_encoded_bytes_unchecked(&longopt[i + 1..]) };
+                    (&longopt[2..i], Some(operand))
+                } else {
+                    (&longopt[2..], None)
+                };
+
+                macro_rules! fail_with_operand {
+                    ($action: stmt) => {{
+                        if let Some(operand) = operand.map(OsStr::to_owned) {
+                            return Err(ArgParseError::UnexpectedOperand { arg, operand });
+                        }
+                        $action
+                    }};
+                }
+
+                macro_rules! pass_operand_to {
+                    ($method: ident) => {
+                        if let Some(o) = operand.map(OsStr::to_owned).or_else(|| args.next()) {
+                            cfg.$method(o)
+                        } else {
+                            return Err(ArgParseError::MissingOperand(arg));
+                        }
+                    };
+                }
+                match opt {
+                    b"help" => fail_with_operand!(return Ok(RunConfig::ShowHelp)),
+                    b"version" => fail_with_operand!(return Ok(RunConfig::ShowVersion)),
+                    b"list-targets" => {
+                        fail_with_operand!(return Ok(RunConfig::ListArches));
+                    }
+                    b"json" => fail_with_operand!(cfg.json = true),
+                    b"quiet" => fail_with_operand!(cfg.quiet = true),
+                    b"optimize" => fail_with_operand!(cfg.optimize = true),
+                    b"keep" | b"keep-failed" => fail_with_operand!(cfg.keep = true),
+                    b"continue" => fail_with_operand!(cfg.cont = true),
+                    b"target-arch" => pass_operand_to!(set_arch)?,
+                    b"tape-size" => pass_operand_to!(set_tape_size)?,
+                    b"source-extension" => pass_operand_to!(set_ext)?,
+                    b"output-suffix" => pass_operand_to!(set_suffix)?,
+                    _ => return Err(ArgParseError::UnknownLongOption(arg)),
+                }
+            }
+            [b'-', shortopts @ ..] => {
+                if shortopts.is_empty() {
+                    return Err(ArgParseError::SingleDashArg);
+                }
+                let mut byte_iter = shortopts.iter().copied();
+                macro_rules! use_method {
+                    ($method: ident, $loop: tt) => {{
+                        let operand: Vec<u8> = byte_iter.collect();
+                        let operand = if !operand.is_empty() {
+                            // SAFETY: the encoded bytes can be split before or after a non-UTF-8
+                            // sequence. All valid arguments are ASCII (and thus UTF-8) letters,
+                            // so this splits after a dash and any number of ASCII letters.
+                            unsafe { OsString::from_encoded_bytes_unchecked(operand) }
+                        } else if let Some(o) = args.next() {
+                            o
+                        } else {
+                            return Err(ArgParseError::MissingOperand(arg));
+                        };
+                        cfg.$method(operand)?;
+                        break $loop;
+                    }};
+                }
+
+                'l: while let Some(b) = byte_iter.next() {
+                    match b {
+                        b'h' => return Ok(RunConfig::ShowHelp),
+                        b'V' => return Ok(RunConfig::ShowVersion),
+                        b'A' => return Ok(RunConfig::ListArches),
+                        b'q' => cfg.quiet = true,
+                        b'j' => cfg.json = true,
+                        b'O' => cfg.optimize = true,
+                        b'k' => cfg.keep = true,
+                        b'c' => cfg.cont = true,
+                        b't' => use_method!(set_tape_size, 'l),
+                        b'e' => use_method!(set_ext, 'l),
+                        b's' => use_method!(set_suffix, 'l),
+                        b'a' => use_method!(set_arch, 'l),
+                        _ => return Err(ArgParseError::UnknownShortOption(b)),
+                    }
+                }
+            }
+            _ => cfg.source_files.push(arg.into()),
         }
     }
-    Ok(RunConfig::StandardRun(pcfg.try_into()?))
+
+    Ok(RunConfig::StandardRun(cfg.try_into()?))
 }
 
 #[cfg(test)]
 mod tests {
+
+    trait UnwrapStandard {
+        fn unwrap_standard_cfg(self) -> StandardRunConfig;
+    }
+
+    #[cfg(not(tarpaulin_include))]
+    impl UnwrapStandard for Result<RunConfig, ArgParseError> {
+        fn unwrap_standard_cfg(self) -> StandardRunConfig {
+            self.unwrap().unwrap_standard_cfg()
+        }
+    }
+
+    #[cfg(not(tarpaulin_include))]
+    impl UnwrapStandard for RunConfig {
+        fn unwrap_standard_cfg(self) -> StandardRunConfig {
+            let RunConfig::StandardRun(cfg) = self else {
+                panic!("test expected StandardRunConfig")
+            };
+            cfg
+        }
+    }
     use super::*;
 
     // a more concise way to write OsString::from(a)
@@ -311,35 +316,31 @@ mod tests {
         a.into()
     }
 
-    // extract a standard run config
-    #[cfg(not(tarpaulin_include))]
-    fn parse_standard(args: Vec<OsString>) -> StandardRunConfig {
-        let RunConfig::StandardRun(cfg) = parse_args(args.into_iter()).unwrap() else {
-            panic!("test expected StandardRunConfig")
+    macro_rules! args {
+        [$($arg: expr),*] => {
+            vec![$(OsString::from($arg)),*].into_iter()
         };
-        cfg
+        [$($arg: expr),*,] => {
+            vec![$(OsString::from($arg)),*].into_iter()
+        };
     }
 
     #[test]
     fn combined_args() {
         // ensure that combined arguments are processed properly
-        let args_set_0 = vec![
-            // should be interpreted identically to -k -j -e .brainfuck'
-            arg("-kje.brainfuck"),
-            arg("foo.brainfuck"),
-            arg("bar.brainfuck"),
-        ]
-        .into_iter();
-        let args_set_1 = vec![
-            // should be interpreted identically to -kje.brainfuck'
-            arg("-k"),
-            arg("-j"),
-            arg("-e"),
-            arg(".brainfuck"),
-            arg("foo.brainfuck"),
-            arg("bar.brainfuck"),
-        ]
-        .into_iter();
+
+        // should be interpreted identically to -k -j -e .brainfuck'
+        let args_set_0 = args!["-kje.brainfuck", "foo.brainfuck", "bar.brainfuck"];
+
+        // should be interpreted identically to -kje.brainfuck'
+        let args_set_1 = args![
+            "-k",
+            "-j",
+            "-e",
+            ".brainfuck",
+            "foo.brainfuck",
+            "bar.brainfuck",
+        ];
 
         assert_eq!(
             parse_args(args_set_0).unwrap(),
@@ -349,13 +350,15 @@ mod tests {
 
     #[test]
     fn options_stop_on_double_dash() {
-        let args_set = vec![arg("--"), arg("-j"), arg("-h"), arg("-e.notbf")];
+        let args_set = args!["--", "-j", "-h", "-e.notbf"];
         // ensure that -h, -j and -e.notbf are interpreted as the list of file names
-        let parsed_args = parse_standard(args_set);
+        let Ok(RunConfig::StandardRun(parsed_args)) = parse_args(args_set) else {
+            panic!("test expected StandardRunConfig")
+        };
         assert_eq!(parsed_args.out_mode, OutMode::Basic);
         assert_eq!(
             parsed_args.source_files,
-            vec![arg("-j"), arg("-h"), arg("-e.notbf"),]
+            vec![arg("-j"), arg("-h"), arg("-e.notbf")]
         );
     }
 
@@ -363,129 +366,140 @@ mod tests {
     fn options_can_mix_with_files() {
         // ensure that -O isn't interpreted as a file name
         assert_eq!(
-            parse_standard(vec![arg("e.bf"), arg("-O")]).source_files,
+            parse_args(args!["e.bf", "-O"])
+                .unwrap_standard_cfg()
+                .source_files,
             vec![arg("e.bf")]
         );
     }
 
     #[test]
-    fn help_returned() {
-        let args_set = vec![arg("-h")].into_iter();
-        assert_eq!(parse_args(args_set), Ok(RunConfig::ShowHelp));
+    fn static_info_returned() {
+        assert_eq!(parse_args(args!["-h"]), Ok(RunConfig::ShowHelp));
+        assert_eq!(parse_args(args!["-V"]), Ok(RunConfig::ShowVersion));
     }
 
     #[test]
-    fn version_returned() {
-        let args_set = vec![arg("-V")].into_iter();
-        assert_eq!(parse_args(args_set), Ok(RunConfig::ShowVersion));
-    }
-
-    #[test]
-    fn handle_empty_args() {
-        let (bf_err, _) = parse_args(vec![].into_iter()).unwrap_err();
-        assert_eq!(bf_err.error_id(), BFErrorID::NoSourceFiles);
+    fn report_no_sources() {
+        let err = parse_args(args![]).unwrap_err();
+        assert_eq!(err, ArgParseError::NoSourceFiles);
+        let err = parse_args(args!["-t32", "-q"]).unwrap_err();
+        assert_eq!(err, ArgParseError::NoSourceFiles);
     }
 
     #[test]
     fn non_numeric_tape_size() {
-        let (err, ..) = parse_args(vec![arg("-t"), arg("###")].into_iter()).unwrap_err();
-        assert_eq!(err.error_id(), BFErrorID::TapeSizeNotNumeric);
+        let err = parse_args(args!["-t", "###"]).unwrap_err();
+        assert_eq!(err, ArgParseError::TapeSizeNotNumeric(arg("###")));
     }
 
     #[test]
     fn multiple_tape_size() {
-        let args_set = vec![arg("-t1"), arg("-t1024")].into_iter();
-        let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.error_id(), BFErrorID::MultipleTapeBlockCounts);
+        let args_set = args!["-t1", "-t1024"];
+        let err = parse_args(args_set).unwrap_err();
+        assert_eq!(err, ArgParseError::MultipleTapeSizes(1, 1024));
     }
 
     #[test]
     fn tape_size_zero() {
-        let args_set = vec![arg("-t0")].into_iter();
-        let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.error_id(), BFErrorID::TapeSizeZero);
+        let args_set = args!["-t0"];
+        let err = parse_args(args_set).unwrap_err();
+        assert_eq!(err, ArgParseError::TapeSizeZero);
     }
 
     #[test]
     fn tape_too_large() {
-        let args_set = vec![arg("-t9223372036854775807")].into_iter();
-        let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.error_id(), BFErrorID::TapeTooLarge);
+        let args_set = args!["-t9223372036854775807", "foo.bf"];
+        let err = parse_args(args_set).unwrap_err();
+        assert_eq!(
+            err,
+            ArgParseError::TapeTooLarge {
+                class: Backend::default().ei_class(),
+                tape_blocks: 9_223_372_036_854_775_807
+            }
+        );
     }
 
     #[test]
     fn missing_operand() {
-        let args_set = vec![arg("-t")].into_iter();
-        let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.error_id(), BFErrorID::MissingOperand);
-        let args_set = vec![arg("-e")].into_iter();
-        let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.error_id(), BFErrorID::MissingOperand);
-        let args_set = vec![arg("-a")].into_iter();
-        let (err, ..) = parse_args(args_set).unwrap_err();
-        assert_eq!(err.error_id(), BFErrorID::MissingOperand);
+        let err = parse_args(args!["-t"]).unwrap_err();
+        assert_eq!(err, ArgParseError::MissingOperand(arg("-t")));
+        let err = parse_args(args!["-e"]).unwrap_err();
+        assert_eq!(err, ArgParseError::MissingOperand(arg("-e")));
+        let args_set = args!["-a"];
+        let err = parse_args(args_set).unwrap_err();
+        assert_eq!(err, ArgParseError::MissingOperand(arg("-a")));
     }
 
     #[test]
     fn out_mode_options() {
         assert_eq!(
-            parse_standard(vec![arg("-q"), arg("f.bf")]).out_mode,
+            parse_args(args!["-q", "f.bf"])
+                .unwrap_standard_cfg()
+                .out_mode,
             OutMode::Quiet
         );
         assert_eq!(
-            parse_standard(vec![arg("-j"), arg("f.bf")]).out_mode,
+            parse_args(args!["-j", "f.bf"])
+                .unwrap_standard_cfg()
+                .out_mode,
             OutMode::Json
         );
         assert_eq!(
-            parse_standard(vec![arg("-qj"), arg("f.bf")]).out_mode,
-            OutMode::Json
+            parse_args(args!["-qj", "f.bf"]).unwrap_err(),
+            ArgParseError::SetBothOutModes,
         );
         assert_eq!(
-            parse_standard(vec![arg("-jq"), arg("f.bf")]).out_mode,
-            OutMode::Json
+            parse_args(args!["-jq", "f.bf"]).unwrap_err(),
+            ArgParseError::SetBothOutModes,
         );
     }
 
     #[test]
     fn single_args_parsed() {
-        let args = parse_standard(vec![arg("-Ok"), arg("foo.bf")]);
+        let args = parse_args(args!["-Ok", "foo.bf"]).unwrap_standard_cfg();
         assert!(args.keep && args.optimize && !args.cont,);
-        let args = parse_standard(vec![arg("-Ok"), arg("-c"), arg("foo.bf")]);
+        let args = parse_args(args!["-Ok", "-c", "foo.bf"]).unwrap_standard_cfg();
         assert!(args.keep && args.optimize && args.cont,);
-        let args = parse_standard(vec![arg("-c"), arg("foo.bf")]);
+        let args = parse_args(args!["-c", "foo.bf"]).unwrap_standard_cfg();
         assert!(args.cont && !args.optimize && !args.keep,);
-        let args = parse_standard(vec![arg("-Oc"), arg("foo.bf")]);
+        let args = parse_args(args!["-Oc", "foo.bf"]).unwrap_standard_cfg();
         assert!(args.cont && args.optimize && !args.keep,);
-        let args = parse_standard(vec![arg("-kOccOk"), arg("foo.bf")]);
+        let args = parse_args(args!["-kOccOk", "foo.bf"]).unwrap_standard_cfg();
         assert!(args.keep && args.optimize && args.cont,);
-        let args = parse_standard(vec![arg("foo.bf")]);
+        let args = parse_args(args!["foo.bf"]).unwrap_standard_cfg();
         assert!(!args.keep && !args.optimize && !args.cont,);
     }
 
     #[test]
     fn multiple_extensions_err() {
-        assert!(
-            parse_args(vec![arg("-e.brainfuck"), arg("-e"), arg(".bf")].into_iter())
-                .is_err_and(|e| e.0.error_id() == BFErrorID::MultipleExtensions)
+        assert_eq!(
+            parse_args(args!["-e.brainfuck", "-e", ".bf"]).unwrap_err(),
+            ArgParseError::MultipleExtensions(arg(".brainfuck"), arg(".bf")),
+        );
+    }
+
+    #[test]
+    fn multiple_output_extensions_err() {
+        assert_eq!(
+            parse_args(args!["-s.elf", "-s", "_bf"]).unwrap_err(),
+            ArgParseError::MultipleOutputExtensions(arg(".elf"), arg("_bf")),
         );
     }
 
     #[test]
     fn bad_args_error_out() {
-        assert!(
-            parse_args(vec![arg("-u")].into_iter())
-                .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArg)
+        assert_eq!(
+            parse_args(args!["-u"]).unwrap_err(),
+            ArgParseError::UnknownShortOption(b'u'),
         );
     }
 
     #[test]
     fn list_arch_processed() {
+        assert_eq!(parse_args(args!["-A"]), Ok(RunConfig::ListArches));
         assert_eq!(
-            parse_args(vec![arg("-A")].into_iter()),
-            Ok(RunConfig::ListArches)
-        );
-        assert_eq!(
-            parse_args(vec![arg("-e"), arg(".b"), arg("-A")].into_iter()),
+            parse_args(args!["-e", ".b", "-A"]),
             Ok(RunConfig::ListArches)
         );
     }
@@ -493,18 +507,15 @@ mod tests {
     macro_rules! test_arch_args {
         ($arch: literal, $backend: ident, $($aliases: literal),*) => {
             for arch_id in [$arch, $($aliases,)*] {
-                if cfg!(feature = $arch) {
-                    #[cfg(feature = $arch)]
-                    {
-                        assert_eq!(
-                            parse_standard(vec![arg("-a"), arg(arch_id), arg("foo.bf")]).arch,
-                            Backend::$backend
-                        );
-                    }
-                } else {
-                    assert!(
-                        parse_args(vec![arg("-a"), arg(arch_id), arg("foo.bf")].into_iter())
-                            .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
+                let args = args!["-a", arg(arch_id), "foo.bf"];
+                #[cfg(feature = $arch)]
+                assert_eq!(parse_args(args).unwrap_standard_cfg().arch, Backend::$backend);
+                #[cfg(not(feature = $arch))]
+                {
+                    use crate::compile::backends::DisabledBackend;
+                    assert_eq!(
+                        parse_args(args).unwrap_err(),
+                        ArgParseError::DisabledBackend(DisabledBackend::$backend)
                     );
                 }
             }
@@ -518,19 +529,113 @@ mod tests {
         test_arch_args!("riscv64", RiscV64, "riscv");
         test_arch_args!("s390x", S390x, "s390", "z/architecture");
         test_arch_args!("x86_64", X86_64, "x64", "amd64", "x86-64");
-        assert!(
-            parse_args(vec![arg("-apdp11"), arg("foo.bf")].into_iter())
-                .is_err_and(|e| e.0.error_id() == BFErrorID::UnknownArch)
+        assert_eq!(
+            parse_args(args!["-apdp11", "foo.bf"]).unwrap_err(),
+            ArgParseError::UnknownBackend(arg("pdp11"))
         );
     }
 
     #[test]
     fn multiple_arches_error() {
-        if cfg!(all(feature = "x86_64", feature = "arm64")) {
-            assert!(
-                parse_args(vec![arg("-ax86_64"), arg("-aarm64"), arg("foo.bf")].into_iter())
-                    .is_err_and(|e| e.0.error_id() == BFErrorID::MultipleArchitectures)
+        let args = args![
+            "-a",
+            env!("EAMBFC_DEFAULT_ARCH"),
+            format!("-a{}", env!("EAMBFC_DEFAULT_ARCH")),
+            "foo.bf",
+        ];
+        assert_eq!(
+            parse_args(args).unwrap_err(),
+            ArgParseError::MultipleArchitectures(Backend::default(), Backend::default()),
+        );
+    }
+
+    #[test]
+    fn longopts_are_like_shortopts() {
+        // For standalone options, make sure that they're handled identically in short and long
+        // forms
+        let pairs = vec![
+            ("-h", "--help"),
+            ("-V", "--version"),
+            ("-q", "--quiet"),
+            ("-j", "--json"),
+            ("-O", "--optimize"),
+            ("-k", "--keep-failed"),
+            ("-c", "--continue"),
+            ("-A", "--list-targets"),
+        ];
+        for (short_opt, long_opt) in pairs {
+            assert_eq!(
+                parse_args(args![arg(short_opt), "f.bf"]).unwrap(),
+                parse_args(args![arg(long_opt), "f.bf"]).unwrap(),
             );
         }
+
+        // For flags that take arguments, make sure that the forms `-a x86_64`,
+        // `--target-arch x86_64`, `-ax86_64`, and `--target-arch=x86_64` are all processed
+        // identically.
+        let param_opts = vec![
+            ("-a", "--target-arch", args![env!("EAMBFC_DEFAULT_ARCH")]),
+            (
+                "-t",
+                "--tape-size",
+                args!["1", "###", "0", arg(u64::MAX.to_string())],
+            ),
+            ("-e", "--source-extension", args![".beef"]),
+            ("-s", "--output-suffix", args![".elf"]),
+        ];
+        for (short, long, test_params) in param_opts {
+            for param in test_params {
+                let mut joined_short = arg(short);
+                joined_short.push(&param);
+                let mut joined_long = arg(long);
+                joined_long.push("=");
+                joined_long.push(&param);
+                let a = parse_args(args![arg(short), param.clone(), "f.bf"]);
+                let b = parse_args(args![arg(long), param, "f.bf"]);
+                let c = parse_args(args![joined_short, "f.bf"]);
+                let d = parse_args(args![joined_long, "f.bf"]);
+                assert_eq!(a, b);
+                assert_eq!(a, c);
+                assert_eq!(a, d);
+            }
+        }
+    }
+
+    #[test]
+    fn unrecognized_longopts() {
+        let err = parse_args(args!["--run-real-fast"]).unwrap_err();
+        assert_eq!(
+            err,
+            ArgParseError::UnknownLongOption(arg("--run-real-fast"))
+        );
+    }
+
+    #[test]
+    fn err_when_input_is_output() {
+        assert_eq!(
+            parse_args(args!["-e.beef", "-s.beef", "file.beef"]).unwrap_err(),
+            ArgParseError::InputIsOutput(arg(".beef"))
+        );
+        assert_eq!(
+            parse_args(args!["-s.bf", "file.bf"]).unwrap_err(),
+            ArgParseError::InputIsOutput(arg(".bf"))
+        );
+        assert_eq!(
+            parse_args(args!["-e.bf", "-s.bf", "file.bf"]).unwrap_err(),
+            ArgParseError::InputIsOutput(arg(".bf"))
+        );
+        // make sure that it does not return an error if extension is set afterwards
+        assert_eq!(
+            // if -e changes suffix after -s.bf, it shouldn't return an InputIsOutput error
+            parse_args(args!["-s.bf", "-e.beef", "file.beef"]).unwrap_standard_cfg(),
+            PartialRunConfig {
+                extension: Some(arg(".beef")),
+                source_files: vec!["file.beef".into()],
+                out_suffix: Some(arg(".bf")),
+                ..Default::default()
+            }
+            .try_into()
+            .unwrap()
+        );
     }
 }

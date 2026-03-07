@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2025 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2026 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 #![cfg(test)]
@@ -178,31 +178,8 @@ macro_rules! test_err {
 
 #[test]
 fn test_simple_errors() {
-    test_err!("MultipleExtensions", "-e", ".bf", "-e", ".b");
-    test_err!("MultipleOutputExtensions", "-s", ".elf", "-s", ".out");
-    test_err!("MultipleTapeBlockCounts", "-t", "32", "-t", "76");
-    test_err!("MissingOperand", "-t");
-    test_err!("UnknownArg", "-r");
-    test_err!("NoSourceFiles");
     test_err!("BadSourceExtension", "e");
-    test_err!("TapeSizeZero", "-t", "0");
-    test_err!("TapeTooLarge", "-t9223372036854775807");
-    test_err!("TapeSizeNotNumeric", "-t", "hello");
     test_err!("OpenReadFailed", "nonexistent.bf");
-    test_err!("UnknownArch", "-a", "pdp10.99999");
-    test_err!(
-        "MultipleArchitectures",
-        "-a",
-        env!("EAMBFC_DEFAULT_ARCH"),
-        "-a",
-        env!("EAMBFC_DEFAULT_ARCH")
-    );
-
-    test_err!("InputIsOutput", "-s.bf");
-    test_err!("InputIsOutput", "-s.b", "-e.b");
-    // if -e changes suffix after -s.bf, error shouldn't be InputIsOutput
-    test_err!("NoSourceFiles", "-s.bf", "-e.b");
-
     let unmatched_open = source_file("unmatched_open.bf");
     let unmatched_close = source_file("unmatched_close.bf");
     test_err!("UnmatchedOpen", &unmatched_open);
@@ -256,12 +233,24 @@ fn out_suffix() -> io::Result<()> {
 
 #[test]
 fn quiet_means_quiet() {
-    let cmd_output = eambfc_with_args!("-q", "these", "are", "quite", "bad", "args", "-t0")
+    let cmd_output = eambfc_with_args!("-q", "nonexistent-file.bf")
         .output()
         .unwrap();
-    assert!(!cmd_output.status.success());
-    assert!(cmd_output.stdout.is_empty());
-    assert!(cmd_output.stderr.is_empty());
+    assert!(
+        !cmd_output.status.success(),
+        "status: {}",
+        cmd_output.status
+    );
+    assert!(
+        cmd_output.stdout.is_empty(),
+        "stdout: {}",
+        cmd_output.stdout.escape_ascii()
+    );
+    assert!(
+        cmd_output.stderr.is_empty(),
+        "stderr: {}",
+        cmd_output.stderr.escape_ascii()
+    );
 }
 
 #[unix_test("PermissionsExt, OpenOptionsExt")]
