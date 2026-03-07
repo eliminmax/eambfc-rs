@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 - 2025 Eli Array Minkoff
+// SPDX-FileCopyrightText: 2024 - 2026 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
 #![cfg(not(tarpaulin_include))]
@@ -164,6 +164,17 @@ fn set_cfg_metavalues() {
     println!("cargo::rustc-check-cfg=cfg(have_be_targets)");
     if cfg!(feature = "s390x") {
         println!("cargo::rustc-cfg=have_be_targets");
+    }
+
+    println!("cargo::rustc-check-cfg=cfg(have_all_targets)");
+    if cfg!(all(
+        feature = "x86_64",
+        feature = "arm64",
+        feature = "riscv64",
+        feature = "s390x",
+        feature = "i386",
+    )) {
+        println!("cargo::rustc-cfg=have_all_targets");
     }
 }
 
