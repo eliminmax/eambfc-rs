@@ -7,7 +7,7 @@ use crate::err::{BFCompileError, BFErrorID};
 use std::io::BufRead;
 use std::num::NonZero;
 
-/// Represents one or more instructions, in an intemediate form that's easier to optimize.
+/// Represents one or more instructions, in an intermediate form that's easier to optimize.
 #[derive(Clone, Copy, PartialEq)]
 #[cfg_attr(any(test, debug_assertions), derive(Debug))]
 #[repr(u8)]
@@ -331,7 +331,7 @@ pub(super) fn combine_instructions(
     drop_dead_loops(&mut combined)?;
     join_set_cells(&mut combined);
 
-    // drop trailing instructions other than `]`, `,`, or `.`, as other instructiosn will have no
+    // drop trailing instructions other than `]`, `,`, or `.`, as other instructions will have no
     // externally-visible effects if no I/O instructions will be run afterwards.
     while combined
         .last()

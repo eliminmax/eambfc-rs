@@ -67,7 +67,7 @@ impl ArchInter for X86_64Inter {
 
     x86_common_impl!();
 
-    // Chooses the shortest instrution to set a register to an immediate value, from the following:
+    // Chooses the shortest instruction to set a register to an immediate value, from the following:
     // XOR reg, reg
     // MOV reg, imm32
     // MOV reg, imm64

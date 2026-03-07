@@ -66,7 +66,7 @@ impl ArchInter for I386Inter {
     const SYSCALL_INSTR: &[u8] = &[0xcd, 0x80];
     x86_common_impl!();
 
-    // Chooses the shortest instrution to set a register to an immediate value, from the following:
+    // Chooses the shortest instruction to set a register to an immediate value, from the following:
     // XOR reg, reg
     // MOV reg, imm32
     fn set_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: i64) -> FailableInstrEncoding {
