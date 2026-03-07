@@ -1,5 +1,6 @@
-# SPDX-FileCopyrightText: 2024 Eli Array Minkoff
+# SPDX-FileCopyrightText: 2024 - 2026 Eli Array Minkoff
 #
 # SPDX-License-Identifier: 0BSD
 
+edition = "2024"
 max_width = 100
