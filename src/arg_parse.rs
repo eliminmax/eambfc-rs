@@ -10,12 +10,156 @@ use std::ffi::{OsStr, OsString};
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 
-pub(crate) mod err;
-use err::ArgParseError;
+#[cfg(not(have_all_targets))]
+use crate::compile::backends::DisabledBackend;
+use crate::compile::backends::ElfClass;
 
-use crate::compile::ElfClass;
-mod help_text;
-pub use help_text::help_fmt;
+use std::error::Error;
+use std::fmt::{self, Display};
+use std::num::{IntErrorKind, ParseIntError};
+
+#[derive(PartialEq, Clone, Debug)]
+pub(crate) enum ArgParseError {
+    #[cfg(not(have_all_targets))]
+    DisabledBackend(DisabledBackend),
+    InputIsOutput(OsString),
+    MissingOperand(OsString),
+    MultipleArchitectures(Backend, Backend),
+    MultipleExtensions(OsString, OsString),
+    MultipleOutputExtensions(OsString, OsString),
+    MultipleTapeSizes(u64, u64),
+    NoSourceFiles,
+    SetBothOutModes,
+    SingleDashArg,
+    TapeSizeNotNumeric(OsString),
+    TapeSizeOverflow(OsString),
+    TapeSizeZero,
+    TapeTooLarge {
+        class: ElfClass,
+        tape_blocks: u64,
+    },
+    UnexpectedOperand {
+        arg: OsString,
+        operand: OsString,
+    },
+    UnknownBackend(OsString),
+    UnknownLongOption(OsString),
+    UnknownShortOption(u8),
+}
+
+impl ArgParseError {
+    pub(super) fn from_bad_tape_size(err: &ParseIntError, param: OsString) -> Self {
+        match err.kind() {
+            IntErrorKind::Zero => Self::TapeSizeZero,
+            IntErrorKind::Empty => {
+                panic!("Internal error: tape size parameter empty");
+            }
+            IntErrorKind::PosOverflow => Self::TapeSizeOverflow(param),
+            _ => Self::TapeSizeNotNumeric(param),
+        }
+    }
+}
+
+impl Display for ArgParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InputIsOutput(ext) => {
+                write!(
+                    f,
+                    "extension {} is used for both source and output files",
+                    ext.display()
+                )
+            }
+            Self::MissingOperand(arg) => {
+                write!(f, "argument {} requires an operand", arg.display())
+            }
+            Self::MultipleArchitectures(a, b) => {
+                write!(f, "provided multiple backends: {a} and {b}")
+            }
+            Self::MultipleExtensions(a, b) => {
+                write!(
+                    f,
+                    "provided multiple extensions for source files: {} and {}",
+                    a.display(),
+                    b.display()
+                )
+            }
+            Self::MultipleOutputExtensions(a, b) => {
+                write!(
+                    f,
+                    "provided multiple extensions for output files: {} and {}",
+                    a.display(),
+                    b.display()
+                )
+            }
+            Self::MultipleTapeSizes(a, b) => {
+                if a == b {
+                    write!(f, "tape size {a} provided multiple times")
+                } else {
+                    write!(f, "both {a} and {b} provided as tape size")
+                }
+            }
+            Self::NoSourceFiles => write!(f, "no source files provided"),
+            Self::TapeSizeNotNumeric(param) => {
+                write!(f, "non-numeric tape size {} provided", param.display())
+            }
+            Self::TapeSizeZero => write!(f, "tape size cannot be zero pages"),
+            Self::TapeTooLarge { class, tape_blocks } => write!(
+                f,
+                "{tape_blocks} 4KiB-blocks can't fit in {}-bit address space",
+                class.bits()
+            ),
+            Self::UnknownLongOption(opt) => write!(f, "unknown option: {}", opt.display()),
+            Self::UnexpectedOperand { arg, operand } => {
+                let arg = arg.display();
+                let operand = operand.display();
+                write!(f, "option {arg} was provided unexpected operand {operand}")
+            }
+            #[cfg(not(have_all_targets))]
+            Self::DisabledBackend(db) => write!(f, "backend {db} is disabled"),
+            Self::UnknownBackend(param) => {
+                write!(f, "unknown backend: {}", param.display())
+            }
+            Self::UnknownShortOption(b) => write!(f, "unknown option: -{}", b.escape_ascii()),
+            Self::SingleDashArg => write!(
+                f,
+                "`-` as a standalone arg is not supported. Use `--` as a terminal argument instead."
+            ),
+            Self::TapeSizeOverflow(param) => write!(
+                f,
+                "overflow parsing {} as a 64-bit unsigned int",
+                param.display()
+            ),
+            Self::SetBothOutModes => write!(f, "attempted to set both quiet and json output"),
+        }
+    }
+}
+
+impl Error for ArgParseError {}
+
+pub fn help_fmt(progname: &str) -> String {
+    format!(
+        r#"Usage: {progname} [options] <program.bf> [<program2.bf> ...]
+
+ --help,         -h:   display this help text and exit
+ --version,      -V:   print version information and exit
+ --json,         -j:   print errors in JSON format (conflicts with --quiet)
+ --quiet,        -q:   don't print any errors (conflicts with --json)
+ --optimize,     -O:   enable optimization (can make error reporting less precise)
+ --continue,     -c:   continue to the next file on failure
+ --list-targets, -A:   list supported targets and exit
+ --keep-failed,  -k:   keep files that failed to compile
+                 --:   stop argument parsing, treating remaining arguments as filenames
+
+PARAMETER OPTIONS (provide at most once each):
+ --tape-size=count,      -t count:   use <count> 4-KiB blocks for the tape (default 8)
+ --source-extension=ext, -e   ext:   use 'ext' as the source extension (default "bf")
+ --target-arch=arch,     -a  arch:   compile for the specified architecture (defaults to {})
+ --output-suffix=suf,    -s   suf:   append 'suf' to output file names (defaults to empty string)
+"#,
+        Backend::default(),
+    )
+}
 
 #[derive(PartialEq, Debug)]
 pub(crate) struct StandardRunConfig {
