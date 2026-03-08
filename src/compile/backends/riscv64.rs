@@ -7,7 +7,7 @@ use super::backend_utils::{MinimumBits, sign_extend};
 use crate::Backend;
 use crate::err::{BFCompileError, BFErrorID};
 
-use std::num::{NonZeroI8, NonZeroI16, NonZero};
+use std::num::{NonZero, NonZeroI8, NonZeroI16};
 
 // SPDX-SnippetCopyrightText: 2025 Eli Array Minkoff
 //
@@ -37,7 +37,9 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
         let hi20 = (val.cast_unsigned().wrapping_add(0x800) >> 12).cast_signed();
         let hi20 = (sign_extend(hi20, 20) % 0x20_000) as i32;
         if let Some(hi20) = NonZero::new(hi20) {
-            if let Ok(hi6) = NonZeroI16::try_from(hi20) && hi6.get().fits_within_bits(6) {
+            if let Ok(hi6) = NonZeroI16::try_from(hi20)
+                && hi6.get().fits_within_bits(6)
+            {
                 // C.LUI reg, hi20
                 let imm = hi6.get().cast_unsigned();
                 code_buf.extend(u16::to_le_bytes(

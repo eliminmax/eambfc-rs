@@ -141,11 +141,21 @@ impl ArchInter for X86_64Inter {
 }
 
 fn add_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
-    code_buf.extend([0x48, 0x83, ArithOp::Add as u8 | reg as u8, imm8.cast_unsigned()]);
+    code_buf.extend([
+        0x48,
+        0x83,
+        ArithOp::Add as u8 | reg as u8,
+        imm8.cast_unsigned(),
+    ]);
 }
 
 fn sub_reg_imm8(code_buf: &mut Vec<u8>, reg: X86Register, imm8: i8) {
-    code_buf.extend([0x48, 0x83, ArithOp::Sub as u8 | reg as u8, imm8.cast_unsigned()]);
+    code_buf.extend([
+        0x48,
+        0x83,
+        ArithOp::Sub as u8 | reg as u8,
+        imm8.cast_unsigned(),
+    ]);
 }
 
 fn add_reg_imm32(code_buf: &mut Vec<u8>, reg: X86Register, imm32: i32) {
