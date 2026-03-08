@@ -345,39 +345,49 @@ pub(crate) fn parse_args(args: impl Iterator<Item = OsString>) -> Result<RunConf
                     (&longopt[2..], None)
                 };
 
-                macro_rules! fail_with_operand {
-                    ($action: stmt) => {{
-                        if let Some(operand) = operand.map(OsStr::to_owned) {
-                            return Err(ArgParseError::UnexpectedOperand { arg, operand });
-                        }
-                        $action
-                    }};
-                }
-
-                macro_rules! pass_operand_to {
-                    ($method: ident) => {
-                        if let Some(o) = operand.map(OsStr::to_owned).or_else(|| args.next()) {
-                            cfg.$method(o)
-                        } else {
-                            return Err(ArgParseError::MissingOperand(arg));
-                        }
-                    };
-                }
-                match opt {
-                    b"help" => fail_with_operand!(return Ok(RunConfig::ShowHelp)),
-                    b"version" => fail_with_operand!(return Ok(RunConfig::ShowVersion)),
-                    b"list-targets" => {
-                        fail_with_operand!(return Ok(RunConfig::ListArches));
+                let variant = |variant: RunConfig| {
+                    if let Some(operand) = operand.map(OsStr::to_owned) {
+                        Err(ArgParseError::UnexpectedOperand {
+                            arg: arg.clone(),
+                            operand,
+                        })
+                    } else {
+                        Ok(variant)
                     }
-                    b"json" => fail_with_operand!(cfg.json = true),
-                    b"quiet" => fail_with_operand!(cfg.quiet = true),
-                    b"optimize" => fail_with_operand!(cfg.optimize = true),
-                    b"keep" | b"keep-failed" => fail_with_operand!(cfg.keep = true),
-                    b"continue" => fail_with_operand!(cfg.cont = true),
-                    b"target-arch" => pass_operand_to!(set_arch)?,
-                    b"tape-size" => pass_operand_to!(set_tape_size)?,
-                    b"source-extension" => pass_operand_to!(set_ext)?,
-                    b"output-suffix" => pass_operand_to!(set_suffix)?,
+                };
+
+                let set_flag = |flag: &mut bool| {
+                    if let Some(operand) = operand.map(OsStr::to_owned) {
+                        return Err(ArgParseError::UnexpectedOperand {
+                            arg: arg.clone(),
+                            operand,
+                        });
+                    }
+                    *flag = true;
+                    Ok(())
+                };
+
+                let mut pass_operand_to = |method: fn(&mut _, _) -> _| {
+                    if let Some(o) = operand.map(OsStr::to_owned).or_else(|| args.next()) {
+                        method(&mut cfg, o)
+                    } else {
+                        Err(ArgParseError::MissingOperand(arg.clone()))
+                    }
+                };
+
+                match opt {
+                    b"help" => return variant(RunConfig::ShowHelp),
+                    b"version" => return variant(RunConfig::ShowVersion),
+                    b"list-targets" => return variant(RunConfig::ListArches),
+                    b"json" => set_flag(&mut cfg.json)?,
+                    b"quiet" => set_flag(&mut cfg.quiet)?,
+                    b"optimize" => set_flag(&mut cfg.optimize)?,
+                    b"keep" | b"keep-failed" => set_flag(&mut cfg.keep)?,
+                    b"continue" => set_flag(&mut cfg.cont)?,
+                    b"target-arch" => pass_operand_to(PartialRunConfig::set_arch)?,
+                    b"tape-size" => pass_operand_to(PartialRunConfig::set_tape_size)?,
+                    b"source-extension" => pass_operand_to(PartialRunConfig::set_ext)?,
+                    b"output-suffix" => pass_operand_to(PartialRunConfig::set_suffix)?,
                     _ => return Err(ArgParseError::UnknownLongOption(arg)),
                 }
             }
@@ -386,25 +396,8 @@ pub(crate) fn parse_args(args: impl Iterator<Item = OsString>) -> Result<RunConf
                     return Err(ArgParseError::SingleDashArg);
                 }
                 let mut byte_iter = shortopts.iter().copied();
-                macro_rules! use_method {
-                    ($method: ident, $loop: tt) => {{
-                        let operand: Vec<u8> = byte_iter.collect();
-                        let operand = if !operand.is_empty() {
-                            // SAFETY: the encoded bytes can be split before or after a non-UTF-8
-                            // sequence. All valid arguments are ASCII (and thus UTF-8) letters,
-                            // so this splits after a dash and any number of ASCII letters.
-                            unsafe { OsString::from_encoded_bytes_unchecked(operand) }
-                        } else if let Some(o) = args.next() {
-                            o
-                        } else {
-                            return Err(ArgParseError::MissingOperand(arg));
-                        };
-                        cfg.$method(operand)?;
-                        break $loop;
-                    }};
-                }
 
-                'l: while let Some(b) = byte_iter.next() {
+                while let Some(b) = byte_iter.next() {
                     match b {
                         b'h' => return Ok(RunConfig::ShowHelp),
                         b'V' => return Ok(RunConfig::ShowVersion),
@@ -414,10 +407,25 @@ pub(crate) fn parse_args(args: impl Iterator<Item = OsString>) -> Result<RunConf
                         b'O' => cfg.optimize = true,
                         b'k' => cfg.keep = true,
                         b'c' => cfg.cont = true,
-                        b't' => use_method!(set_tape_size, 'l),
-                        b'e' => use_method!(set_ext, 'l),
-                        b's' => use_method!(set_suffix, 'l),
-                        b'a' => use_method!(set_arch, 'l),
+                        b't' | b'e' | b's' | b'a' => {
+                            let operand: Vec<u8> = byte_iter.collect();
+                            let operand = if !operand.is_empty() {
+                                unsafe { OsString::from_encoded_bytes_unchecked(operand) }
+                            } else if let Some(o) = args.next() {
+                                o
+                            } else {
+                                return Err(ArgParseError::MissingOperand(arg));
+                            };
+                            match b {
+                                b't' => cfg.set_tape_size(operand),
+                                b'e' => cfg.set_ext(operand),
+                                b's' => cfg.set_suffix(operand),
+                                b'a' => cfg.set_arch(operand),
+                                // SAFETY: inner match only reached if it's one of the above 4
+                                _ => unsafe { std::hint::unreachable_unchecked() },
+                            }?;
+                            break;
+                        }
                         _ => return Err(ArgParseError::UnknownShortOption(b)),
                     }
                 }
