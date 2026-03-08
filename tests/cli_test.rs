@@ -541,3 +541,9 @@ fn non_utf8_code_position_reporting() {
     assert_eq!(errors[2].line, Some(8));
     assert_eq!(errors[2].column, Some(3));
 }
+
+#[test]
+fn bad_args() {
+    let err = checked_output!(expect_failure, eambfc_with_args!("-8"), stderr);
+    assert!(err.starts_with(b"unknown option: -8\nUsage: "));
+}
