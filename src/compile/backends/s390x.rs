@@ -386,12 +386,15 @@ impl ArchInter for S390xInter {
     }
 
     fn syscall(code_buf: &mut Vec<u8>, sc_num: i64) {
-        use std::num::NonZero;
-        if let Ok(sc_byte) = u8::try_from(sc_num).and_then(NonZero::try_from) {
-            code_buf.extend([0x0a, sc_byte.get()]);
+        if let Ok(sc_byte) = u8::try_from(sc_num)
+            && sc_byte != 0
+        {
+            code_buf.extend([0x0a, sc_byte]);
         } else {
-            Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc_num)
-                .unwrap_or_else(|_| unreachable!("64-bit platforms can encode 64-bit values"));
+            let result = Self::set_reg(code_buf, Self::REGISTERS.sc_num, sc_num);
+            // SAFETY: `S390xInter::set_reg` is infallible, and only returns a `Result` as the
+            // 32-bit equivalent can fail if passed an `imm` larger than 32 bits.
+            unsafe { result.unwrap_unchecked() };
             code_buf.extend([0x0a, 0x00]);
         }
     }

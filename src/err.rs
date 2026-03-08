@@ -62,15 +62,20 @@ fn json_escape(s: &str) -> String {
     construct
 }
 
+macro_rules! write_string {
+    ($($token: tt) *) => {{
+        write!($($token) *).expect("Won't fail to write! to String")
+    }};
+}
+
 fn json_escape_byte(b: u8, target: &mut String) {
     match b {
         // characters with special backslash escapes in JSON but not Rust
         0x08 => target.push_str("\\b"),
         0x0c => target.push_str("\\f"),
-        b'\n' | b'\r' | b'\t' | b'\\' | b'"' => write!(target, "{}", b.escape_ascii())
-            .unwrap_or_else(|_| unreachable!("Won't fail to write! to String")),
-        ..0b10_000 => write!(target, "\\u{b:04x}")
-            .unwrap_or_else(|_| unreachable!("Won't fail to write! to String")),
+        // characters with shared escapes between JSON and Rust
+        b'\n' | b'\r' | b'\t' | b'\\' | b'"' => write_string!(target, "{}", b.escape_ascii()),
+        ..0b10_000 => write_string!(target, "\\u{b:04x}"),
         0b10_000..0b1000_0000 => target.push(char::from(b)),
         _ => target.push('�'),
     }
@@ -114,21 +119,20 @@ impl BFCompileError {
         let mut report_string = format!("Error {:?}", self.kind);
         if let Some(instr) = self.instr {
             if instr > 0x7f {
-                write!(report_string, " when compiling '�' (byte value {instr})")
+                write_string!(report_string, " when compiling '�' (byte value {instr})");
             } else {
-                write!(report_string, " when compiling '{}'", instr.escape_ascii())
+                write_string!(report_string, " when compiling '{}'", instr.escape_ascii());
             }
-            .unwrap_or_else(|_| unreachable!("Won't fail to `write!` to String"));
         }
         if let Some(file) = self.file.as_ref() {
-            write!(report_string, " in file {}", file.to_string_lossy())
-                .unwrap_or_else(|_| unreachable!("Won't fail to `write!` to string"));
+            write_string!(report_string, " in file {}", file.display());
         }
         if let Some(loc) = self.loc {
-            write!(report_string, " at line {} column {}", loc.line, loc.col)
-                .unwrap_or_else(|_| unreachable!("Won't fail to write! to String"));
+            write_string!(report_string, " at line {} column {}", loc.line, loc.col);
         }
-        format!("{report_string}: {}", self.msg)
+        report_string += ": ";
+        report_string += &self.msg;
+        report_string
     }
 
     #[must_use]
@@ -140,16 +144,14 @@ impl BFCompileError {
             report_string.push('\"');
         }
         if let Some(file) = self.file.as_ref() {
-            write!(
+            write_string!(
                 report_string,
                 ",\"file\":\"{}\"",
                 json_escape(&file.to_string_lossy())
-            )
-            .unwrap_or_else(|_| unreachable!("Won't fail to `write!` to string"));
+            );
         }
         if let Some(CodePosition { line, col }) = self.loc {
-            write!(report_string, ",\"line\":{line},\"column\":{col}")
-                .unwrap_or_else(|_| unreachable!("Won't fail to write! to String"));
+            write_string!(report_string, ",\"line\":{line},\"column\":{col}");
         }
         format!(
             "{report_string},\"message\":\"{}\"}}",

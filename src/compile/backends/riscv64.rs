@@ -7,7 +7,7 @@ use super::backend_utils::{MinimumBits, sign_extend};
 use crate::Backend;
 use crate::err::{BFCompileError, BFErrorID};
 
-use std::num::NonZeroI8;
+use std::num::{NonZeroI8, NonZeroI16, NonZero};
 
 // SPDX-SnippetCopyrightText: 2025 Eli Array Minkoff
 //
@@ -32,28 +32,21 @@ use std::num::NonZeroI8;
 /// A modified port of LLVM's logic for resolving the `li` (load immediate) pseudo-instruction,
 /// as it existed in 2022.
 fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
-    let lo12 = i16::try_from(sign_extend(val, 12)).unwrap_or_else(|_| unreachable!());
+    let lo12 = (sign_extend(val, 12) % 0x2000) as i16;
     if val.fits_within_bits(32) {
-        let hi20 = i32::try_from(sign_extend(
-            (val.cast_unsigned().wrapping_add(0x800) >> 12).cast_signed(),
-            20,
-        ))
-        .unwrap_or_else(|_| unreachable!("Sign-extended from 20 bits, will always fit"));
-        if hi20 != 0 {
-            if hi20.fits_within_bits(6) {
+        let hi20 = (val.cast_unsigned().wrapping_add(0x800) >> 12).cast_signed();
+        let hi20 = (sign_extend(hi20, 20) % 0x20_000) as i32;
+        if let Some(hi20) = NonZero::new(hi20) {
+            if let Ok(hi6) = NonZeroI16::try_from(hi20) && hi6.get().fits_within_bits(6) {
                 // C.LUI reg, hi20
-                let imm = i16::try_from(hi20)
-                    .unwrap_or_else(|_| {
-                        unreachable!("fits within 6 bits, so must fit within 16 bits as well")
-                    })
-                    .cast_unsigned();
+                let imm = hi6.get().cast_unsigned();
                 code_buf.extend(u16::to_le_bytes(
                     0x6001 | (((imm & 0x20) | u16::from(reg)) << 7) | ((imm & 0x1f) << 2),
                 ));
             } else {
                 // LUI reg, hi20
                 code_buf.extend(u32::to_le_bytes(
-                    (hi20.cast_unsigned() << 12) | (u32::from(reg) << 7) | 0b011_0111,
+                    (hi20.get().cast_unsigned() << 12) | (u32::from(reg) << 7) | 0b011_0111,
                 ));
             }
         }
@@ -112,24 +105,18 @@ fn encode_li(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, val: i64) {
             (((shift_amount & 0x20) | (u16::from(reg))) << 7) | ((shift_amount & 0x1f) << 2) | 0b10,
         ));
     }
-    if lo12 != 0 {
-        if lo12.fits_within_bits(6) {
-            code_buf.extend(c_addi(
-                RawReg(reg),
-                i8::try_from(lo12)
-                    .and_then(NonZeroI8::try_from)
-                    .unwrap_or_else(|_| unreachable!("Already known nonzero and small enough")),
-            ));
+    if let Some(lo12) = NonZeroI16::new(lo12) {
+        if let Ok(lo6) = NonZeroI8::try_from(lo12)
+            && lo6.get().fits_within_bits(6)
+        {
+            code_buf.extend(c_addi(RawReg(reg), lo6));
         } else {
-            code_buf.extend(addi(RawReg(reg), lo12 as i16));
+            code_buf.extend(addi(RawReg(reg), lo12.get()));
         }
     }
 }
 
 // SPDX-SnippetEnd
-
-const NZ1: NonZeroI8 = NonZeroI8::new(1).expect("1 != 0");
-const NZ_NEG1: NonZeroI8 = NonZeroI8::new(-1).expect("-1 != 0");
 
 /// Internal type representing a raw register identifier.
 #[derive(PartialEq, Copy, Clone)]
@@ -340,16 +327,12 @@ impl ArchInter for RiscV64Inter {
         let imm = imm.cast_signed();
         match imm {
             0 => (),
-            -32..0 | 1..32 => code_buf.extend(c_addi(
-                reg.into(),
-                i8::try_from(imm)
-                    .and_then(NonZeroI8::try_from)
-                    .unwrap_or_else(|_| unreachable!()),
-            )),
-            -2048..-32 | 32..2048 => code_buf.extend(addi(
-                reg.into(),
-                imm.try_into().unwrap_or_else(|_| unreachable!()),
-            )),
+            -32..0 | 1..32 => {
+                #[allow(clippy::cast_possible_truncation, reason = "known to be in range")]
+                code_buf.extend(c_addi(reg.into(), NonZeroI8::new(imm as i8).unwrap()));
+            }
+            #[allow(clippy::cast_possible_truncation, reason = "known to be in range")]
+            -2048..-32 | 32..2048 => code_buf.extend(addi(reg.into(), imm as i16)),
             _ => {
                 encode_li(code_buf, TEMP_REG, imm);
                 // C.ADD reg, aux
@@ -528,7 +511,10 @@ mod test {
 
     #[disasm_test]
     fn test_caddi() {
-        let mut v = Vec::from(c_addi(RiscVRegister::A0.into(), NZ_NEG1));
+        let mut v = Vec::from(c_addi(
+            RiscVRegister::A0.into(),
+            const { NonZeroI8::new(-1).unwrap() },
+        ));
         v.extend(c_addi(
             RiscVRegister::A1.into(),
             const { NonZeroI8::new(0x1f).unwrap() },

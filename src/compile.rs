@@ -93,7 +93,7 @@ fn write_headers(
     // ELF addressing stuff that depends on tape_blocks, so can't be constant
     let tape_size: u64 = tape_blocks * 0x1000;
     let load_vaddr: u64 = ((TAPE_ADDR + tape_size) & (!0xffff)) + 0x10000;
-    let start_virt_addr = u64::try_from(START_ADDR).unwrap_or_else(|_| unreachable!()) + load_vaddr;
+    let start_virt_addr = const { START_ADDR as u64 } + load_vaddr;
 
     let Some(Ok(file_size)) = START_ADDR.checked_add(codesize).map(u64::try_from) else {
         // Can't create a file larger than 64 bits to test this on non-64-bit platforms
