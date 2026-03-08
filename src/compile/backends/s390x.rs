@@ -500,10 +500,44 @@ impl ArchInter for S390xInter {
     )
 )]
 mod tests {
+    #[cfg(feature = "disasmtests")]
+    use std::ffi::c_uint;
+
     #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     use super::super::test_utils::Disassembler;
     use super::*;
-    use test_macros::{disasm_test, debug_assert_test};
+    use test_macros::{debug_assert_test, disasm_test};
+
+    #[cfg(feature = "disasmtests")]
+    fn llvm_version() -> (c_uint, c_uint, c_uint) {
+        use std::mem::MaybeUninit;
+        use std::sync::OnceLock;
+        static VERSION: OnceLock<(c_uint, c_uint, c_uint)> = OnceLock::new();
+
+        *VERSION.get_or_init(|| {
+            let (mut major, mut minor, mut patch) = (
+                MaybeUninit::uninit(),
+                MaybeUninit::uninit(),
+                MaybeUninit::uninit(),
+            );
+
+            // SAFETY: Function takes 3 `unsigned *` C parameters, and sets the pointed-to values
+            // to the major, minor, and patch numbers of the LLVM release, so all 3 variables will
+            // be initialized by `LLVMGetVersion`
+            unsafe {
+                llvm_sys::core::LLVMGetVersion(
+                    major.as_mut_ptr(),
+                    minor.as_mut_ptr(),
+                    patch.as_mut_ptr(),
+                );
+                (
+                    major.assume_init(),
+                    minor.assume_init(),
+                    patch.assume_init(),
+                )
+            }
+        })
+    }
 
     #[cfg_attr(
         not(all(feature = "disasmtests", not(cross_compiled))),
@@ -680,10 +714,15 @@ mod tests {
         assert_eq!(disasm_lines.next().unwrap(), "llgc %r5, 0(%r3,0)");
         assert_eq!(disasm_lines.next().unwrap(), "cfi %r5, 0");
         // lh for low | high (i.e. not equal).
-        // For some reason, LLVM treats operand as an unsigned immediate after sign extending it to
-        // the full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64
-        given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
-        assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
+        // For some reason, LLVM 19 and 20 treat the operand as an unsigned immediate after
+        // sign-extending it to the full 64 bits, so -0x24i32 becomes 0xffffffffffffffdcu64. LLVM
+        // 21 and 22 do not do this.
+        if matches!(llvm_version(), (19 | 20, _minor, _patch)) {
+            given_that!(-0x24_i32 as i64 as u64 == 0xffffffffffffffdc);
+            assert_eq!(disasm_lines.next().unwrap(), "jglh 0xffffffffffffffdc");
+        } else {
+            assert_eq!(disasm_lines.next().unwrap(), "jglh -0x24");
+        }
         assert_eq!(disasm_lines.next().unwrap(), "j 0x2");
 
         // LLVM 19 adds pointless operands to the disassembly of NOP instructions, but LLVM 20 does
@@ -692,14 +731,10 @@ mod tests {
         // necessary to know which is in use here when validating disassembly, so take a detour to
         // check that.
         let (nop, nopr) = {
-            use std::ptr::null_mut;
-            use llvm_sys::core::LLVMGetVersion;
-            let mut llvm_version = 0;
             // SAFETY: Function takes 3 `unsigned *` C parameters, and sets the pointed-to values
             // to the major, minor, and patch numbers of the LLVM release. both supported LLVM
             // versions document that `NULL` can be passed for unneeded values.
-            unsafe { LLVMGetVersion(&raw mut llvm_version, null_mut(), null_mut()); };
-            if llvm_version == 10 {
+            if matches!(llvm_version(), (19, _minor, _patch)) {
                 ("nop 0", "nopr %r0")
             } else {
                 ("nop", "nopr")

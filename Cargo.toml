@@ -60,4 +60,4 @@ test_macros = { path = "test_macros" }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
 tempfile = "3.15.0"
-llvm-sys = { version = ">=191.0.0, <202.0.0", features = ["prefer-dynamic"] }
+llvm-sys = { version = ">=191.0.0, <222.0.0", features = ["prefer-dynamic"] }

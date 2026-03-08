@@ -107,12 +107,15 @@ The test suite is run with `cargo test`, as is typical of Rust projects. The
 tests require the `llvm_sys` crate, which has a bit of a complicated setup
 process - [see its docs](https://github.com/tari/llvm-sys.rs#build-requirements)
 for more info. In order for it to build properly on my system
-(Debian Bookworm with `llvm-19-dev` installed), I had to create the following
-`.cargo/config.toml` file:
+(Debian Trixie with `llvm-19-dev`), I had to include the following
+in `.cargo/config.toml`:
 
 ```toml
 [env]
 LLVM_SYS_191_PREFIX = "/usr/lib/llvm-19"
+LLVM_SYS_201_PREFIX = "/usr/lib/llvm-20"
+LLVM_SYS_211_PREFIX = "/usr/lib/llvm-21"
+LLVM_SYS_221_PREFIX = "/usr/lib/llvm-22"
 ```
 
 (`.cargo/config.toml` is for local configuration and is not supposed to be
@@ -164,3 +167,6 @@ created for `eambfc-rs`, or adapted from the the original `eambfc` project in C.
 All licenses used in any part of this repository are in the LICENSES/ directory,
 and every file has an SPDX License header identifying the license(s) it's under,
 either near the top of the file, or in an associated `.license` file.
+
+No "AI" tools have been used in the creation of the code or documentation in
+this repository.
