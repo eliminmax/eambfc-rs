@@ -110,7 +110,9 @@ impl ArchInter for X86_64Inter {
     }
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
-        if imm == 1 {
+        if imm == 0 {
+            return Ok(());
+        } else if imm == 1 {
             Self::inc_reg(code_buf, reg);
         } else if let Ok(imm8) = i8::try_from(imm) {
             add_reg_imm8(code_buf, reg, imm8);
@@ -123,7 +125,9 @@ impl ArchInter for X86_64Inter {
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
-        if imm == 1 {
+        if imm == 0 {
+            return Ok(());
+        } else if imm == 1 {
             Self::dec_reg(code_buf, reg);
         } else if let Ok(imm8) = i8::try_from(imm) {
             sub_reg_imm8(code_buf, reg, imm8);
@@ -335,5 +339,15 @@ mod tests {
                 "dec byte ptr [rax]"
             ]
         );
+    }
+
+    #[test]
+    fn add_sub_zero_does_nothing() {
+        let mut v = Vec::new();
+        X86_64Inter::add_byte(&mut v, X86Register::Eax, 0);
+        X86_64Inter::sub_byte(&mut v, X86Register::Eax, 0);
+        X86_64Inter::add_reg(&mut v, X86Register::Eax, 0).unwrap();
+        X86_64Inter::sub_reg(&mut v, X86Register::Eax, 0).unwrap();
+        assert!(v.is_empty());
     }
 }

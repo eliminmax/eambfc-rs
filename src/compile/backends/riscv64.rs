@@ -777,4 +777,14 @@ mod test {
             ]
         );
     }
+
+    #[test]
+    fn add_sub_zero_does_nothing() {
+        let mut v = Vec::new();
+        RiscV64Inter::add_byte(&mut v, RiscVRegister::A1, 0);
+        RiscV64Inter::sub_byte(&mut v, RiscVRegister::A1, 0);
+        RiscV64Inter::add_reg(&mut v, RiscVRegister::A1, 0).unwrap();
+        RiscV64Inter::sub_reg(&mut v, RiscVRegister::A1, 0).unwrap();
+        assert!(v.is_empty());
+    }
 }

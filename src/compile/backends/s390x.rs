@@ -293,6 +293,9 @@ fn branch_cond(
 }
 
 fn add_reg_signed(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
+    if imm == 0 {
+        return;
+    }
     if let Ok(imm16) = i16::try_from(imm) {
         // AGHI reg, imm {RI-a}
         code_buf.extend(u16::to_be_bytes(0xa70b | ((reg as u16) << 4)));
@@ -444,23 +447,26 @@ impl ArchInter for S390xInter {
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u8) {
-        code_buf.extend(load_from_byte(reg));
-        add_reg_signed(code_buf, TMP_REG, i64::from(imm));
-        code_buf.extend(store_to_byte(reg, TMP_REG));
+        if imm != 0 {
+            code_buf.extend(load_from_byte(reg));
+            add_reg_signed(code_buf, TMP_REG, i64::from(imm));
+            code_buf.extend(store_to_byte(reg, TMP_REG));
+        }
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u64) -> FailableInstrEncoding {
         // There are no equivalent sub instructions to any of the add instructions used.
-        // Given that in 2's complement with wrapping, adding i64::MIN and subtracting i64::MIN are
-        // equivalent (except possibly for effect on overflow flag, which is never checked in this
-        // program), simply make sure that if imm is i64::MIN, pass it directly, otherwise, pass
-        // `-imm`
-        // check that "-imm" won't cause problems, then call add_reg with negative imm.
+        // In 2's complement with wrapping, adding i64::MIN and subtracting i64::MIN are equivalent
+        // (except possibly for effect on overflow flag, which is never checked in this program),
+        // so use wrapping negation
         add_reg_signed(code_buf, reg, imm.cast_signed().wrapping_neg());
         Ok(())
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u8) {
+        if imm == 0 {
+            return;
+        }
         code_buf.extend(load_from_byte(reg));
         add_reg_signed(code_buf, TMP_REG, -i64::from(imm.cast_signed()));
         code_buf.extend(store_to_byte(reg, TMP_REG));
@@ -912,5 +918,15 @@ mod tests {
     #[debug_assert_test("<…>::s390x::branch_cond distance offset must be even")]
     fn fail_on_odd_jumps() {
         branch_cond(S390xRegister::R4, 3, ComparisonMask::MaskEQ).unwrap();
+    }
+
+    #[test]
+    fn add_sub_zero_does_nothing() {
+        let mut v = Vec::new();
+        S390xInter::add_byte(&mut v, S390xRegister::R3, 0);
+        S390xInter::sub_byte(&mut v, S390xRegister::R3, 0);
+        S390xInter::add_reg(&mut v, S390xRegister::R3, 0).unwrap();
+        S390xInter::sub_reg(&mut v, S390xRegister::R3, 0).unwrap();
+        assert!(v.is_empty());
     }
 }

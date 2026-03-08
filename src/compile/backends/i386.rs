@@ -102,7 +102,9 @@ impl ArchInter for I386Inter {
     }
 
     fn add_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
-        if imm == 1 {
+        if imm == 0 {
+            return Ok(());
+        } else if imm == 1 {
             Self::inc_reg(code_buf, reg);
         } else if let Ok(imm8) = i8::try_from(imm) {
             add_reg_imm8(code_buf, reg, imm8);
@@ -120,7 +122,9 @@ impl ArchInter for I386Inter {
     }
 
     fn sub_reg(code_buf: &mut Vec<u8>, reg: X86Register, imm: u64) -> FailableInstrEncoding {
-        if imm == 1 {
+        if imm == 0 {
+            return Ok(())
+        } else if imm == 1 {
             Self::dec_reg(code_buf, reg);
         } else if let Ok(imm8) = i8::try_from(imm) {
             sub_reg_imm8(code_buf, reg, imm8);
@@ -181,7 +185,6 @@ mod tests {
         I386Inter::set_reg(&mut v, X86Register::Ebx, 128).unwrap();
         assert_eq!(ds.disassemble(v.clone()), ["mov ebx, 0x80"]);
         v.clear();
-
     }
     #[disasm_test]
     fn fits_i32_or_u32() {
@@ -191,7 +194,6 @@ mod tests {
         I386Inter::set_reg(&mut b, X86Register::Eax, -1).unwrap();
         assert_eq!(a, b);
         assert_eq!(disassembler().disassemble(a), ["mov eax, 0xffffffff"]);
-
     }
 
     #[test]
@@ -274,10 +276,18 @@ mod tests {
         I386Inter::set_byte(&mut v, X86Register::Edx, 0);
         assert_eq!(dis.disassemble(v), ["mov byte ptr [edx], 0x0"]);
 
-
         let mut v = Vec::new();
         I386Inter::set_byte(&mut v, X86Register::Edx, 0x40);
         assert_eq!(dis.disassemble(v), ["mov byte ptr [edx], 0x40"]);
+    }
 
+    #[test]
+    fn add_sub_zero_does_nothing() {
+        let mut v = Vec::new();
+        I386Inter::add_byte(&mut v, X86Register::Eax, 0);
+        I386Inter::sub_byte(&mut v, X86Register::Eax, 0);
+        I386Inter::add_reg(&mut v, X86Register::Eax, 0).unwrap();
+        I386Inter::sub_reg(&mut v, X86Register::Eax, 0).unwrap();
+        assert!(v.is_empty());
     }
 }

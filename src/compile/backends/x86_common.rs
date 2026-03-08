@@ -128,6 +128,7 @@ macro_rules! x86_common_impl {
 
         fn add_byte(code_buf: &mut Vec<u8>, reg: X86Register, imm: u8) {
             match imm {
+                0 => (),
                 1 => Self::inc_byte(code_buf, reg),
                 255 => Self::dec_byte(code_buf, reg),
                 // ADD byte [reg], imm8
@@ -137,6 +138,7 @@ macro_rules! x86_common_impl {
 
         fn sub_byte(code_buf: &mut Vec<u8>, reg: X86Register, imm: u8) {
             match imm {
+                0 => (),
                 1 => Self::dec_byte(code_buf, reg),
                 255 => Self::inc_byte(code_buf, reg),
                 // SUB byte [reg], imm8

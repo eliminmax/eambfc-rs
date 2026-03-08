@@ -125,9 +125,7 @@ fn branch_cond(
 fn set_raw_reg(code_buf: &mut Vec<u8>, reg: RawReg, imm: i64) {
     // split the immediate into 4 16-bit parts - high, medium-high, medium-low, and low
     macro_rules! mask_u16 {
-        ($val: expr) => {{
-            (($val).cast_unsigned() & 0xffff) as u16
-        }};
+        ($val: expr) => {{ (($val).cast_unsigned() & 0xffff) as u16 }};
     }
     let parts: [(u16, ShiftLevel); 4] = [
         (mask_u16!(imm), ShiftLevel::NoShift),
@@ -209,12 +207,18 @@ impl ArchInter for Arm64Inter {
     }
 
     fn add_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
+        if imm == 0 {
+            return;
+        }
         code_buf.extend(load_from_byte(reg));
         add_sub_imm(code_buf, TEMP_REG, u32::from(imm), ArithOp::Add, false);
         code_buf.extend(store_to_byte(reg));
     }
 
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
+        if imm == 0 {
+            return;
+        }
         code_buf.extend(load_from_byte(reg));
         add_sub_imm(code_buf, TEMP_REG, u32::from(imm), ArithOp::Sub, false);
         code_buf.extend(store_to_byte(reg));
@@ -267,6 +271,9 @@ enum ArithOp {
 }
 
 fn add_sub_imm(code_buf: &mut Vec<u8>, RawReg(reg): RawReg, imm: u32, op: ArithOp, shift: bool) {
+    if imm == 0 {
+        return;
+    }
     assert!(
         (shift && (imm & !0xfff_000) == 0) || (!shift && (imm & !0xfff) == 0),
         "{imm} is invalid for shift level"
@@ -584,5 +591,15 @@ mod tests {
                 "b.ne #-0x1c",
             ]
         );
+    }
+
+    #[test]
+    fn add_sub_zero_does_nothing() {
+        let mut v = Vec::new();
+        Arm64Inter::add_byte(&mut v, Arm64Register::X2, 0);
+        Arm64Inter::sub_byte(&mut v, Arm64Register::X2, 0);
+        Arm64Inter::add_reg(&mut v, Arm64Register::X2, 0).unwrap();
+        Arm64Inter::sub_reg(&mut v, Arm64Register::X2, 0).unwrap();
+        assert!(v.is_empty());
     }
 }
