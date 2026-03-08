@@ -29,8 +29,21 @@
 // * RBX is 011b
 
 use super::arch_inter::{ArchInter, FailableInstrEncoding, Registers, SyscallNums};
-use crate::Backend;
 use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
+use crate::Backend;
+
+#[allow(non_upper_case_globals, reason = "aliases for enum variants")]
+#[allow(dead_code, reason = "not all registers will necessarily be used")]
+impl X86Register {
+    const Rax: Self = Self::Eax;
+    const Rcx: Self = Self::Ecx;
+    const Rdx: Self = Self::Edx;
+    const Rbx: Self = Self::Ebx;
+    const Rsp: Self = Self::Esp;
+    const Rbp: Self = Self::Ebp;
+    const Rsi: Self = Self::Esi;
+    const Rdi: Self = Self::Edi;
+}
 
 // INC and DEC are encoded very similarly with very few differences between
 // the encoding for operating on registers and operating on bytes pointed to by
@@ -49,11 +62,11 @@ use super::x86_common::{ArithOp, ConditionCode, X86Register, x86_common_impl};
 pub(crate) struct X86_64Inter;
 impl ArchInter for X86_64Inter {
     const REGISTERS: Registers<X86Register> = Registers {
-        sc_num: X86Register::Eax,
-        arg1: X86Register::Edi,
-        arg2: X86Register::Esi,
-        arg3: X86Register::Edx,
-        bf_ptr: X86Register::Ebx,
+        sc_num: X86Register::Rax,
+        arg1: X86Register::Rdi,
+        arg2: X86Register::Rsi,
+        arg3: X86Register::Rdx,
+        bf_ptr: X86Register::Rbx,
     };
     const SC_NUMS: SyscallNums = SyscallNums {
         read: 0,
@@ -152,14 +165,14 @@ fn add_sub_qw(code_buf: &mut Vec<u8>, reg: X86Register, imm64: u64, op: ArithOp)
     code_buf.extend([
         // MOV RCX, (imm64 to be appended)
         0x48,
-        0xb8 | X86Register::Ecx as u8,
+        0xb8 | X86Register::Rcx as u8,
     ]);
     code_buf.extend(imm64.to_le_bytes());
     code_buf.extend([
         // (ADD||SUB) reg, rcx
         0x48,
         (op as u8) - 0xbf,
-        0xc0 + ((X86Register::Ecx as u8) << 3) + (reg as u8),
+        0xc0 + ((X86Register::Rcx as u8) << 3) + (reg as u8),
     ]);
 }
 
@@ -190,14 +203,14 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         let mut ds = disassembler();
 
-        X86_64Inter::set_reg(&mut v, X86Register::Ebx, 0).unwrap();
+        X86_64Inter::set_reg(&mut v, X86Register::Rbx, 0).unwrap();
         assert_eq!(ds.disassemble(v.clone()), ["xor ebx, ebx"]);
         v.clear();
-        X86_64Inter::set_reg(&mut v, X86Register::Ebx, 128).unwrap();
+        X86_64Inter::set_reg(&mut v, X86Register::Rbx, 128).unwrap();
         assert_eq!(ds.disassemble(v.clone()), ["mov ebx, 0x80"]);
 
         v.clear();
-        X86_64Inter::set_reg(&mut v, X86Register::Ebx, i64::MAX - 0xffff).unwrap();
+        X86_64Inter::set_reg(&mut v, X86Register::Rbx, i64::MAX - 0xffff).unwrap();
         assert_eq!(
             ds.disassemble(v),
             // movabs is an internal term some dis/assemblers have for MOV variant for large
@@ -209,8 +222,8 @@ mod tests {
     #[disasm_test]
     fn test_jump_instructions() {
         let mut v: Vec<u8> = vec![0; 9];
-        X86_64Inter::jump_open(&mut v, 0, X86Register::Edi, 9).unwrap();
-        X86_64Inter::jump_close(&mut v, X86Register::Edi, -18).unwrap();
+        X86_64Inter::jump_open(&mut v, 0, X86Register::Rdi, 9).unwrap();
+        X86_64Inter::jump_close(&mut v, X86Register::Rdi, -18).unwrap();
         X86_64Inter::pad_loop_open(&mut v);
         let mut disasm_lines = disassembler().disassemble(v).into_iter();
         // NOTE: the disassembly uses absolute addresses, not relative addresses.
@@ -234,12 +247,12 @@ mod tests {
     fn add_sub_small_imm() {
         let mut v = Vec::with_capacity(4);
         let mut ds = disassembler();
-        X86_64Inter::add_reg(&mut v, X86Register::Esi, 0x20).unwrap();
+        X86_64Inter::add_reg(&mut v, X86Register::Rsi, 0x20).unwrap();
         assert_eq!(v.len(), 4);
         assert_eq!(ds.disassemble(v), ["add rsi, 0x20"]);
 
         let mut v = Vec::with_capacity(4);
-        X86_64Inter::sub_reg(&mut v, X86Register::Esi, 0x20).unwrap();
+        X86_64Inter::sub_reg(&mut v, X86Register::Rsi, 0x20).unwrap();
         assert_eq!(v.len(), 4);
         assert_eq!(ds.disassemble(v), ["sub rsi, 0x20"]);
     }
@@ -248,12 +261,12 @@ mod tests {
     fn add_sub_medium_imm() {
         let mut v = Vec::with_capacity(7);
         let mut ds = disassembler();
-        X86_64Inter::add_reg(&mut v, X86Register::Edx, 0xdead).unwrap();
+        X86_64Inter::add_reg(&mut v, X86Register::Rdx, 0xdead).unwrap();
         assert_eq!(v.len(), 7);
         assert_eq!(ds.disassemble(v), ["add rdx, 0xdead"]);
 
         let mut v = Vec::with_capacity(7);
-        X86_64Inter::sub_reg(&mut v, X86Register::Edx, 0xbeef).unwrap();
+        X86_64Inter::sub_reg(&mut v, X86Register::Rdx, 0xbeef).unwrap();
         assert_eq!(v.len(), 7);
         assert_eq!(ds.disassemble(v), ["sub rdx, 0xbeef"]);
     }
@@ -264,7 +277,7 @@ mod tests {
         let mut ds = disassembler();
 
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        X86_64Inter::add_reg(&mut v, X86Register::Ebx, 0xdeadbeef).unwrap();
+        X86_64Inter::add_reg(&mut v, X86Register::Rbx, 0xdeadbeef).unwrap();
         assert_eq!(
             ds.disassemble(v),
             ["movabs rcx, 0xdeadbeef", "add rbx, rcx",]
@@ -272,7 +285,7 @@ mod tests {
 
         let mut v: Vec<u8> = Vec::new();
         #[allow(clippy::unreadable_literal, reason = "deadbeef is famously readable")]
-        X86_64Inter::sub_reg(&mut v, X86Register::Ebx, 0xdeadbeef).unwrap();
+        X86_64Inter::sub_reg(&mut v, X86Register::Rbx, 0xdeadbeef).unwrap();
         assert_eq!(
             ds.disassemble(v),
             ["movabs rcx, 0xdeadbeef", "sub rbx, rcx",]
@@ -282,8 +295,8 @@ mod tests {
     #[disasm_test]
     fn test_add_sub_byte() {
         let mut v: Vec<u8> = Vec::new();
-        X86_64Inter::add_byte(&mut v, X86Register::Edi, 0x23);
-        X86_64Inter::sub_byte(&mut v, X86Register::Edi, 0x23);
+        X86_64Inter::add_byte(&mut v, X86Register::Rdi, 0x23);
+        X86_64Inter::sub_byte(&mut v, X86Register::Rdi, 0x23);
         assert_eq!(
             disassembler().disassemble(v),
             ["add byte ptr [rdi], 0x23", "sub byte ptr [rdi], 0x23"]
@@ -294,11 +307,11 @@ mod tests {
     fn test_set_byte() {
         let mut dis = disassembler();
         let mut v: Vec<u8> = Vec::new();
-        X86_64Inter::set_byte(&mut v, X86Register::Edx, 0);
+        X86_64Inter::set_byte(&mut v, X86Register::Rdx, 0);
         assert_eq!(dis.disassemble(v), ["mov byte ptr [rdx], 0x0"]);
 
         let mut v = Vec::new();
-        X86_64Inter::set_byte(&mut v, X86Register::Edx, 0x40);
+        X86_64Inter::set_byte(&mut v, X86Register::Rdx, 0x40);
         assert_eq!(dis.disassemble(v), ["mov byte ptr [rdx], 0x40"]);
     }
 
@@ -308,10 +321,10 @@ mod tests {
         let mut v: Vec<u8> = Vec::new();
         let mut ds = disassembler();
 
-        X86_64Inter::inc_reg(&mut v, X86Register::Eax);
-        X86_64Inter::dec_reg(&mut v, X86Register::Eax);
-        X86_64Inter::inc_byte(&mut v, X86Register::Eax);
-        X86_64Inter::dec_byte(&mut v, X86Register::Eax);
+        X86_64Inter::inc_reg(&mut v, X86Register::Rax);
+        X86_64Inter::dec_reg(&mut v, X86Register::Rax);
+        X86_64Inter::inc_byte(&mut v, X86Register::Rax);
+        X86_64Inter::dec_byte(&mut v, X86Register::Rax);
 
         assert_eq!(
             ds.disassemble(v),
