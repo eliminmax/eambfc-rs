@@ -198,20 +198,6 @@ impl ArchInter for Arm64Inter {
         code_buf.extend(INSTR_SEQUENCE.into_iter().flatten());
     }
 
-    fn inc_reg(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-        // ADD reg, reg, 1
-        code_buf.extend(u32::to_le_bytes(
-            0x9100_0400 | ((reg as u32) << 5) | (reg as u32),
-        ));
-    }
-
-    fn dec_reg(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-        // SUB reg, reg, 1
-        code_buf.extend(u32::to_le_bytes(
-            0xd100_0400 | ((reg as u32) << 5) | (reg as u32),
-        ));
-    }
-
     fn add_reg(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u64) -> FailableInstrEncoding {
         add_sub(code_buf, reg, imm, ArithOp::Add);
         Ok(())
@@ -231,20 +217,6 @@ impl ArchInter for Arm64Inter {
     fn sub_byte(code_buf: &mut Vec<u8>, reg: Arm64Register, imm: u8) {
         code_buf.extend(load_from_byte(reg));
         add_sub_imm(code_buf, TEMP_REG, u32::from(imm), ArithOp::Sub, false);
-        code_buf.extend(store_to_byte(reg));
-    }
-
-    fn inc_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-        code_buf.extend(load_from_byte(reg));
-        // add x17, x17, 1
-        code_buf.extend(u32::to_le_bytes(0x9100_0631));
-        code_buf.extend(store_to_byte(reg));
-    }
-
-    fn dec_byte(code_buf: &mut Vec<u8>, reg: Arm64Register) {
-        code_buf.extend(load_from_byte(reg));
-        // sub x17, x17, 1
-        code_buf.extend(u32::to_le_bytes(0xd100_0631));
         code_buf.extend(store_to_byte(reg));
     }
 

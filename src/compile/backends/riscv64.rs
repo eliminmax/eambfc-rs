@@ -361,26 +361,6 @@ impl ArchInter for RiscV64Inter {
         Ok(())
     }
 
-    fn inc_reg(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        code_buf.extend(c_addi(reg.into(), NZ1));
-    }
-
-    fn dec_reg(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        code_buf.extend(c_addi(reg.into(), NZ_NEG1));
-    }
-
-    fn inc_byte(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        code_buf.extend(load_from_byte(reg));
-        code_buf.extend(c_addi(TEMP_REG, NZ1));
-        code_buf.extend(store_to_byte(reg));
-    }
-
-    fn dec_byte(code_buf: &mut Vec<u8>, reg: Self::RegType) {
-        code_buf.extend(load_from_byte(reg));
-        code_buf.extend(c_addi(TEMP_REG, NZ_NEG1));
-        code_buf.extend(store_to_byte(reg));
-    }
-
     fn set_byte(code_buf: &mut Vec<u8>, reg: Self::RegType, imm: u8) {
         if imm == 0 {
             code_buf.extend(u32::to_le_bytes(0x23 | ((reg as u32) << 15)));

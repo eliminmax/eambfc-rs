@@ -435,22 +435,6 @@ impl ArchInter for S390xInter {
         code_buf.extend([0x07, 0x00]);
     }
 
-    fn inc_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        add_reg_signed(code_buf, reg, 1);
-    }
-
-    fn inc_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        S390xInter::add_byte(code_buf, reg, 1);
-    }
-
-    fn dec_reg(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        add_reg_signed(code_buf, reg, -1);
-    }
-
-    fn dec_byte(code_buf: &mut Vec<u8>, reg: S390xRegister) {
-        S390xInter::sub_byte(code_buf, reg, 1);
-    }
-
     fn add_reg(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: u64) -> FailableInstrEncoding {
         add_reg_signed(code_buf, reg, imm.cast_signed());
         Ok(())
