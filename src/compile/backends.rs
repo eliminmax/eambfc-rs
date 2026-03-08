@@ -36,6 +36,30 @@ pub(crate) enum Backend {
     #[cfg(feature = "x86_64")]
     X86_64,
 }
+use super::BFCompile;
+impl Backend {
+    fn compiler(self) -> &'static dyn BFCompile {
+        match self {
+            Backend::Arm64 => &Arm64Inter,
+            Backend::I386 => &I386Inter,
+            Backend::RiscV64 => &RiscV64Inter,
+            Backend::S390x => &S390xInter,
+            Backend::X86_64 => &X86_64Inter,
+        }
+    }
+}
+
+impl BFCompile for Backend {
+    fn compile(
+        &self,
+        in_f: &mut dyn std::io::Read,
+        out_f: &mut dyn std::io::Write,
+        optimize: bool,
+        tape_blocks: u64,
+    ) -> Result<(), Vec<crate::err::BFCompileError>> {
+        self.compiler().compile(in_f, out_f, optimize, tape_blocks)
+    }
+}
 
 #[cfg(not(have_all_targets))]
 /// Enum of disabled backends

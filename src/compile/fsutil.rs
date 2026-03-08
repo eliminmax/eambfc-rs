@@ -5,6 +5,7 @@
 use crate::err::{BFCompileError, BFErrorID};
 use std::borrow::Cow;
 use std::ffi::OsStr;
+use std::path::Path;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 #[cfg(target_os = "wasi")]
@@ -17,10 +18,11 @@ use std::os::wasi::ffi::OsStrExt;
 /// On non-unix platforms, it returns an `Err` with a `.err_id()` of `BFCompileError::NonUTF8` if
 /// either `filename` or `extension` are not valid Unicode
 pub(super) fn set_extension<'a>(
-    filename: &'a OsStr,
+    filename: &'a Path,
     extension: &OsStr,
     suffix: Option<&OsStr>,
 ) -> Result<Cow<'a, OsStr>, BFCompileError> {
+    let filename = filename.as_os_str();
     let outname: &'a OsStr;
     #[cfg(any(unix, target_os = "wasi"))]
     {

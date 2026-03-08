@@ -21,6 +21,8 @@ pub(crate) use backends::ElfClass;
 use backends::{Backend, BinInfo, SegmentInfo};
 
 use std::ffi::OsStr;
+use std::fs::{File, OpenOptions, remove_file};
+use std::path::Path;
 use std::io::{BufReader, Read, Write};
 
 struct JumpLocation {
@@ -82,7 +84,7 @@ const START_ADDR: usize = 256;
 
 /// Write the headers and padding bytes to `output`
 fn write_headers(
-    output: &mut impl Write,
+    output: &mut dyn Write,
     codesize: usize,
     tape_blocks: u64,
     elf_arch: Backend,
@@ -140,22 +142,23 @@ fn write_headers(
 pub(crate) trait BFCompile {
     // compile the contents of in_f, writing the output to out_f
     fn compile(
-        in_f: impl Read,
-        out_f: impl Write,
+        &self,
+        in_f: &mut dyn Read,
+        out_f: &mut dyn Write,
         optimize: bool,
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>>;
 
     // handle opening file_name, and writing the executable
     fn compile_file(
-        file_name: &OsStr,
+        &self,
+        file_name: &Path,
         extension: &OsStr,
         optimize: bool,
         keep: bool,
         tape_blocks: u64,
         out_suffix: Option<&OsStr>,
     ) -> Result<(), Vec<BFCompileError>> {
-        use std::fs::{File, OpenOptions, remove_file};
 
         let mut open_options = OpenOptions::new();
         open_options.write(true).create(true).truncate(true);
@@ -167,7 +170,7 @@ pub(crate) trait BFCompile {
 
         let outfile_name = set_extension(file_name, extension, out_suffix)?;
 
-        let infile = File::open(file_name).map_err(|e| {
+        let mut infile = File::open(file_name).map_err(|e| {
             BFCompileError::basic(
                 BFErrorID::OpenReadFailed,
                 format!(
@@ -177,7 +180,7 @@ pub(crate) trait BFCompile {
             )
         })?;
 
-        let outfile = open_options.open(&outfile_name).map_err(|e| {
+        let mut outfile = open_options.open(&outfile_name).map_err(|e| {
             BFCompileError::basic(
                 BFErrorID::OpenWriteFailed,
                 format!(
@@ -186,7 +189,7 @@ pub(crate) trait BFCompile {
                 ),
             )
         })?;
-        let mut ret = Self::compile(infile, outfile, optimize, tape_blocks);
+        let mut ret = self.compile(&mut infile, &mut outfile, optimize, tape_blocks);
         if let Err(ref mut errs) = ret {
             for e in errs.iter_mut() {
                 e.set_file(file_name);
@@ -334,8 +337,9 @@ impl<A: ArchInter> BFCompileHelper for A {}
 
 impl<B: BFCompileHelper> BFCompile for B {
     fn compile(
-        in_f: impl Read,
-        mut out_f: impl Write,
+        &self,
+        in_f: &mut dyn Read,
+        mut out_f: &mut dyn Write,
         optimize: bool,
         tape_blocks: u64,
     ) -> Result<(), Vec<BFCompileError>> {
@@ -429,7 +433,7 @@ mod tests {
 
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
-        TestInter::compile(b"+[>]<-,.".as_slice(), Vec::<u8>::new(), false, 8)
+        TestInter.compile(&mut b"+[>]<-,.".as_slice(), &mut Vec::<u8>::new(), false, 8)
             .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
@@ -437,14 +441,14 @@ mod tests {
     fn compile_nested_loops() -> Result<(), String> {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
-        TestInter::compile(b">+[-->---[-<]>]>+".as_slice(), Vec::<u8>::new(), false, 8)
+        TestInter.compile(&mut b">+[-->---[-<]>]>+".as_slice(), &mut Vec::<u8>::new(), false, 8)
             .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
     #[test]
     fn unmatched_open() {
         assert!(
-            TestInter::compile(b"[".as_slice(), Vec::<u8>::new(), false, 8,)
+            TestInter.compile(&mut b"[".as_slice(), &mut Vec::<u8>::new(), false, 8,)
                 .is_err_and(|e| e[0].error_id() == BFErrorID::UnmatchedOpen)
         );
     }
@@ -452,14 +456,14 @@ mod tests {
     #[cfg(feature = "i386")]
     #[test_macros::debug_assert_test("tape size should've been validated during arg parsing")]
     fn tape_size_32_validation() {
-        backends::I386Inter::compile(b"".as_slice(), Vec::<u8>::new(), false, u32::MAX.into())
+        backends::I386Inter.compile(&mut b"".as_slice(), &mut Vec::<u8>::new(), false, u32::MAX.into())
             .unwrap();
     }
 
     #[test]
     fn unmatched_close() {
         assert!(
-            TestInter::compile(b"]".as_slice(), Vec::<u8>::new(), false, 8,)
+            TestInter.compile(&mut b"]".as_slice(), &mut Vec::<u8>::new(), false, 8,)
                 .is_err_and(|e| e[0].error_id() == BFErrorID::UnmatchedClose)
         );
     }
@@ -491,19 +495,19 @@ mod tests {
 
         // partial write failure while writing headers
         assert!(
-            TestInter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 60 }, true, 8)
+            TestInter.compile(&mut b"[-]".as_slice(), &mut FailingWriter { fail_after: 60 }, true, 8)
                 .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
         // total write failure while writing headers
         assert!(
-            TestInter::compile(b"[-]".as_slice(), FailingWriter { fail_after: 0 }, true, 8)
+            TestInter.compile(&mut b"[-]".as_slice(), &mut FailingWriter { fail_after: 0 }, true, 8)
                 .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
         // partial write failure while writing code
         assert!(
-            TestInter::compile(
-                b">>[-]".as_slice(),
-                FailingWriter {
+            TestInter.compile(
+                &mut b">>[-]".as_slice(),
+                &mut FailingWriter {
                     fail_after: START_ADDR + 1
                 },
                 true,
@@ -513,9 +517,9 @@ mod tests {
         );
         // total write failure after writing headers
         assert!(
-            TestInter::compile(
-                b"[-]".as_slice(),
-                FailingWriter {
+            TestInter.compile(
+                &mut b"[-]".as_slice(),
+                &mut FailingWriter {
                     fail_after: START_ADDR
                 },
                 true,

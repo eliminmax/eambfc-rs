@@ -26,58 +26,6 @@ use arg_parse::{RunConfig, help_fmt};
 use compile::{BFCompile, backends::Backend};
 use err::OutMode;
 
-// architecture interfaces
-#[cfg(feature = "arm64")]
-use crate::compile::backends::Arm64Inter;
-#[cfg(feature = "i386")]
-use crate::compile::backends::I386Inter;
-#[cfg(feature = "riscv64")]
-use crate::compile::backends::RiscV64Inter;
-#[cfg(feature = "s390x")]
-use crate::compile::backends::S390xInter;
-#[cfg(feature = "x86_64")]
-use crate::compile::backends::X86_64Inter;
-
-fn standard_run(rc: arg_parse::StandardRunConfig) -> ExitCode {
-    let mut exit_code = ExitCode::SUCCESS;
-    for f in rc.source_files {
-        macro_rules! compile_with {
-            ($inter: ident) => {{
-                $inter::compile_file(
-                    f.as_ref(),
-                    &rc.extension,
-                    rc.optimize,
-                    rc.keep,
-                    rc.tape_blocks,
-                    rc.out_suffix.as_deref(),
-                )
-            }};
-        }
-        let comp_result = match rc.arch {
-            #[cfg(feature = "arm64")]
-            Backend::Arm64 => compile_with!(Arm64Inter),
-            #[cfg(feature = "i386")]
-            Backend::I386 => compile_with!(I386Inter),
-            #[cfg(feature = "riscv64")]
-            Backend::RiscV64 => compile_with!(RiscV64Inter),
-            #[cfg(feature = "s390x")]
-            Backend::S390x => compile_with!(S390xInter),
-            #[cfg(feature = "x86_64")]
-            Backend::X86_64 => compile_with!(X86_64Inter),
-        };
-        if let Err(errs) = comp_result {
-            for e in errs {
-                e.report(rc.out_mode);
-            }
-            if !rc.cont {
-                return ExitCode::FAILURE;
-            }
-            exit_code = ExitCode::FAILURE;
-        }
-    }
-    exit_code
-}
-
 fn main() -> ExitCode {
     let mut args = args_os();
     // if args[0] is not present, it's sensible to fall back to the name cargo is using
@@ -113,7 +61,29 @@ fn main() -> ExitCode {
             println!("{}", help_fmt(&progname));
             ExitCode::SUCCESS
         }
-        Ok(RunConfig::StandardRun(rc)) => standard_run(rc),
+        Ok(RunConfig::StandardRun(rc)) => {
+            let mut exit_code = ExitCode::SUCCESS;
+            for f in rc.source_files {
+                let comp_result = rc.arch.compile_file(
+                    &f,
+                    &rc.extension,
+                    rc.optimize,
+                    rc.keep,
+                    rc.tape_blocks,
+                    rc.out_suffix.as_deref(),
+                );
+                if let Err(errs) = comp_result {
+                    for e in errs {
+                        e.report(rc.out_mode);
+                    }
+                    if !rc.cont {
+                        return ExitCode::FAILURE;
+                    }
+                    exit_code = ExitCode::FAILURE;
+                }
+            }
+            exit_code
+        },
         Ok(RunConfig::ShowVersion) => {
             println!(
                 include_str!("text_assets/version_template.txt"),

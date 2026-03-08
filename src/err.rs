@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use std::borrow::Cow;
-use std::ffi::OsStr;
 use std::fmt::Write;
+use std::path::Path;
 
 #[derive(PartialEq, Debug, Clone, Copy, Default)]
 pub(crate) enum OutMode {
@@ -38,7 +38,7 @@ pub(crate) struct BFCompileError {
     msg: ErrMsg,
     instr: Option<u8>,
     loc: Option<CodePosition>,
-    file: Option<Box<OsStr>>,
+    file: Option<Box<Path>>,
 }
 
 #[cfg(not(tarpaulin_include))]
@@ -93,7 +93,7 @@ impl BFCompileError {
             file: None,
         }
     }
-    pub fn set_file(&mut self, file: &OsStr) {
+    pub fn set_file(&mut self, file: &Path) {
         self.file = Some(Box::from(file));
     }
 
@@ -245,6 +245,7 @@ mod tests {
 
     #[unix_test("OsStrExt::from_bytes")]
     fn error_reporting_test() {
+        use std::ffi::OsStr;
         use std::os::unix::ffi::OsStrExt;
         let mut test_err =
             BFCompileError::basic(BFErrorID::BadSourceExtension, "Bad source extension");
@@ -256,13 +257,13 @@ mod tests {
             DeserializedCompileError::from_json(&test_err.report_json()),
             test_err
         );
-        test_err.set_file(OsStr::from_bytes(b"somefile.b\xeef"));
+        test_err.set_file(Path::new(OsStr::from_bytes(b"somefile.b\xeef")));
         assert_eq!(
             test_err.report_basic(),
             "Error BadSourceExtension in file somefile.b�f: Bad source extension"
         );
         let json = test_err.report_json();
-        test_err.set_file(OsStr::new("somefile.b�f"));
+        test_err.set_file(Path::new("somefile.b�f"));
         assert_eq!(DeserializedCompileError::from_json(&json), test_err);
         test_err.instr = Some(b'e');
         assert_eq!(
@@ -325,7 +326,7 @@ mod tests {
                     && self.message == other.msg
                     && self.instruction == instr
                     && loc == other.loc
-                    && self.file.as_deref().map(OsStr::new) == other.file.as_deref()
+                    && self.file.as_deref().map(Path::new) == other.file.as_deref()
             }
         }
     }
