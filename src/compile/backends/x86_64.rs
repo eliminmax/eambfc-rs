@@ -211,6 +211,22 @@ mod tests {
         Disassembler::new(Backend::X86_64)
     }
 
+    #[test]
+    fn add_sub_special_cases() {
+        let mut vs = [Vec::with_capacity(6), Vec::with_capacity(6)];
+        // adding or subtracting 1 from a byte should result in `inc_byte` or `dec_byte`
+        X86_64Inter::add_byte(&mut vs[0], X86Register::Rbp, 1);
+        X86_64Inter::inc_byte(&mut vs[1], X86Register::Rbp);
+        X86_64Inter::sub_byte(&mut vs[0], X86Register::Rbp, 1);
+        X86_64Inter::dec_byte(&mut vs[1], X86Register::Rbp);
+        // adding or subtracting 255 from a byte should result in `dec_byte` or `inc_byte`
+        X86_64Inter::add_byte(&mut vs[0], X86Register::Rbp, 255);
+        X86_64Inter::dec_byte(&mut vs[1], X86Register::Rbp);
+        X86_64Inter::sub_byte(&mut vs[0], X86Register::Rbp, 255);
+        X86_64Inter::inc_byte(&mut vs[1], X86Register::Rbp);
+        assert_eq!(vs[0], vs[1]);
+    }
+
     #[disasm_test]
     fn test_set_reg() {
         // test that appropriate encodings are used for different immediates
