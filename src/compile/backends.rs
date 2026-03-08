@@ -114,7 +114,7 @@ impl std::str::FromStr for Backend {
                 }
                 #[cfg(not(feature = $feature))]
                 {
-                    Err(BackendParseErr(DisabledBackend::$backend))
+                    Err(BackendParseErr::DisabledBackend(DisabledBackend::$backend))
                 }
             }};
         }
