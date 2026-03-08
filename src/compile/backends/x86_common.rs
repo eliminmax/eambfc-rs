@@ -11,20 +11,18 @@ use crate::err::{BFCompileError, BFErrorID};
 /// identical to the 32-bit equivalent or have a REX.W prefix, so are not included in the enum
 #[derive(Clone, Copy)]
 #[repr(u8)]
+#[allow(
+    dead_code,
+    reason = "not all registers needed in all backends, but all are included for completeness"
+)]
 pub(in super::super) enum X86Register {
     Eax = 0b000,
     Ecx = 0b001,
     Edx = 0b010,
     Ebx = 0b011,
-    #[expect(dead_code, reason = "included for completeness's sake")]
     Esp = 0b100,
-    #[expect(dead_code, reason = "included for completeness's sake")]
     Ebp = 0b101,
     Esi = 0b110,
-    #[cfg_attr(
-        not(feature = "x86_64"),
-        expect(dead_code, reason = "only used in x86_64")
-    )]
     Edi = 0b111,
 }
 
