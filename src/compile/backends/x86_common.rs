@@ -73,7 +73,6 @@ pub(super) fn conditional_jump(
 macro_rules! x86_common_impl {
     () => {
         type RegType = X86Register;
-        const JUMP_SIZE: usize = 9;
         const E_FLAGS: u32 = 0;
 
         fn jump_open(
@@ -82,7 +81,8 @@ macro_rules! x86_common_impl {
             reg: X86Register,
             offset: i64,
         ) -> crate::compile::arch_inter::FailableInstrEncoding {
-            code_buf[index..index + Self::JUMP_SIZE].copy_from_slice(
+            const JUMP_SIZE: usize = 9;
+            code_buf[index..index + JUMP_SIZE].copy_from_slice(
                 &crate::compile::backends::x86_common::conditional_jump(
                     reg,
                     offset,

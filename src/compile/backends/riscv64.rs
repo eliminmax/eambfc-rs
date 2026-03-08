@@ -257,7 +257,6 @@ impl ArchInter for RiscV64Inter {
         write: 64,
         exit: 93,
     };
-    const JUMP_SIZE: usize = 12;
     const ARCH: Backend = Backend::RiscV64;
     const E_FLAGS: u32 = 5; // EF_RISCV_RVC | EF_RISCV_FLOAT_ABI_DOUBLE (chosen to match Debian)
 

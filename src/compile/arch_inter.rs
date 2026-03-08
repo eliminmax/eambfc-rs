@@ -14,10 +14,6 @@ pub(super) type FailableInstrEncoding = Result<(), BFCompileError>;
 pub(super) trait ArchInter {
     /// The type used to represent this architecture's registers
     type RegType: Copy;
-    /// The size of the jump instruction (including any preceding "test", "cmp", etc) for this
-    /// architecture
-    const JUMP_SIZE: usize;
-
     /// The syscall instruction code
     const SYSCALL_INSTR: &[u8];
 
@@ -54,7 +50,7 @@ pub(super) trait ArchInter {
         code_buf.extend_from_slice(Self::SYSCALL_INSTR);
     }
 
-    /// overwrite `code_buf[index..index + Self::JUMP_SIZE]` with machine code to test if the byte
+    /// overwrite `code_buf[index..index + <JUMP_SIZE>]` with machine code to test if the byte
     /// pointed to by `reg` is zero, and jump `offset` bytes away if so
     ///
     /// Should return an error if `offset` is too large of a jump for this architecture

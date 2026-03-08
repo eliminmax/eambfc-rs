@@ -268,7 +268,7 @@ trait BFCompileHelper: ArchInter {
                 FilteredInstr::Write => Self::bf_io(code_buf, Self::SC_NUMS.write, 1),
                 // Read 1 byte to [bf_ptr] from STDIN
                 FilteredInstr::Read => Self::bf_io(code_buf, Self::SC_NUMS.read, 0),
-                // pad `Self::JUMP_SIZE` bytes with a trap instruction followed by no-ops.
+                // pad for jump instruction bytes with a trap instruction followed by no-ops.
                 // will replace when reaching the corresponding ']' instruction
                 FilteredInstr::LoopOpen => {
                     jump_stack.push(JumpLocation {

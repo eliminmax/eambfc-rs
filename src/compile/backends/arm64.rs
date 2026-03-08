@@ -151,10 +151,11 @@ fn set_raw_reg(code_buf: &mut Vec<u8>, reg: RawReg, imm: i64) {
     });
 }
 
+const JUMP_SIZE: usize = 12;
+
 pub(crate) struct Arm64Inter;
 impl ArchInter for Arm64Inter {
     type RegType = Arm64Register;
-    const JUMP_SIZE: usize = 12;
     const E_FLAGS: u32 = 0;
     const SYSCALL_INSTR: &[u8] = &u32::to_le_bytes(0xd400_0001);
 
@@ -262,7 +263,7 @@ impl ArchInter for Arm64Inter {
         reg: Self::RegType,
         offset: i64,
     ) -> FailableInstrEncoding {
-        code_buf[index..index + Self::JUMP_SIZE].clone_from_slice(&branch_cond(
+        code_buf[index..index + JUMP_SIZE].clone_from_slice(&branch_cond(
             reg,
             offset,
             ConditionCode::Eq,

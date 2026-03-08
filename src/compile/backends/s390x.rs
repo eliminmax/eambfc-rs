@@ -311,11 +311,11 @@ fn add_reg_signed(code_buf: &mut Vec<u8>, reg: S390xRegister, imm: i64) {
         code_buf.extend(imm_h.to_be_bytes());
     }
 }
+const JUMP_SIZE: usize = 18;
 
 pub(crate) struct S390xInter;
 impl ArchInter for S390xInter {
     type RegType = S390xRegister;
-    const JUMP_SIZE: usize = 18;
     const E_FLAGS: u32 = 0;
 
     // SVC 0 {I}
@@ -402,7 +402,7 @@ impl ArchInter for S390xInter {
         reg: S390xRegister,
         offset: i64,
     ) -> FailableInstrEncoding {
-        code_buf[index..index + Self::JUMP_SIZE].copy_from_slice(&branch_cond(
+        code_buf[index..index + JUMP_SIZE].copy_from_slice(&branch_cond(
             reg,
             offset,
             ComparisonMask::MaskEQ,
@@ -430,7 +430,7 @@ impl ArchInter for S390xInter {
         // BRC 15, 2 {RI-c}
         const INSTR_SEQ: [[u8; 4]; 4] = [u32::to_be_bytes(0xa7f4_0001), NOP, NOP, NOP];
         code_buf.extend(INSTR_SEQ.into_iter().flatten());
-        // two bytes short of Self::JUMP_SIZE, so pad with the NOPR pseudo-instruction
+        // two bytes short of jump size, so pad with the NOPR pseudo-instruction
         // BCR 0, 0 {RR}
         code_buf.extend([0x07, 0x00]);
     }
