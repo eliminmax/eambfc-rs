@@ -40,10 +40,15 @@ use super::BFCompile;
 impl Backend {
     fn compiler(self) -> &'static dyn BFCompile {
         match self {
+            #[cfg(feature = "arm64")]
             Backend::Arm64 => &Arm64Inter,
+            #[cfg(feature = "i386")]
             Backend::I386 => &I386Inter,
+            #[cfg(feature = "riscv64")]
             Backend::RiscV64 => &RiscV64Inter,
+            #[cfg(feature = "s390x")]
             Backend::S390x => &S390xInter,
+            #[cfg(feature = "x86_64")]
             Backend::X86_64 => &X86_64Inter,
         }
     }
