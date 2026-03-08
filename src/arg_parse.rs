@@ -60,6 +60,7 @@ impl ArgParseError {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl Display for ArgParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -790,4 +791,55 @@ mod tests {
             .unwrap()
         );
     }
+
+    #[test]
+    fn single_dash_err() {
+        assert_eq!(
+            parse_args(args!["-"]).unwrap_err(),
+            ArgParseError::SingleDashArg
+        );
+    }
+
+    #[test_macros::unix_test("OsStrExt::from_vec")]
+    fn non_unicode_backend() {
+        use std::os::unix::ffi::OsStrExt;
+        assert_eq!(
+            parse_args(args![OsStr::from_bytes(b"-a\x86_\x64")]).unwrap_err(),
+            ArgParseError::UnknownBackend(arg(OsStr::from_bytes(b"\x86_\x64")))
+        );
+    }
+
+    #[test_macros::unix_test("OsStrExt::from_vec")]
+    fn non_unicode_tape_size() {
+        use std::os::unix::ffi::OsStrExt;
+        assert_eq!(
+            parse_args(args![OsStr::from_bytes(b"-t\xff100")]).unwrap_err(),
+            ArgParseError::TapeSizeNotNumeric(arg(OsStr::from_bytes(b"\xff100")))
+        );
+    }
+
+    #[test]
+    fn tape_size_overflow_err() {
+        assert_eq!(
+            parse_args(args!["--tape-size", u128::MAX.to_string()]).unwrap_err(),
+            ArgParseError::TapeSizeOverflow(arg(u128::MAX.to_string()))
+        );
+    }
+
+    #[test]
+    fn parameter_shenanigans() {
+        assert_eq!(
+            parse_args(args!["--tape-size"]).unwrap_err(),
+            ArgParseError::MissingOperand(arg("--tape-size"))
+        );
+        assert_eq!(
+            parse_args(args!["--help=true"]).unwrap_err(),
+            ArgParseError::UnexpectedOperand{ arg: arg("--help=true"), operand: arg("true") }
+        );
+        assert_eq!(
+            parse_args(args!["--keep=true"]).unwrap_err(),
+            ArgParseError::UnexpectedOperand{ arg: arg("--keep=true"), operand: arg("true") }
+        );
+    }
+
 }
