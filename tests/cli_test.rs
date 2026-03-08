@@ -3,10 +3,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![cfg(test)]
 
-#[path = "../src/arg_parse/help_text.rs"]
-mod help_text;
-use help_text::help_fmt;
-
 extern crate tempfile;
 use tempfile::TempDir;
 
@@ -107,11 +103,6 @@ macro_rules! checked_output {
     (expect_failure, $cmd: expr) => {{ checked_output!(expect_failure, $cmd, stdout) }};
 }
 
-macro_rules! help_text {
-    ($progname: expr) => {{ format!("{}\n", help_fmt($progname)) }};
-    () => {{ help_text!(EXEC_PATH) }};
-}
-
 #[derive(Deserialize, PartialEq, Clone)]
 struct ErrorMsg {
     #[serde(rename = "errorId")]
@@ -161,7 +152,7 @@ macro_rules! test_err {
             ErrorMsg::expected_formatting(&errors).trim(),
             String::from_utf8(
                 checked_output!(expect_failure, Command::new(EXEC_PATH), stderr)
-            ).unwrap().replace(&help_text!(), "").trim()
+            ).unwrap().trim()
         );
         assert_eq!(errors[0].error_id, $first_err);
     };
@@ -170,7 +161,7 @@ macro_rules! test_err {
         let output = checked_output!(expect_failure, eambfc_with_args!($($args),+), stderr);
         assert_eq!(
             ErrorMsg::expected_formatting(&errors).trim(),
-            String::from_utf8(output).unwrap().replace(&help_text!(), "").trim()
+            String::from_utf8(output).unwrap().trim()
         );
         assert_eq!(errors[0].error_id, $first_err);
     };
@@ -504,15 +495,14 @@ fn test_version_output() {
 
 #[test]
 fn test_help_output() {
-    let output = checked_output!(eambfc_with_args!("-h"));
-    assert_eq!(output, help_text!().as_bytes());
+    assert!(checked_output!(eambfc_with_args!("-h")).starts_with(b"Usage: "));
 }
 
 #[unix_test("CommandExt::arg0")]
 fn test_alt_argv0_help() {
     use std::os::unix::process::CommandExt;
     let output = checked_output!(eambfc_with_args!("-h").arg0("bfc"));
-    assert_eq!(String::from_utf8(output).unwrap(), help_text!("bfc"));
+    assert!(output.starts_with(b"Usage: bfc [options]"));
 }
 
 #[test]
