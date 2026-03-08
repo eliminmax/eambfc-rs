@@ -83,7 +83,7 @@ fn main() -> ExitCode {
                 }
             }
             exit_code
-        },
+        }
         Ok(RunConfig::ShowVersion) => {
             println!(
                 include_str!("text_assets/version_template.txt"),

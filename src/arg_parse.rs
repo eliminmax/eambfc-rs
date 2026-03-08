@@ -834,12 +834,17 @@ mod tests {
         );
         assert_eq!(
             parse_args(args!["--help=true"]).unwrap_err(),
-            ArgParseError::UnexpectedOperand{ arg: arg("--help=true"), operand: arg("true") }
+            ArgParseError::UnexpectedOperand {
+                arg: arg("--help=true"),
+                operand: arg("true")
+            }
         );
         assert_eq!(
             parse_args(args!["--keep=true"]).unwrap_err(),
-            ArgParseError::UnexpectedOperand{ arg: arg("--keep=true"), operand: arg("true") }
+            ArgParseError::UnexpectedOperand {
+                arg: arg("--keep=true"),
+                operand: arg("true")
+            }
         );
     }
-
 }

@@ -22,8 +22,8 @@ use backends::{Backend, BinInfo, SegmentInfo};
 
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions, remove_file};
-use std::path::Path;
 use std::io::{BufReader, Read, Write};
+use std::path::Path;
 
 struct JumpLocation {
     loc: Option<CodePosition>,
@@ -159,7 +159,6 @@ pub(crate) trait BFCompile {
         tape_blocks: u64,
         out_suffix: Option<&OsStr>,
     ) -> Result<(), Vec<BFCompileError>> {
-
         let mut open_options = OpenOptions::new();
         open_options.write(true).create(true).truncate(true);
         #[cfg(unix)]
@@ -433,7 +432,8 @@ mod tests {
 
     #[test]
     fn compile_all_bf_instructions() -> Result<(), String> {
-        TestInter.compile(&mut b"+[>]<-,.".as_slice(), &mut Vec::<u8>::new(), false, 8)
+        TestInter
+            .compile(&mut b"+[>]<-,.".as_slice(), &mut Vec::<u8>::new(), false, 8)
             .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
@@ -441,14 +441,21 @@ mod tests {
     fn compile_nested_loops() -> Result<(), String> {
         // An algorithm to set a cell to the number 33, contributed to esolangs.org in 2005 by
         // user Calamari. esolangs.org contents are available under a CC0-1.0 license.
-        TestInter.compile(&mut b">+[-->---[-<]>]>+".as_slice(), &mut Vec::<u8>::new(), false, 8)
+        TestInter
+            .compile(
+                &mut b">+[-->---[-<]>]>+".as_slice(),
+                &mut Vec::<u8>::new(),
+                false,
+                8,
+            )
             .map_err(|e| format!("Failed to compile: {e:?}"))
     }
 
     #[test]
     fn unmatched_open() {
         assert!(
-            TestInter.compile(&mut b"[".as_slice(), &mut Vec::<u8>::new(), false, 8,)
+            TestInter
+                .compile(&mut b"[".as_slice(), &mut Vec::<u8>::new(), false, 8,)
                 .is_err_and(|e| e[0].error_id() == BFErrorID::UnmatchedOpen)
         );
     }
@@ -456,14 +463,21 @@ mod tests {
     #[cfg(feature = "i386")]
     #[test_macros::debug_assert_test("tape size should've been validated during arg parsing")]
     fn tape_size_32_validation() {
-        backends::I386Inter.compile(&mut b"".as_slice(), &mut Vec::<u8>::new(), false, u32::MAX.into())
+        backends::I386Inter
+            .compile(
+                &mut b"".as_slice(),
+                &mut Vec::<u8>::new(),
+                false,
+                u32::MAX.into(),
+            )
             .unwrap();
     }
 
     #[test]
     fn unmatched_close() {
         assert!(
-            TestInter.compile(&mut b"]".as_slice(), &mut Vec::<u8>::new(), false, 8,)
+            TestInter
+                .compile(&mut b"]".as_slice(), &mut Vec::<u8>::new(), false, 8,)
                 .is_err_and(|e| e[0].error_id() == BFErrorID::UnmatchedClose)
         );
     }
@@ -495,37 +509,51 @@ mod tests {
 
         // partial write failure while writing headers
         assert!(
-            TestInter.compile(&mut b"[-]".as_slice(), &mut FailingWriter { fail_after: 60 }, true, 8)
+            TestInter
+                .compile(
+                    &mut b"[-]".as_slice(),
+                    &mut FailingWriter { fail_after: 60 },
+                    true,
+                    8
+                )
                 .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
         // total write failure while writing headers
         assert!(
-            TestInter.compile(&mut b"[-]".as_slice(), &mut FailingWriter { fail_after: 0 }, true, 8)
+            TestInter
+                .compile(
+                    &mut b"[-]".as_slice(),
+                    &mut FailingWriter { fail_after: 0 },
+                    true,
+                    8
+                )
                 .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
         // partial write failure while writing code
         assert!(
-            TestInter.compile(
-                &mut b">>[-]".as_slice(),
-                &mut FailingWriter {
-                    fail_after: START_ADDR + 1
-                },
-                true,
-                8
-            )
-            .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
+            TestInter
+                .compile(
+                    &mut b">>[-]".as_slice(),
+                    &mut FailingWriter {
+                        fail_after: START_ADDR + 1
+                    },
+                    true,
+                    8
+                )
+                .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
         // total write failure after writing headers
         assert!(
-            TestInter.compile(
-                &mut b"[-]".as_slice(),
-                &mut FailingWriter {
-                    fail_after: START_ADDR
-                },
-                true,
-                8
-            )
-            .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
+            TestInter
+                .compile(
+                    &mut b"[-]".as_slice(),
+                    &mut FailingWriter {
+                        fail_after: START_ADDR
+                    },
+                    true,
+                    8
+                )
+                .is_err_and(|e| e[0].error_id() == BFErrorID::FailedWrite)
         );
     }
 }

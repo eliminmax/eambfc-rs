@@ -5,11 +5,11 @@
 use crate::err::{BFCompileError, BFErrorID};
 use std::borrow::Cow;
 use std::ffi::OsStr;
-use std::path::Path;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 #[cfg(target_os = "wasi")]
 use std::os::wasi::ffi::OsStrExt;
+use std::path::Path;
 
 /// if `filename` ends with `extension`, return `Ok(f)`, where `f` is `filename` without
 /// `extension` at the end.
