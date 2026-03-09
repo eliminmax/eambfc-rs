@@ -159,10 +159,28 @@ impl std::str::FromStr for Backend {
 }
 
 impl Default for Backend {
+    #[inline]
     fn default() -> Self {
-        env!("EAMBFC_DEFAULT_ARCH")
-            .parse()
-            .expect("build.rs validates default arch")
+        #[cfg(eambfc_default_arch = "x86_64")]
+        {
+            Self::X86_64
+        }
+        #[cfg(eambfc_default_arch = "arm64")]
+        {
+            Self::Arm64
+        }
+        #[cfg(eambfc_default_arch = "riscv64")]
+        {
+            Self::RiscV64
+        }
+        #[cfg(eambfc_default_arch = "s390x")]
+        {
+            Self::S390x
+        }
+        #[cfg(eambfc_default_arch = "i386")]
+        {
+            Self::I386
+        }
     }
 }
 

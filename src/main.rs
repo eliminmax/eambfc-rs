@@ -50,11 +50,10 @@ fn main() -> ExitCode {
             println!("- riscv64 (aliases: riscv)");
             #[cfg(feature = "s390x")]
             println!("- s390x (aliases: s390, z/architecture)");
-            println!(concat!(
-                "\nIf no architecture is specified, it defaults to ",
-                env!("EAMBFC_DEFAULT_ARCH"),
-                '.'
-            ));
+            println!(
+                "\nIf no architecture is specified, it defaults to {}.",
+                Backend::default()
+            );
             ExitCode::SUCCESS
         }
         Ok(RunConfig::ShowHelp) => {
@@ -90,7 +89,7 @@ fn main() -> ExitCode {
                 progname,
                 env!("CARGO_PKG_NAME"),
                 env!("CARGO_PKG_VERSION"),
-                env!("EAMBFC_RS_GIT_COMMIT")
+                include_str!("../.commitinfo")
             );
             ExitCode::SUCCESS
         }

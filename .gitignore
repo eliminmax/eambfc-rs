@@ -5,3 +5,4 @@
 /target
 tarpaulin-report.html
 .tarpaulin
+.commitinfo

@@ -103,6 +103,16 @@ macro_rules! checked_output {
     (expect_failure, $cmd: expr) => {{ checked_output!(expect_failure, $cmd, stdout) }};
 }
 
+macro_rules! default_arch {
+    () => { default_arch!("x86_64", "arm64", "riscv64", "s390x", "i386") };
+    [$($arch: tt),*] => {{
+        $(if cfg!(eambfc_default_arch = $arch) {
+            $arch
+        } ) else*
+        else { panic!("no default architecture") }
+    }};
+}
+
 #[derive(Deserialize, PartialEq, Clone)]
 struct ErrorMsg {
     #[serde(rename = "errorId")]
@@ -202,10 +212,11 @@ fn arch_list() {
     if cfg!(feature = "s390x") {
         writeln!(expected, "- s390x (aliases: s390, z/architecture)").unwrap();
     }
+
     writeln!(
         expected,
         "\nIf no architecture is specified, it defaults to {}.",
-        env!("EAMBFC_DEFAULT_ARCH")
+        default_arch!()
     )
     .unwrap();
     let cmd_output = checked_output!(eambfc_with_args!("-A"));
@@ -487,7 +498,7 @@ fn test_version_output() {
         EXEC_PATH,
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
-        env!("EAMBFC_RS_GIT_COMMIT"),
+        include_str!("../.commitinfo"),
     );
     let output = checked_output!(eambfc_with_args!("-V"));
     assert_eq!(output, expected.as_bytes());

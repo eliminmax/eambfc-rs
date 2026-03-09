@@ -692,9 +692,9 @@ mod tests {
     fn multiple_arches_error() {
         let args = args![
             "-a",
-            env!("EAMBFC_DEFAULT_ARCH"),
-            format!("-a{}", env!("EAMBFC_DEFAULT_ARCH")),
-            "foo.bf",
+            Backend::default().to_string(),
+            format!("-a{}", Backend::default()),
+            "foo.bf"
         ];
         assert_eq!(
             parse_args(args).unwrap_err(),
@@ -727,7 +727,7 @@ mod tests {
         // `--target-arch x86_64`, `-ax86_64`, and `--target-arch=x86_64` are all processed
         // identically.
         let param_opts = vec![
-            ("-a", "--target-arch", args![env!("EAMBFC_DEFAULT_ARCH")]),
+            ("-a", "--target-arch", args![Backend::default().to_string()]),
             (
                 "-t",
                 "--tape-size",
