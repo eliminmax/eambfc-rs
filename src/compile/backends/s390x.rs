@@ -501,7 +501,7 @@ mod tests {
     use super::*;
     use test_macros::{debug_assert_test, disasm_test};
 
-    #[cfg(feature = "disasmtests")]
+    #[cfg(all(feature = "disasmtests", not(cross_compiled)))]
     fn llvm_version() -> (c_uint, c_uint, c_uint) {
         use std::mem::MaybeUninit;
         use std::sync::OnceLock;
