@@ -153,8 +153,8 @@ pub fn help_fmt(progname: &str) -> String {
                  --:   stop argument parsing, treating remaining arguments as filenames
 
 PARAMETER OPTIONS (provide at most once each):
- --tape-size=count,      -t count:   use <count> 4-KiB blocks for the tape (default 8)
- --source-extension=ext, -e   ext:   use 'ext' as the source extension (default "bf")
+ --tape-size=count,      -t count:   use <count> 4-KiB blocks for the tape (defaults to 8)
+ --source-extension=ext, -e   ext:   use 'ext' as the source extension (defaults to "bf")
  --target-arch=arch,     -a  arch:   compile for the specified architecture (defaults to {})
  --output-suffix=suf,    -s   suf:   append 'suf' to output file names (defaults to empty string)
 "#,
