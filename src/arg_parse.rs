@@ -22,6 +22,8 @@ use std::num::{IntErrorKind, ParseIntError};
 pub(crate) enum ArgParseError {
     #[cfg(not(have_all_targets))]
     DisabledBackend(DisabledBackend),
+    DotInSourceExtension(OsString),
+    DotInOutputExtension(OsString),
     InputIsOutput(OsString),
     MissingOperand(OsString),
     MultipleArchitectures(Backend, Backend),
@@ -64,6 +66,22 @@ impl ArgParseError {
 impl Display for ArgParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(not(have_all_targets))]
+            Self::DisabledBackend(db) => write!(f, "backend {db} is disabled"),
+            Self::DotInOutputExtension(ext) => {
+                write!(
+                    f,
+                    "output extension {} is invalid, as it contains '.'",
+                    ext.display()
+                )
+            }
+            Self::DotInSourceExtension(ext) => {
+                write!(
+                    f,
+                    "source extension {} is invalid, as it contains '.'",
+                    ext.display()
+                )
+            }
             Self::InputIsOutput(ext) => {
                 write!(
                     f,
@@ -116,8 +134,6 @@ impl Display for ArgParseError {
                 let operand = operand.display();
                 write!(f, "option {arg} was provided unexpected operand {operand}")
             }
-            #[cfg(not(have_all_targets))]
-            Self::DisabledBackend(db) => write!(f, "backend {db} is disabled"),
             Self::UnknownBackend(param) => {
                 write!(f, "unknown backend: {}", param.display())
             }
@@ -154,9 +170,9 @@ pub fn help_fmt(progname: &str) -> String {
 
 PARAMETER OPTIONS (provide at most once each):
  --tape-size=count,      -t count:   use <count> 4-KiB blocks for the tape (defaults to 8)
- --source-extension=ext, -e   ext:   use 'ext' as the source extension (defaults to "bf")
- --target-arch=arch,     -a  arch:   compile for the specified architecture (defaults to {})
- --output-suffix=suf,    -s   suf:   append 'suf' to output file names (defaults to empty string)
+ --source-extension=ext, -e ext:     use 'ext' as the source extension (defaults to "bf")
+ --target-arch=arch,     -a arch:    compile for the specified architecture (defaults to {})
+ --output-extension=ext, -s ext:     use 'ext' as the output extension (no extension if unset)
 "#,
         Backend::default(),
     )
@@ -215,16 +231,24 @@ impl TryFrom<PartialRunConfig> for StandardRunConfig {
             (false, false) => OutMode::Basic,
         };
 
-        let extension = extension.map_or(Cow::Borrowed(".bf".as_ref()), Cow::Owned);
-        let out_suffix = {
-            if let Some(out_suffix) = out_suffix {
-                if out_suffix == extension {
-                    return Err(ArgParseError::InputIsOutput(out_suffix));
-                }
-                Some(out_suffix)
-            } else {
-                None
+        let extension = if let Some(extension) = extension {
+            if extension.as_encoded_bytes().contains(&b'.') {
+                return Err(ArgParseError::DotInSourceExtension(extension));
             }
+            Cow::Owned(extension)
+        } else {
+            Cow::Borrowed(OsStr::new("bf"))
+        };
+
+        let out_suffix = if let Some(out_suffix) = out_suffix {
+            if out_suffix == extension {
+                return Err(ArgParseError::InputIsOutput(out_suffix));
+            } else if out_suffix.as_encoded_bytes().contains(&b'.') {
+                return Err(ArgParseError::DotInOutputExtension(out_suffix));
+            }
+            Some(out_suffix)
+        } else {
+            None
         };
 
         if source_files.is_empty() {
@@ -279,7 +303,7 @@ impl PartialRunConfig {
         Ok(())
     }
 
-    fn set_ext(&mut self, ext: OsString) -> Result<(), ArgParseError> {
+    fn set_source_extension(&mut self, ext: OsString) -> Result<(), ArgParseError> {
         if let Some(old_ext) = self.extension.take() {
             return Err(ArgParseError::MultipleExtensions(old_ext, ext));
         }
@@ -287,7 +311,7 @@ impl PartialRunConfig {
         Ok(())
     }
 
-    fn set_suffix(&mut self, suf: OsString) -> Result<(), ArgParseError> {
+    fn set_out_extension(&mut self, suf: OsString) -> Result<(), ArgParseError> {
         if let Some(old_suf) = self.out_suffix.take() {
             return Err(ArgParseError::MultipleOutputExtensions(old_suf, suf));
         }
@@ -387,8 +411,8 @@ pub(crate) fn parse_args(args: impl Iterator<Item = OsString>) -> Result<RunConf
                     b"continue" => set_flag(&mut cfg.cont)?,
                     b"target-arch" => pass_operand_to(PartialRunConfig::set_arch)?,
                     b"tape-size" => pass_operand_to(PartialRunConfig::set_tape_size)?,
-                    b"source-extension" => pass_operand_to(PartialRunConfig::set_ext)?,
-                    b"output-suffix" => pass_operand_to(PartialRunConfig::set_suffix)?,
+                    b"source-extension" => pass_operand_to(PartialRunConfig::set_source_extension)?,
+                    b"output-extension" => pass_operand_to(PartialRunConfig::set_out_extension)?,
                     _ => return Err(ArgParseError::UnknownLongOption(arg)),
                 }
             }
@@ -419,8 +443,8 @@ pub(crate) fn parse_args(args: impl Iterator<Item = OsString>) -> Result<RunConf
                             };
                             match b {
                                 b't' => cfg.set_tape_size(operand),
-                                b'e' => cfg.set_ext(operand),
-                                b's' => cfg.set_suffix(operand),
+                                b'e' => cfg.set_source_extension(operand),
+                                b's' => cfg.set_out_extension(operand),
                                 b'a' => cfg.set_arch(operand),
                                 // SAFETY: inner match only reached if it's one of the above 4
                                 _ => unsafe { std::hint::unreachable_unchecked() },
@@ -440,6 +464,7 @@ pub(crate) fn parse_args(args: impl Iterator<Item = OsString>) -> Result<RunConf
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     trait UnwrapStandard {
         fn unwrap_standard_cfg(self) -> StandardRunConfig;
@@ -461,7 +486,6 @@ mod tests {
             cfg
         }
     }
-    use super::*;
 
     // a more concise way to write OsString::from(a)
     #[cfg(not(tarpaulin_include))]
@@ -483,14 +507,14 @@ mod tests {
         // ensure that combined arguments are processed properly
 
         // should be interpreted identically to -k -j -e .brainfuck'
-        let args_set_0 = args!["-kje.brainfuck", "foo.brainfuck", "bar.brainfuck"];
+        let args_set_0 = args!["-kjebrainfuck", "foo.brainfuck", "bar.brainfuck"];
 
-        // should be interpreted identically to -kje.brainfuck'
+        // should be interpreted identically to -kjebrainfuck'
         let args_set_1 = args![
             "-k",
             "-j",
             "-e",
-            ".brainfuck",
+            "brainfuck",
             "foo.brainfuck",
             "bar.brainfuck",
         ];
@@ -503,15 +527,15 @@ mod tests {
 
     #[test]
     fn options_stop_on_double_dash() {
-        let args_set = args!["--", "-j", "-h", "-e.notbf"];
-        // ensure that -h, -j and -e.notbf are interpreted as the list of file names
+        let args_set = args!["--", "-j", "-h", "-enotbf"];
+        // ensure that -h, -j and -enotbf are interpreted as the list of file names
         let Ok(RunConfig::StandardRun(parsed_args)) = parse_args(args_set) else {
             panic!("test expected StandardRunConfig")
         };
         assert_eq!(parsed_args.out_mode, OutMode::Basic);
         assert_eq!(
             parsed_args.source_files,
-            vec![arg("-j"), arg("-h"), arg("-e.notbf")]
+            vec![arg("-j"), arg("-h"), arg("-enotbf")]
         );
     }
 
@@ -627,16 +651,16 @@ mod tests {
     #[test]
     fn multiple_extensions_err() {
         assert_eq!(
-            parse_args(args!["-e.brainfuck", "-e", ".bf"]).unwrap_err(),
-            ArgParseError::MultipleExtensions(arg(".brainfuck"), arg(".bf")),
+            parse_args(args!["-ebrainfuck", "-e", "bf"]).unwrap_err(),
+            ArgParseError::MultipleExtensions(arg("brainfuck"), arg("bf")),
         );
     }
 
     #[test]
     fn multiple_output_extensions_err() {
         assert_eq!(
-            parse_args(args!["-s.elf", "-s", "_bf"]).unwrap_err(),
-            ArgParseError::MultipleOutputExtensions(arg(".elf"), arg("_bf")),
+            parse_args(args!["-self", "-s", "_bf"]).unwrap_err(),
+            ArgParseError::MultipleOutputExtensions(arg("elf"), arg("_bf")),
         );
     }
 
@@ -652,7 +676,7 @@ mod tests {
     fn list_arch_processed() {
         assert_eq!(parse_args(args!["-A"]), Ok(RunConfig::ListArches));
         assert_eq!(
-            parse_args(args!["-e", ".b", "-A"]),
+            parse_args(args!["-e", "b", "-A"]),
             Ok(RunConfig::ListArches)
         );
     }
@@ -733,8 +757,8 @@ mod tests {
                 "--tape-size",
                 args!["1", "###", "0", arg(u64::MAX.to_string())],
             ),
-            ("-e", "--source-extension", args![".beef"]),
-            ("-s", "--output-suffix", args![".elf"]),
+            ("-e", "--source-extension", args!["beef"]),
+            ("-s", "--output-extension", args!["elf"]),
         ];
         for (short, long, test_params) in param_opts {
             for param in test_params {
@@ -766,25 +790,25 @@ mod tests {
     #[test]
     fn err_when_input_is_output() {
         assert_eq!(
-            parse_args(args!["-e.beef", "-s.beef", "file.beef"]).unwrap_err(),
-            ArgParseError::InputIsOutput(arg(".beef"))
+            parse_args(args!["-ebeef", "-sbeef", "file.beef"]).unwrap_err(),
+            ArgParseError::InputIsOutput(arg("beef"))
         );
         assert_eq!(
-            parse_args(args!["-s.bf", "file.bf"]).unwrap_err(),
-            ArgParseError::InputIsOutput(arg(".bf"))
+            parse_args(args!["-sbf", "file.bf"]).unwrap_err(),
+            ArgParseError::InputIsOutput(arg("bf"))
         );
         assert_eq!(
-            parse_args(args!["-e.bf", "-s.bf", "file.bf"]).unwrap_err(),
-            ArgParseError::InputIsOutput(arg(".bf"))
+            parse_args(args!["-ebf", "-sbf", "file.bf"]).unwrap_err(),
+            ArgParseError::InputIsOutput(arg("bf"))
         );
         // make sure that it does not return an error if extension is set afterwards
         assert_eq!(
-            // if -e changes suffix after -s.bf, it shouldn't return an InputIsOutput error
-            parse_args(args!["-s.bf", "-e.beef", "file.beef"]).unwrap_standard_cfg(),
+            // if -e changes suffix after -sbf, it shouldn't return an InputIsOutput error
+            parse_args(args!["-sbf", "-ebeef", "file.beef"]).unwrap_standard_cfg(),
             PartialRunConfig {
-                extension: Some(arg(".beef")),
+                extension: Some(arg("beef")),
                 source_files: vec!["file.beef".into()],
-                out_suffix: Some(arg(".bf")),
+                out_suffix: Some(arg("bf")),
                 ..Default::default()
             }
             .try_into()
@@ -845,6 +869,18 @@ mod tests {
                 arg: arg("--keep=true"),
                 operand: arg("true")
             }
+        );
+    }
+
+    #[test]
+    fn dots_in_extensions() {
+        assert_eq!(
+            parse_args(args!["-e.foo"]).unwrap_err(),
+            ArgParseError::DotInSourceExtension(arg(".foo"))
+        );
+        assert_eq!(
+            parse_args(args!["-s.foo"]).unwrap_err(),
+            ArgParseError::DotInOutputExtension(arg(".foo"))
         );
     }
 }

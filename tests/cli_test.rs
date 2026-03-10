@@ -228,7 +228,7 @@ fn out_suffix() -> io::Result<()> {
     let dir = working_dir()?;
     let src = dir.join("hello.bf");
     fs::copy(source_file("hello.bf"), &src)?;
-    invoke!(eambfc_with_args!("-s", ".elf", "--", &src));
+    invoke!(eambfc_with_args!("-s", "elf", "--", &src));
     assert!(fs::exists(dir.join("hello.elf"))? && !fs::exists(dir.join("hello"))?);
     Ok(())
 }
@@ -483,7 +483,7 @@ fn alternative_extension() -> io::Result<()> {
     let expected = fs::read(&outfile)?;
 
     fs::rename(hello_path, &path)?;
-    invoke!(eambfc_with_args!("-e.brnfck", path));
+    invoke!(eambfc_with_args!("-ebrnfck", path));
     assert_eq!(expected, fs::read(&outfile)?);
     Ok(())
 }

@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2024 - 2026 Eli Array Minkoff
 //
 // SPDX-License-Identifier: GPL-3.0-only
-mod fsutil;
-use fsutil::set_extension;
 mod optimize;
 use optimize::{CombinedInstruction, combine_instructions};
 mod arch_inter;
@@ -167,7 +165,19 @@ pub(crate) trait BFCompile {
             open_options.mode(0o755);
         };
 
-        let outfile_name = set_extension(file_name, extension, out_suffix)?;
+        let outfile_name = {
+            if file_name.extension() == Some(extension) {
+                file_name.with_extension(out_suffix.unwrap_or_default())
+            } else {
+                return Err(vec![BFCompileError::basic(
+                    BFErrorID::BadSourceExtension,
+                    format!(
+                        "{} does not end with expected extension",
+                        file_name.to_string_lossy()
+                    ),
+                )]);
+            }
+        };
 
         let mut infile = File::open(file_name).map_err(|e| {
             BFCompileError::basic(

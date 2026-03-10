@@ -3,13 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::err::{BFCompileError, BFErrorID};
-use std::borrow::Cow;
 use std::ffi::OsStr;
-#[cfg(unix)]
-use std::os::unix::ffi::OsStrExt;
-#[cfg(target_os = "wasi")]
-use std::os::wasi::ffi::OsStrExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// if `filename` ends with `extension`, return `Ok(f)`, where `f` is `filename` without
 /// `extension` at the end.
@@ -17,60 +12,23 @@ use std::path::Path;
 ///
 /// On non-unix platforms, it returns an `Err` with a `.err_id()` of `BFCompileError::NonUTF8` if
 /// either `filename` or `extension` are not valid Unicode
-pub(super) fn set_extension<'a>(
-    filename: &'a Path,
-    extension: &OsStr,
-    suffix: Option<&OsStr>,
-) -> Result<Cow<'a, OsStr>, BFCompileError> {
-    let filename = filename.as_os_str();
-    let outname: &'a OsStr;
-    #[cfg(any(unix, target_os = "wasi"))]
-    {
-        let name_len: usize = filename.as_bytes().len();
-        let ext_len: usize = extension.as_bytes().len();
-        if filename.as_bytes().ends_with(extension.as_bytes()) {
-            outname = OsStr::from_bytes(&filename.as_bytes()[..name_len - ext_len]);
-        } else {
-            return Err(BFCompileError::basic(
-                BFErrorID::BadSourceExtension,
-                format!(
-                    "{} does not end with expected extension",
-                    filename.to_string_lossy()
-                ),
-            ));
-        }
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    #[cfg(not(any(unix, target_os = "wasi")))]
-    {
-        const SUPPORT_MSG: &str = " - non-Unicode filenames are only supported on Unix targets";
-        let filename = filename.to_str().ok_or(BFCompileError::basic(
-            BFErrorID::NonUTF8,
+pub(super) fn set_extension(
+    filename: &Path,
+    source_extension: &OsStr,
+    output_extension: Option<&OsStr>,
+) -> Result<PathBuf, BFCompileError> {
+    if filename.extension() == Some(source_extension) {
+        Ok(filename.with_extension(output_extension.unwrap_or_default()))
+    } else {
+        Err(BFCompileError::basic(
+            BFErrorID::BadSourceExtension,
             format!(
-                "filename {} is not valid Unicode{SUPPORT_MSG}",
+                "{} does not end with expected extension",
                 filename.to_string_lossy()
             ),
-        ))?;
-        let extension = extension
-            .to_str()
-            .unwrap_or_else(|| unreachable!("extension validated when parsing args"));
-        outname = OsStr::new(
-            filename
-                .strip_suffix(extension)
-                .ok_or(BFCompileError::basic(
-                    BFErrorID::BadSourceExtension,
-                    format!("{filename} does not end with expected extension"),
-                ))?,
-        );
-    };
-    if let Some(suf) = suffix {
-        let mut outname = outname.to_os_string();
-        outname.push(suf);
-        Ok(outname.into())
-    } else {
-        Ok(outname.into())
+        ))
     }
+
 }
 
 #[cfg(test)]
@@ -80,19 +38,19 @@ mod tests {
     #[test]
     fn rmext_success() {
         assert_eq!(
-            set_extension("foobar".as_ref(), "bar".as_ref(), None),
-            Ok(OsStr::new("foo").into())
+            set_extension("foo.bar".as_ref(), "bar".as_ref(), None),
+            Ok(PathBuf::from("foo"))
         );
         assert_eq!(
-            set_extension("foobar".as_ref(), "bar".as_ref(), Some("_quux".as_ref())),
-            Ok(OsStr::new("foo_quux").into())
+            set_extension("foo.bar".as_ref(), "bar".as_ref(), Some("_quux".as_ref())),
+            Ok(PathBuf::from("foo._quux"))
         );
     }
 
     #[test]
     fn rmext_fail() {
         assert!(
-            set_extension("ee.e".as_ref(), ".bf".as_ref(), None)
+            set_extension("ee.e".as_ref(), "bf".as_ref(), None)
                 .is_err_and(|e| e.error_id() == BFErrorID::BadSourceExtension)
         );
     }
