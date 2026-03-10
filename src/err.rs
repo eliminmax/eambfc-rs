@@ -26,8 +26,6 @@ pub(crate) enum BFErrorID {
     UnmatchedClose,
     UnmatchedOpen,
     CodeTooLarge,
-    #[cfg(not(any(unix, target_os = "wasi")))]
-    NonUTF8,
 }
 
 type ErrMsg = Cow<'static, str>;
