@@ -125,7 +125,7 @@ impl Display for ArgParseError {
             Self::TapeSizeZero => write!(f, "tape size cannot be zero pages"),
             Self::TapeTooLarge { class, tape_blocks } => write!(
                 f,
-                "{tape_blocks} 4KiB-blocks can't fit in {}-bit address space",
+                "{tape_blocks} 4KiB blocks can't fit in {}-bit address space",
                 class.bits()
             ),
             Self::UnknownLongOption(opt) => write!(f, "unknown option: {}", opt.display()),

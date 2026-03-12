@@ -94,7 +94,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(err) => {
-            eprintln!("{err}\n{}", help_fmt(&progname));
+            eprintln!("Error: {err}.\n{}", help_fmt(&progname));
             ExitCode::FAILURE
         }
     }

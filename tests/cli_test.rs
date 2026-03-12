@@ -556,5 +556,5 @@ fn non_utf8_code_position_reporting() {
 #[test]
 fn bad_args() {
     let err = checked_output!(expect_failure, eambfc_with_args!("-8"), stderr);
-    assert!(err.starts_with(b"unknown option: -8\nUsage: "));
+    assert!(err.starts_with(b"Error: unknown option: -8.\nUsage: "));
 }
